@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+    "prototypes/paddles",
+    "prototypes/jumper",
+    "prototypes/quest"
+]
