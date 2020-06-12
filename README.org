@@ -4,8 +4,10 @@ An asterism is a pattern people can see in stars, and while there is a fixed set
 
 Asterism is a project in operationalizing operational logics to the extent that they can be composed to form game engines.
 
-* Repository Structure
+* Prototypes
 
 The =prototypes= directory contains games programmed directly, with an eye towards operational logics rather than, say, object-oriented or component-based approaches.
 
-That's it for now.
+This means that instead of a monolithic =update()= function which combines different logics and extremely concrete instantiations of abstract processes, the game loop arbitrates its rules by configuring and calling out to a variety of logics.  For example, the game code might project the game state out to a set of colliders for a specific type of collision logic, allow the collision logic to update itself (detecting contacts and halting motion of blocked colliders), then unproject the collision-specific state out to the full game state.  (For efficiency this projection/unprojection step could even be a no-op depending on how the game state is represented.)  Afterwards, the game could process the contacts to perform game specific actions like destroying blocks or winning points.
+
+For rendering, the collision logic can be configured to map its provided communication channel (the positions and extents of objects, the locations of contacts) onto an output device (a framebuffer, 3D renderer, or terminal).  The game can then make use of this mapping to position and draw game content.
