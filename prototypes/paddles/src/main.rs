@@ -7,7 +7,7 @@ use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
-use ultraviolet::{Vec2};
+use ultraviolet::{Vec2, geometry::Aabb};
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
 const PADDLE_OFF_X: u8 = 16;
@@ -15,13 +15,25 @@ const PADDLE_HEIGHT: u8 = 48;
 const PADDLE_WIDTH: u8 = 8;
 const BALL_SIZE: u8 = 8;
 
+// right now there's only control logics. collision logics through
+// aabb. what does actors do?
+
 struct WinitControl {
-    actors: Vec<Player>,
+    _actors: Vec<Player>,
     // loci: Vec<>,
     selected_actions: Vec<(Player, Action)>,
     // keymapping
 }
+
 impl WinitControl {
+    fn new() -> Self {
+        Self {
+            _actors: vec![Player::P1, Player::P2],
+            selected_actions: Vec::new(),
+        }
+    }
+
+// handles keyboard inputs
     fn update(&mut self, input:&WinitInputHelper) {
         self.selected_actions.clear();
         if input.key_held(VirtualKeyCode::Q) {
@@ -49,6 +61,13 @@ struct PongPhysics {
     velocities:Vec<Vec2>
 }
 impl PongPhysics {
+    fn new() -> Self {
+        Self {
+            positions: Vec::new(),
+            velocities: Vec::new(),
+        }
+    }
+
     fn update(&mut self) {
         for (pos, vel) in self.positions.iter_mut().zip(self.velocities.iter()) {
             *pos += *vel;
@@ -56,13 +75,58 @@ impl PongPhysics {
     }
 }
 
+// velocity shifts bodies out of whatever they interpenetrated before
+// moving
+struct PongCollision {
+    bodies: Vec<(Aabb, CollisionBehavior)>,
+    // collision_behavior: Vec<CollisionBehavior>,
+}
+
+// this has to stand independently of world. but it can be specific to
+// pong. which are two different things.
+impl PongCollision {
+    fn new() -> Self {
+        Self {
+            bodies: Vec::new(),
+        }
+    }
+
+    fn update(&mut self) {
+        for (body, behavior) in self.bodies.iter() {
+            for (body2, _behavior2) in self.bodies.iter() {
+                if body.intersects(body2) {
+                    match behavior {
+                        CollisionBehavior::Bounce => {},
+                        CollisionBehavior::AddPoint => {},
+                    }
+                }
+            }
+        }
+    }
+}
+
+enum CollisionBehavior {
+    Bounce,
+    AddPoint,
+}
+
 
 struct Logics {
     control:WinitControl,
-    physics:PongPhysics
+    physics:PongPhysics,
+    collision: PongCollision,
 }
 
-/// Representation of the application state. In this example, a box will bounce around the screen.
+impl Logics {
+    fn new() -> Self {
+        Self {
+            control: WinitControl::new(),
+            physics: PongPhysics::new(),
+            collision: PongCollision::new(),
+        }
+    }
+}
+
 enum Player {
     P1,
     P2
@@ -86,7 +150,7 @@ fn main() -> Result<(), Error> {
     let window = {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
         WindowBuilder::new()
-            .with_title("Hello Pixels")
+            .with_title("paddles")
             .with_inner_size(size)
             .with_min_inner_size(size)
             .build(&event_loop)
@@ -142,7 +206,6 @@ fn main() -> Result<(), Error> {
 }
 
 impl World {
-    /// Create a new `World` instance that can draw a moving box.
     fn new() -> Self {
         Self {
             paddles: (HEIGHT/2-PADDLE_HEIGHT/2, HEIGHT/2-PADDLE_HEIGHT/2),
@@ -153,22 +216,34 @@ impl World {
         }
     }
 
-    /// Update the `World` internal state; bounce the box around the screen.
+    // overflow issues when paddles reach edge of screen, both bottom and top......... dont worry about it
     fn update(&mut self, logics:&mut Logics, input:&WinitInputHelper) {
         logics.control.update(input);
         for choice in logics.control.selected_actions.iter() {
             match choice {
-                (Player::P1, Action::Move(amt)) => self.paddles.0 += amt,
+                (Player::P1, Action::Move(amt)) => {
+                    if *amt > 0 {
+                        self.paddles.0 += (*amt) as u8
+                    } else {
+                        self.paddles.0 -= (amt.abs()) as u8
+                    }
+                }
                 (Player::P1, Action::Serve) => {
                     if let Some(Player::P1) = self.serving {
-                        self.ball_vel = Vec2::new(8.0, 8.0);
+                        self.ball_vel = Vec2::new(3.0, 3.0);
                         self.serving = None;
                     }
                 },
-                (Player::P2, Action::Move(amt)) => self.paddles.1 += amt,
+                (Player::P2, Action::Move(amt)) => {
+                    if *amt > 0 {
+                        self.paddles.1 += (*amt) as u8
+                    } else {
+                        self.paddles.1 -= (amt.abs()) as u8
+                    }
+                }
                 (Player::P2, Action::Serve) => {
                     if let Some(Player::P2) = self.serving {
-                        self.ball_vel = Vec2::new(-8.0, -8.0);
+                        self.ball_vel = Vec2::new(-3.0, -3.0);
                         self.serving = None;
                     }
                 }
@@ -187,6 +262,10 @@ impl World {
         self.project_physics(&mut logics.physics);
         logics.physics.update();
         self.unproject_physics(&logics.physics);
+
+        self.project_collision(&mut logics.collision);
+        logics.collision.update();
+        self.unproject_collision(&logics.collision);
     }
     fn project_physics(&self, physics:&mut PongPhysics) {
         physics.positions.resize_with(1, Vec2::default);
@@ -202,12 +281,18 @@ impl World {
         self.ball_vel = physics.velocities[0];
     }
 
+    fn project_collision(&self, collision: &mut PongCollision) {
+    }
+
+    fn unproject_collision(&mut self, collision: &PongCollision) {
+    }
+
     /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
     fn draw(&self, frame: &mut [u8]) {
         for pixel in frame.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&[0,0,0,255]);
+            pixel.copy_from_slice(&[0,0,128,255]);
         }
         draw_rect(PADDLE_OFF_X, self.paddles.0,
                   PADDLE_WIDTH, PADDLE_HEIGHT,
