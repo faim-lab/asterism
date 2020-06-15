@@ -3,5 +3,6 @@
 members = [
     "prototypes/paddles",
     "prototypes/jumper",
-    "prototypes/quest"
+    "prototypes/quest",
+    "prototypes/Maze-minigame"
 ]
