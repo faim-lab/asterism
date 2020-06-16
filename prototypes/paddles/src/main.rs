@@ -7,16 +7,13 @@ use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
-use ultraviolet::{Vec2, geometry::Aabb};
+use ultraviolet::{Vec2, Vec3, geometry::Aabb};
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
 const PADDLE_OFF_X: u8 = 16;
 const PADDLE_HEIGHT: u8 = 48;
 const PADDLE_WIDTH: u8 = 8;
 const BALL_SIZE: u8 = 8;
-
-// right now there's only control logics. collision logics through
-// aabb. what does actors do?
 
 struct WinitControl {
     _actors: Vec<Player>,
@@ -78,42 +75,47 @@ impl PongPhysics {
 // velocity shifts bodies out of whatever they interpenetrated before
 // moving
 struct PongCollision {
-    bodies: Vec<(Aabb, CollisionBehavior)>,
-    // collision_behavior: Vec<CollisionBehavior>,
+    bodies: Vec<Aabb>,
+    velocities: Vec<Vec2>,
+    contacts: Vec<(usize, usize)>,
 }
 
-// this has to stand independently of world. but it can be specific to
-// pong. which are two different things.
 impl PongCollision {
     fn new() -> Self {
         Self {
             bodies: Vec::new(),
+            velocities: Vec::new(),
+            contacts: Vec::new(),
         }
     }
 
     fn update(&mut self) {
-        for (body, behavior) in self.bodies.iter() {
-            for (body2, _behavior2) in self.bodies.iter() {
-                if body.intersects(body2) {
-                    match behavior {
-                        CollisionBehavior::Bounce => {},
-                        CollisionBehavior::AddPoint => {},
-                    }
+        self.contacts.clear();
+        for (i, body) in self.bodies.iter().enumerate() {
+            for (j, body2) in self.bodies.iter().enumerate() {
+                if i != j && body.intersects(body2) {
+                    self.contacts.push((i, j));
+                    // prevents moving object back multiple times-- might cause problems later but oh well
+                    break;
                 }
             }
+        }
+
+        for (i, _j) in self.contacts.iter() {
+            let body = &mut self.bodies[*i];
+            let vel = &self.velocities[*i];
+            body.min.x -= vel.x;
+            body.min.y -= vel.y;
+            body.max.x -= vel.x;
+            body.max.y -= vel.y;
         }
     }
 }
 
-enum CollisionBehavior {
-    Bounce,
-    AddPoint,
-}
-
 
 struct Logics {
-    control:WinitControl,
-    physics:PongPhysics,
+    control: WinitControl,
+    physics: PongPhysics,
     collision: PongCollision,
 }
 
@@ -266,6 +268,8 @@ impl World {
         self.project_collision(&mut logics.collision);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
+
+        // game specific collision stuff
     }
     fn project_physics(&self, physics:&mut PongPhysics) {
         physics.positions.resize_with(1, Vec2::default);
@@ -282,9 +286,37 @@ impl World {
     }
 
     fn project_collision(&self, collision: &mut PongCollision) {
+        let collision_bodies = vec![
+            // sides
+            Aabb::new(
+                Vec3::new(-1.0, 0.0, 0.0),
+                Vec3::new(0.0, HEIGHT as f32, 0.0)),
+            Aabb::new(
+                Vec3::new(0.0, -1.0, 0.0),
+                Vec3::new(WIDTH as f32, 0.0, 0.0)),
+            Aabb::new(
+                Vec3::new(WIDTH as f32, 0.0, 0.0),
+                Vec3::new(WIDTH as f32 + 1.0, HEIGHT as f32, 0.0)),
+            Aabb::new(
+                Vec3::new(0.0, HEIGHT as f32, 0.0),
+                Vec3::new(WIDTH as f32, HEIGHT as f32 + 1.0, 0.0)),
+            // ball
+            Aabb::new(
+                Vec3::new(self.ball.0 as f32, self.ball.1 as f32, 0.0),
+                Vec3::new(self.ball.0 as f32 + BALL_SIZE as f32, self.ball.1 as f32 + BALL_SIZE as f32, 0.0)),
+            // actual paddles???? later
+        ];
+        collision.bodies = collision_bodies;
+        collision.velocities = {
+            let mut velocities = vec![Vec2::new(0.0, 0.0); 4];
+            velocities.push(self.ball_vel);
+            velocities
+        }
     }
 
     fn unproject_collision(&mut self, collision: &PongCollision) {
+        self.ball.0 = collision.bodies[4].min.x.trunc() as u8;
+        self.ball.1 = collision.bodies[4].min.y.trunc() as u8;
     }
 
     /// Draw the `World` state to the frame buffer.
