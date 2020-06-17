@@ -95,19 +95,20 @@ impl PongCollision {
             for (j, body2) in self.bodies.iter().enumerate() {
                 if i != j && body.intersects(body2) {
                     self.contacts.push((i, j));
-                    // prevents moving object back multiple times-- might cause problems later but oh well
-                    break;
                 }
             }
         }
 
-        for (i, _j) in self.contacts.iter() {
+        for (i, ..) in self.contacts.iter() {
             let body = &mut self.bodies[*i];
-            let vel = &self.velocities[*i];
+            let vel = &mut self.velocities[*i];
             body.min.x -= vel.x;
             body.min.y -= vel.y;
             body.max.x -= vel.x;
             body.max.y -= vel.y;
+            // different way of ensuring that vel only gets subtracted once
+            vel.x = 0.0;
+            vel.y = 0.0;
         }
     }
 }
@@ -261,6 +262,36 @@ impl World {
         self.unproject_collision(&logics.collision);
 
         // game specific collision stuff
+        for contact in logics.collision.contacts.iter() {
+            match (contact.0, contact.1) {
+                // collisions: wall x wall = nothing.
+                // paddle x wall = stop (nothing)
+                // ball x top, bottom wall = bounce (x-axis)
+                // ball x paddle = bounce (y-axis)
+                // operate on contact.0, compare w/ contact.1
+                (4, 0) | (4, 1) => {
+                    self.ball_vel = Vec2::new(0.0, 0.0);
+                    self.ball = (WIDTH / 2 - BALL_SIZE / 2, HEIGHT / 2 - BALL_SIZE / 2);
+                    if contact.1 == 0 {
+                        self.serving = Some(Player::P2);
+                        println!("p2 scores");
+                    } else {
+                        self.serving = Some(Player::P1);
+                        println!("p1 scores");
+                    }
+                },
+                (4, 2) | (4, 3) => {
+                    self.ball_vel.y *= -1.0;
+                    self.ball.1 = (self.ball.1 as f32 + self.ball_vel.y.trunc()) as u8;
+                },
+                (4, 5) | (4, 6) => {
+                    self.ball_vel.x *= -1.0;
+                    self.ball.0 = (self.ball.0 as f32 + self.ball_vel.x.trunc()) as u8;
+
+                },
+                _ => {}
+            }
+        }
     }
     fn project_physics(&self, physics:&mut PongPhysics) {
         physics.positions.resize_with(3, Vec2::default);
@@ -275,6 +306,7 @@ impl World {
         physics.positions[2].y = self.paddles.1 as f32;
         physics.velocities[2] = Vec2::new(0.0, self.paddles_vel.1 as f32);
     }
+
     fn unproject_physics(&mut self, physics:&PongPhysics) {
         self.ball.0 = physics.positions[0].x.trunc() as u8;
         self.ball.1 = physics.positions[0].y.trunc() as u8;
@@ -289,15 +321,19 @@ impl World {
     fn project_collision(&self, collision: &mut PongCollision) {
         let collision_bodies = vec![
             // sides
+            // left
             Aabb::new(
                 Vec3::new(-1.0, 0.0, 0.0),
                 Vec3::new(0.0, HEIGHT as f32, 0.0)),
-            Aabb::new(
-                Vec3::new(0.0, -1.0, 0.0),
-                Vec3::new(WIDTH as f32, 0.0, 0.0)),
+            // right
             Aabb::new(
                 Vec3::new(WIDTH as f32, 0.0, 0.0),
                 Vec3::new(WIDTH as f32 + 1.0, HEIGHT as f32, 0.0)),
+            // top
+            Aabb::new(
+                Vec3::new(0.0, -1.0, 0.0),
+                Vec3::new(WIDTH as f32, 0.0, 0.0)),
+            // bottom
             Aabb::new(
                 Vec3::new(0.0, HEIGHT as f32, 0.0),
                 Vec3::new(WIDTH as f32, HEIGHT as f32 + 1.0, 0.0)),
@@ -307,11 +343,11 @@ impl World {
                 Vec3::new(self.ball.0 as f32 + BALL_SIZE as f32, self.ball.1 as f32 + BALL_SIZE as f32, 0.0)),
             // paddles
             Aabb::new(
-                Vec3::new(PADDLE_OFF_X as f32, self.paddles.0 as f32, 0.0),
+                Vec3::new((PADDLE_OFF_X + PADDLE_WIDTH - 1) as f32, self.paddles.0 as f32, 0.0),
                 Vec3::new((PADDLE_OFF_X + PADDLE_WIDTH) as f32, self.paddles.0 as f32 + PADDLE_HEIGHT as f32, 0.0)),
             Aabb::new(
                 Vec3::new((WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32, self.paddles.1 as f32, 0.0),
-                Vec3::new((WIDTH - PADDLE_OFF_X) as f32, self.paddles.1 as f32 + PADDLE_HEIGHT as f32, 0.0)),
+                Vec3::new((WIDTH - PADDLE_OFF_X - PADDLE_WIDTH + 1) as f32, self.paddles.1 as f32 + PADDLE_HEIGHT as f32, 0.0)),
         ];
         collision.bodies = collision_bodies;
         collision.velocities = {
