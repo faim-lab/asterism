@@ -106,9 +106,6 @@ impl PongCollision {
             body.min.y -= vel.y;
             body.max.x -= vel.x;
             body.max.y -= vel.y;
-            // different way of ensuring that vel only gets subtracted once
-            vel.x = 0.0;
-            vel.y = 0.0;
         }
     }
 }
@@ -140,7 +137,6 @@ enum Action {
 }
 struct World {
     paddles: (u8, u8),
-    paddles_vel: (i8, i8),
     ball: (u8, u8),
     ball_err: Vec2,
     ball_vel: Vec2,
@@ -213,7 +209,6 @@ impl World {
     fn new() -> Self {
         Self {
             paddles: (HEIGHT/2-PADDLE_HEIGHT/2, HEIGHT/2-PADDLE_HEIGHT/2),
-            paddles_vel: (0, 0),
             ball: (WIDTH/2-BALL_SIZE/2, HEIGHT/2-BALL_SIZE/2),
             ball_err: Vec2::new(0.0,0.0),
             ball_vel: Vec2::new(0.0,0.0),
@@ -221,20 +216,30 @@ impl World {
         }
     }
 
-    // overflow issues when paddles reach edge of screen, both bottom and top......... dont worry about it
     fn update(&mut self, logics:&mut Logics, input:&WinitInputHelper) {
         logics.control.update(input);
-        self.paddles_vel = (0, 0);
         for choice in logics.control.selected_actions.iter() {
             match choice {
-                (Player::P1, Action::Move(amt)) => self.paddles_vel.0 = *amt as i8,
+                (Player::P1, Action::Move(amt)) => {
+                    if *amt < 0 {
+                        self.paddles.0 -= amt.abs() as u8;
+                    } else {
+                        self.paddles.0 += *amt as u8;
+                    }
+                },
                 (Player::P1, Action::Serve) => {
                     if let Some(Player::P1) = self.serving {
                         self.ball_vel = Vec2::new(3.0, 3.0);
                         self.serving = None;
                     }
                 },
-                (Player::P2, Action::Move(amt)) => self.paddles_vel.1 = *amt as i8,
+                (Player::P2, Action::Move(amt)) => {
+                    if *amt < 0 {
+                        self.paddles.1 -= amt.abs() as u8;
+                    } else {
+                        self.paddles.1 += *amt as u8;
+                    }
+                },
                 (Player::P2, Action::Serve) => {
                     if let Some(Player::P2) = self.serving {
                         self.ball_vel = Vec2::new(-3.0, -3.0);
@@ -257,7 +262,7 @@ impl World {
         logics.physics.update();
         self.unproject_physics(&logics.physics);
 
-        self.project_collision(&mut logics.collision);
+        self.project_collision(&mut logics.collision, &logics.control);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
@@ -294,17 +299,11 @@ impl World {
         }
     }
     fn project_physics(&self, physics:&mut PongPhysics) {
-        physics.positions.resize_with(3, Vec2::default);
-        physics.velocities.resize_with(3, Vec2::default);
+        physics.positions.resize_with(1, Vec2::default);
+        physics.velocities.resize_with(1, Vec2::default);
         physics.positions[0].x = self.ball.0 as f32 + self.ball_err.x;
         physics.positions[0].y = self.ball.1 as f32 + self.ball_err.y;
         physics.velocities[0] = self.ball_vel;
-        physics.positions[1].x = PADDLE_OFF_X as f32;
-        physics.positions[1].y = self.paddles.0 as f32;
-        physics.velocities[1] = Vec2::new(0.0, self.paddles_vel.0 as f32);
-        physics.positions[2].x = (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32;
-        physics.positions[2].y = self.paddles.1 as f32;
-        physics.velocities[2] = Vec2::new(0.0, self.paddles_vel.1 as f32);
     }
 
     fn unproject_physics(&mut self, physics:&PongPhysics) {
@@ -312,16 +311,12 @@ impl World {
         self.ball.1 = physics.positions[0].y.trunc() as u8;
         self.ball_err = physics.positions[0] - Vec2::new(self.ball.0 as f32, self.ball.1 as f32);
         self.ball_vel = physics.velocities[0];
-        self.paddles.0 = physics.positions[1].y.trunc() as u8;
-        self.paddles_vel.0 = physics.velocities[1].y.trunc() as i8;
-        self.paddles.1 = physics.positions[2].y.trunc() as u8;
-        self.paddles_vel.1 = physics.velocities[2].y.trunc() as i8;
     }
 
-    fn project_collision(&self, collision: &mut PongCollision) {
-        let collision_bodies = vec![
-            // sides
-            // left
+    fn project_collision(&self, collision: &mut PongCollision, control: &WinitControl) {
+        collision.bodies.resize_with(7, Aabb::default);
+        collision.velocities.resize_with(7, Default::default);
+        let colliders = [
             Aabb::new(
                 Vec3::new(-1.0, 0.0, 0.0),
                 Vec3::new(0.0, HEIGHT as f32, 0.0)),
@@ -347,16 +342,29 @@ impl World {
                 Vec3::new((PADDLE_OFF_X + PADDLE_WIDTH) as f32, self.paddles.0 as f32 + PADDLE_HEIGHT as f32, 0.0)),
             Aabb::new(
                 Vec3::new((WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32, self.paddles.1 as f32, 0.0),
-                Vec3::new((WIDTH - PADDLE_OFF_X - PADDLE_WIDTH + 1) as f32, self.paddles.1 as f32 + PADDLE_HEIGHT as f32, 0.0)),
-        ];
-        collision.bodies = collision_bodies;
-        collision.velocities = {
-            let mut velocities = vec![Vec2::new(0.0, 0.0); 4];
-            velocities.push(self.ball_vel);
-            velocities.push(Vec2::new(0.0, self.paddles_vel.0 as f32));
-            velocities.push(Vec2::new(0.0, self.paddles_vel.1 as f32));
-            velocities
+                Vec3::new((WIDTH - PADDLE_OFF_X - PADDLE_WIDTH + 1) as f32, self.paddles.1 as f32 + PADDLE_HEIGHT as f32, 0.0))];
+        for (i, body) in colliders.iter().enumerate() {
+            collision.bodies[i] = *body;
         }
+        for vel in collision.velocities[..4].iter_mut() {
+            *vel = Vec2::new(0.0, 0.0);
+        }
+        collision.velocities[4] = self.ball_vel;
+        let mut p1_vel: f32 = 0.0;
+        let mut p2_vel: f32 = 0.0;
+        for choice in &control.selected_actions {
+            match choice {
+                (Player::P1, Action::Move(amt)) => {
+                    p1_vel = *amt as f32;
+                }
+                (Player::P2, Action::Move(amt)) => {
+                    p2_vel = *amt as f32;
+                }
+                _ => {}
+            }
+        }
+        collision.velocities[5] = Vec2::new(0.0, p1_vel);
+        collision.velocities[6] = Vec2::new(0.0, p2_vel);
     }
 
     fn unproject_collision(&mut self, collision: &PongCollision) {
