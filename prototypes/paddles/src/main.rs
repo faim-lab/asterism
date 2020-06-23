@@ -28,9 +28,9 @@ impl WinitControl {
     fn new() -> Self {
         Self {
             _actors: vec![Player::P1, Player::P2],
-            // loci of control?
-            // mapping: buttons -> variables. this button sets this variable to true when it's
-            // pressed, held down, etc
+            // loci of control?  mapping: buttons -> variables. this
+            // button sets this variable to true when it's pressed,
+            // held down, etc
             selected_actions: Vec::new(),
         }
     }
@@ -126,83 +126,68 @@ impl AabbCollision {
         }
 
         for (i, j) in self.contacts.iter() {
-            if !self.metadata[*i].solid && !self.metadata[*j].solid {
-                if !self.metadata[*i].fixed && !self.metadata[*j].fixed {
-                    let vel_i_x = self.velocities[*i].x / (self.velocities[*i].x + self.velocities[*j].x);
-                    let vel_i_y = self.velocities[*i].y / (self.velocities[*i].y + self.velocities[*j].y);
-                    let vel_j_x = self.velocities[*j].x / (self.velocities[*i].x + self.velocities[*j].x);
-                    let vel_j_y = self.velocities[*j].y / (self.velocities[*j].y + self.velocities[*i].y);
-                    if self.bodies[*i].max.x - self.bodies[*j].min.x < self.bodies[*j].max.x - self.bodies[*i].min.x {
-                        let displacement = self.bodies[*i].max.x - self.bodies[*j].min.x;
-                        self.bodies[*i].min.x += displacement * vel_i_x;
-                        self.bodies[*i].max.x += displacement * vel_i_x;
-                        self.bodies[*j].min.x += displacement * vel_j_x;
-                        self.bodies[*j].max.x += displacement * vel_j_x;
-                    } else {
-                        let displacement = self.bodies[*j].max.x - self.bodies[*i].min.y;
-                        self.bodies[*i].min.x -= displacement * vel_i_x;
-                        self.bodies[*i].max.x -= displacement * vel_i_x;
-                        self.bodies[*j].min.x -= displacement * vel_j_x;
-                        self.bodies[*j].max.x -= displacement * vel_j_x;
-                    }
+            let CollisionData { solid: i_solid, fixed: i_fixed, .. } =
+                self.metadata[*i];
+            let CollisionData { solid: j_solid, fixed: j_fixed, .. } =
+                self.metadata[*j];
 
-                    if self.bodies[*i].max.y - self.bodies[*j].min.y < self.bodies[*j].max.y - self.bodies[*i].min.y {
-                        let displacement = self.bodies[*i].max.y - self.bodies[*j].min.y;
-                        self.bodies[*i].min.y += displacement * vel_i_y;
-                        self.bodies[*i].max.y += displacement * vel_i_y;
-                        self.bodies[*j].min.y += displacement * vel_j_y;
-                        self.bodies[*j].max.y += displacement * vel_j_y;
-                    } else {
-                        let displacement = self.bodies[*j].max.y - self.bodies[*i].min.y;
-                        self.bodies[*i].min.y -= displacement * vel_i_y;
-                        self.bodies[*i].max.y -= displacement * vel_i_y;
-                        self.bodies[*j].min.y -= displacement * vel_j_y;
-                        self.bodies[*j].max.y -= displacement * vel_j_y;
-                    }
-                } else if !self.metadata[*i].fixed {
-                    if self.bodies[*i].max.x - self.bodies[*j].min.x < self.bodies[*j].max.x - self.bodies[*i].min.x {
-                        let displacement = self.bodies[*i].max.x - self.bodies[*j].min.x;
-                        self.bodies[*i].min.x -= displacement;
-                        self.bodies[*i].max.x -= displacement;
-                    } else {
-                        let displacement = self.bodies[*j].max.x - self.bodies[*i].min.x;
-                        self.bodies[*i].min.x += displacement;
-                        self.bodies[*i].max.x += displacement;
-                    }
+            if i_solid && j_solid {
+                continue;
+            }
 
-                    if self.bodies[*i].max.y - self.bodies[*j].min.y < self.bodies[*j].max.y - self.bodies[*i].min.y {
-                        let displacement = self.bodies[*i].max.y - self.bodies[*j].min.y;
-                        self.bodies[*i].min.y -= displacement;
-                        self.bodies[*i].max.y -= displacement;
-                    } else {
-                        let displacement = self.bodies[*j].max.y - self.bodies[*i].min.y;
-                        self.bodies[*i].min.y += displacement;
-                        self.bodies[*i].max.y += displacement;
-                    }
-                } else if !self.metadata[*j].fixed {
-                    if self.bodies[*i].max.x - self.bodies[*j].min.x < self.bodies[*j].max.x - self.bodies[*i].min.x {
-                        let displacement = self.bodies[*i].max.x - self.bodies[*j].min.x;
-                        self.bodies[*j].min.x += displacement;
-                        self.bodies[*j].max.x += displacement;
-                    } else {
-                        let displacement = self.bodies[*j].max.x - self.bodies[*i].min.x;
-                        self.bodies[*j].min.x -= displacement;
-                        self.bodies[*j].max.x -= displacement;
-                    }
+            if !i_fixed && !j_fixed {
+                let Vec2 { x: vel_i_x, y: vel_i_y } = self.velocities[*i];
+                let Vec2 { x: vel_j_x, y: vel_j_y } = self.velocities[*j];
+                let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
+                    max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i];
+                let Aabb { min: Vec3 { x: min_j_x, y: min_j_y, .. },
+                    max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[*j];
 
-                    if self.bodies[*i].max.y - self.bodies[*j].min.y < self.bodies[*j].max.y - self.bodies[*i].min.y {
-                        let displacement = self.bodies[*i].max.y - self.bodies[*j].min.y;
-                        self.bodies[*j].min.y += displacement;
-                        self.bodies[*j].max.y += displacement;
-                    } else {
-                        let displacement = self.bodies[*j].max.y - self.bodies[*i].min.y;
-                        self.bodies[*j].min.y -= displacement;
-                        self.bodies[*j].max.y -= displacement;
-                    }
+                let ( i_displace, j_displace ) = {
+                    let vel_i_x = vel_i_x / (vel_i_x.abs() + vel_j_x.abs());
+                    let vel_i_y = vel_i_y / (vel_i_y.abs() + vel_j_y.abs());
+                    let vel_j_x = vel_j_x / (vel_i_x.abs() + vel_j_x.abs());
+                    let vel_j_y = vel_j_y / (vel_i_y.abs() + vel_j_y.abs());
 
-                }
+                    let displacement_x = Self::get_displacement(min_i_x, max_i_x, min_j_x, max_j_x);
+                    let displacement_y = Self::get_displacement(min_i_y, max_i_y, min_j_y, max_j_y);
+
+                    ( Vec3::new(displacement_x * vel_i_x, displacement_y * vel_i_y, 0.0),
+                        Vec3::new(displacement_x * vel_j_x, displacement_y * vel_j_y, 0.0) )
+                };
+
+                self.bodies[*i].min += i_displace;
+                self.bodies[*i].max += i_displace;
+                self.bodies[*j].min += j_displace;
+                self.bodies[*j].max += j_displace;
+            } else {
+                let i = if !j_fixed { j } else { i };
+                let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
+                    max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i];
+                let Aabb { min: Vec3 { x: min_j_x, y: min_j_y, .. },
+                    max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[*j];
+                let displace = {
+                    let displacement_x = Self::get_displacement(min_i_x, max_i_x, min_j_x, max_j_x);
+                    let displacement_y = Self::get_displacement(min_i_y, max_i_y, min_j_y, max_j_y);
+
+                    Vec3::new(displacement_x, displacement_y, 0.0)
+                };
+
+                self.bodies[*i].min += displace;
+                self.bodies[*i].max += displace;
+                self.bodies[*j].min += displace;
+                self.bodies[*j].max += displace;
             }
         }
+    }
+
+    fn get_displacement(min_i: f32, max_i: f32, min_j: f32, max_j: f32)
+        -> f32 {
+            if max_i - min_j < max_j - min_i {
+                max_i - min_j
+            } else {
+                min_i - max_j
+            }
     }
 }
 
@@ -375,26 +360,33 @@ impl World {
 
         // game specific collision stuff
         for contact in logics.collision.contacts.iter() {
-            match (contact.0, contact.1) {
-                (0, 4) | (1, 4) => {
+            match (logics.collision.metadata[contact.0].id,
+                logics.collision.metadata[contact.1].id) {
+                (CollisionID::SideWall(player), CollisionID::Ball) => {
                     self.ball_vel = Vec2::new(0.0, 0.0);
-                    self.ball = (WIDTH / 2 - BALL_SIZE / 2, HEIGHT / 2 - BALL_SIZE / 2);
-                    if contact.0 == 0 {
-                        self.serving = Some(Player::P2);
-                        self.points.1 += 1;
-                        println!("p2 scores. p1: {}, p2: {}",
-                            self.points.0,
-                            self.points.1);
-                    } else {
-                        self.serving = Some(Player::P1);
-                        self.points.0 += 1;
-                        println!("p1 scores. p1: {} p2: {}",
-                            self.points.0,
-                            self.points.1);
+                    self.ball = (WIDTH / 2 - BALL_SIZE / 2,
+                        HEIGHT / 2 - BALL_SIZE / 2);
+                    self.serving = Some(player);
+                    match player {
+                        Player::P1 => {
+                            self.points.0 += 1;
+                            print!("p1 scores. ")
+                        }
+                        Player::P2 => {
+                            self.points.1 += 1;
+                            print!("p2 scores. ");
+                        }
                     }
+                    println!("p1: {}, p2: {}",
+                        self.points.0,
+                        self.points.1);
+
                 },
-                (2, 4) | (3, 4) => self.ball_vel.y *= -1.0,
-                (4, 5) | (4, 6) => self.ball_vel.x *= -1.0,
+                (CollisionID::TopWall, CollisionID::Ball) |
+                    (CollisionID::BottomWall, CollisionID::Ball) =>
+                    self.ball_vel.y *= -1.0,
+                (CollisionID::Ball, CollisionID::Paddle(_)) =>
+                    self.ball_vel.x *= -1.0,
                 _ => {}
             }
         }
