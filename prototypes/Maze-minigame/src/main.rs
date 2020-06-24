@@ -32,6 +32,7 @@ struct World {
     y: i16,
     vx: i16,
     vy: i16,
+    score: u8,
     walls: Vec<Wall>,
     items: Vec<Collectible>,
 }
@@ -44,21 +45,51 @@ struct Wall {
     h: i16,
 }
 
-/// Items that can be obtained and added to score
-struct Collectible {
-    x: i16,
-    y: i16,
-}
-
 impl Wall {
     fn new(x: i16, y: i16, w: i16, h: i16) -> Wall {
         Wall {x: x, y: y, w: w, h: h}
     }
 }
 
+/// Items that can be obtained and added to score
+struct Collectible {
+    x: i16,
+    y: i16,
+}
+
 impl Collectible {
     fn new(x:i16, y:i16) -> Self {
         Self {x: x, y: y}
+    }
+}
+
+struct MazeResources {
+    score: u8,
+    // can add other things later like keys, food
+}
+
+impl MazeResources {
+    fn new() -> Self {
+        Self {
+            score: 0,
+        }
+    }
+
+    fn update(&mut self) {
+        // process queue 
+        // destroy pickup if touched?
+    }
+}
+
+struct Logics {
+    resources: MazeResources,
+}
+
+impl Logics {
+    fn new() -> Self {
+        Self {
+            resources: MazeResources::new(),
+        }
     }
 }
 
@@ -84,6 +115,7 @@ fn main() -> Result<(), Error> {
     };
 
     let mut world = World::new();
+    let mut logics = Logics::new();
 
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
@@ -158,6 +190,7 @@ impl World {
             y: 8,
             vx: 16,
             vy: 16,
+            score: 0,
             walls: {
                 // create horizontal walls
                 let wall_1 = Wall::new(8, 11, 43, 3);
@@ -183,7 +216,7 @@ impl World {
                 vec![wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7, wall_8, wall_9, wall_10, wall_11, wall_12, wall_13, wall_14, wall_15, wall_16, wall_17, wall_18]
             },
             items: {
-                let item_1 = Collectible::new(100, 140);
+                let item_1 = Collectible::new(112, 72);
                 let item_2 = Collectible::new(26, 198);
             
                 vec![item_1, item_2]
@@ -194,10 +227,26 @@ impl World {
     /// Update the `World` internal state 
     fn update(&mut self, movement: ( Direction, Direction )) {
         self.move_box(&movement);
+        // if box touches an item, delete item from items vector
         let i = self.touch_pickup();
         if i != None {
             self.items.remove(i.unwrap());
         }
+
+        // todo: project and unproject
+        // self.project_resources(&mut logics.resources);
+        // logics.resources.update();
+        // self.unproject_resources(&logics.resources);
+
+    }
+
+    fn project_resources(&self, resources:&mut MazeResources) {
+        // todo: create score pool?
+        // todo: push resource transactions [list of rsrc changes] onto some queue
+    }
+
+    fn unproject_resources(&self, resources:&mut MazeResources) {
+        // todo: modify stuff in game state if changed, i.e. self.score += resources.sth
     }
 
     /// Move box according to arrow keys
