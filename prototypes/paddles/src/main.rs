@@ -413,8 +413,8 @@ impl World {
     }
 
     fn unproject_physics(&mut self, physics:&PongPhysics) {
-        self.ball.0 = physics.positions[0].x.trunc() as u8;
-        self.ball.1 = physics.positions[0].y.trunc() as u8;
+        self.ball.0 = physics.positions[0].x.trunc().max(0.0).min((WIDTH - BALL_SIZE) as f32) as u8;
+        self.ball.1 = physics.positions[0].y.trunc().max(0.0).min((HEIGHT - BALL_SIZE) as f32) as u8;
         self.ball_err = physics.positions[0] - Vec2::new(self.ball.0 as f32, self.ball.1 as f32);
         self.ball_vel = physics.velocities[0];
     }
