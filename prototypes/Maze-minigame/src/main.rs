@@ -32,6 +32,7 @@ struct World {
     box_y: i16,
     velocity_x: i16,
     velocity_y: i16,
+    walls: Vec<Wall>
 }
 
 /// Walls of the maze
@@ -89,29 +90,6 @@ fn main() -> Result<(), Error> {
     };
     let mut hidpi_factor = window.scale_factor();
 
-    // draw horizontal walls
-    let wall_1 = Wall::new(8, 11, 43, 3);
-    let wall_2 = Wall::new(94, 11, 218, 3);
-    let wall_3 = Wall::new(94, 54, 46, 3);
-    let wall_4 = Wall::new(180, 54, 86, 3);
-    let wall_5 = Wall::new(223, 97, 43, 3);
-    let wall_6 = Wall::new(8, 140, 46, 3);
-    let wall_7 = Wall::new(266, 140, 46, 3);
-    let wall_8 = Wall::new(51, 183, 132, 3);
-    let wall_9 = Wall::new(223, 183, 43, 3);
-    let wall_10 = Wall::new(8, 226, 218, 3);
-    let wall_11 = Wall::new(266, 226, 46, 3);
-    // draw vertical walls
-    let wall_12 = Wall::new(8, 11, 3, 218);
-    let wall_13 = Wall::new(51, 54, 3, 89);
-    let wall_14 = Wall::new(94, 54, 3, 132);
-    let wall_15 = Wall::new(137, 54, 3, 89);
-    let wall_16 = Wall::new(180, 11, 3, 175);
-    let wall_17 = Wall::new(223, 97, 3, 132);
-    let wall_18 = Wall::new(309, 11, 3, 218);
-
-    let all_walls = vec![wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7, wall_8, wall_9, wall_10, wall_11, wall_12, wall_13, wall_14, wall_15, wall_16, wall_17, wall_18];
-
     let item_1 = Collectible::new(100, 140);
     let item_2 = Collectible::new(26, 198);
 
@@ -123,16 +101,12 @@ fn main() -> Result<(), Error> {
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
 
-    for a_wall in &all_walls {
-        a_wall.draw(pixels.get_frame());
-    }
-    
     let mut world = World::new();
 
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            world.draw(pixels.get_frame(), &all_walls, &mut all_items);
+            world.draw(pixels.get_frame(), &world.walls, &mut all_items);
             if pixels
                 .render()
                 .map_err(|e| error!("pixels.render() failed: {}", e))
@@ -188,7 +162,7 @@ fn main() -> Result<(), Error> {
             });
             
             // Update internal state and request a redraw
-            world.update(movement, &all_walls, &mut all_items);
+            world.update(movement, &mut all_items);
             window.request_redraw();
         }     
     });
@@ -202,13 +176,37 @@ impl World {
             box_y: 8,
             velocity_x: 16,
             velocity_y: 16,
+            walls: {
+                // draw horizontal walls
+                let wall_1 = Wall::new(8, 11, 43, 3);
+                let wall_2 = Wall::new(94, 11, 218, 3);
+                let wall_3 = Wall::new(94, 54, 46, 3);
+                let wall_4 = Wall::new(180, 54, 86, 3);
+                let wall_5 = Wall::new(223, 97, 43, 3);
+                let wall_6 = Wall::new(8, 140, 46, 3);
+                let wall_7 = Wall::new(266, 140, 46, 3);
+                let wall_8 = Wall::new(51, 183, 132, 3);
+                let wall_9 = Wall::new(223, 183, 43, 3);
+                let wall_10 = Wall::new(8, 226, 218, 3);
+                let wall_11 = Wall::new(266, 226, 46, 3);
+                // draw vertical walls
+                let wall_12 = Wall::new(8, 11, 3, 218);
+                let wall_13 = Wall::new(51, 54, 3, 89);
+                let wall_14 = Wall::new(94, 54, 3, 132);
+                let wall_15 = Wall::new(137, 54, 3, 89);
+                let wall_16 = Wall::new(180, 11, 3, 175);
+                let wall_17 = Wall::new(223, 97, 3, 132);
+                let wall_18 = Wall::new(309, 11, 3, 218);
+
+                vec![wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7, wall_8, wall_9, wall_10, wall_11, wall_12, wall_13, wall_14, wall_15, wall_16, wall_17, wall_18]
+            }
         }
     }
 
     /// Update the `World` internal state 
-    fn update(&mut self, movement: ( Direction, Direction ), walls: &Vec<Wall>, collectibles: &mut Vec<Collectible>) {
+    fn update(&mut self, movement: ( Direction, Direction ), collectibles: &mut Vec<Collectible>) {
         // let box = &mut self.World;
-        self.move_box(&movement, walls);
+        self.move_box(&movement);
         let i = self.touch_pickup(collectibles);
         if i != None {
             collectibles.remove(i.unwrap());
@@ -216,7 +214,7 @@ impl World {
     }
 
     /// Move box according to arrow keys
-    fn move_box(&mut self, movement: &(Direction, Direction), walls: &Vec<Wall>) {
+    fn move_box(&mut self, movement: &(Direction, Direction)) {
         match movement.0 {
             Direction::Up => self.velocity_y = -16,
             Direction::Down => self.velocity_y = 16,
@@ -228,7 +226,7 @@ impl World {
             _ => self.velocity_x = 0,
         }
 
-        World::better_collision(self, &movement, walls);
+        World::better_collision(self, &movement);
 
         // Check collision with window boundaries
         if self.box_y + self.velocity_y <= 0 || self.box_y + BOX_SIZE + self.velocity_y > HEIGHT as i16 {
@@ -351,14 +349,14 @@ impl World {
     }
 
     /// Detect collision
-    fn better_collision(&mut self, movement: &(Direction, Direction), walls: &Vec<Wall>) {
+    fn better_collision(&mut self, movement: &(Direction, Direction)) {
         let mut temp_velocity_y: i16 = self.velocity_y;
         let mut temp_velocity_x: i16 = self.velocity_x;
 
-        let touching_above: bool = self.touching_hz_above(walls);
-        let touching_below: bool = self.touching_hz_below(walls);
-        let touching_left: bool = self.touching_vt_left(walls);
-        let touching_right: bool = self.touching_vt_right(walls);
+        let touching_above: bool = self.touching_hz_above(&self.walls);
+        let touching_below: bool = self.touching_hz_below(&self.walls);
+        let touching_left: bool = self.touching_vt_left(&self.walls);
+        let touching_right: bool = self.touching_vt_right(&self.walls);
 
         if {touching_above && movement.0 == Direction::Up} || {touching_below && movement.0 == Direction::Down} {
             temp_velocity_y = 0;
@@ -375,14 +373,14 @@ impl World {
             let touch_hz: bool;
 
             if movement.0 == Direction::Up {
-                touch_vt = self.corner_above_check(walls);
+                touch_vt = self.corner_above_check(&self.walls);
             } else {
-                touch_vt = self.corner_below_check(walls);
+                touch_vt = self.corner_below_check(&self.walls);
             }
             if movement.1 == Direction::Left {
-                touch_hz = self.corner_left_check(walls);
+                touch_hz = self.corner_left_check(&self.walls);
             } else {
-                touch_hz = self.corner_right_check(walls);
+                touch_hz = self.corner_right_check(&self.walls);
             }
 
             if touch_vt == true && touch_hz == true {
@@ -413,7 +411,7 @@ impl World {
         }
 
         if movement.0 != Direction::Still && temp_velocity_y != 0 {
-            for a_wall in walls {
+            for a_wall in &self.walls {
                 if movement.0 == Direction::Up {
                     if a_wall.wall_y + a_wall.wall_height < self.box_y
                     && a_wall.wall_y + a_wall.wall_height > temp_y
@@ -436,7 +434,7 @@ impl World {
             }
         }
         if movement.1 != Direction::Still && temp_velocity_x != 0 {
-            for a_wall in walls {
+            for a_wall in &self.walls {
                 if movement.1 == Direction::Left {
                     if a_wall.wall_x + a_wall.wall_width < self.box_x
                     && a_wall.wall_x + a_wall.wall_width > temp_x
@@ -482,6 +480,10 @@ impl World {
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
     fn draw(&self, frame: &mut [u8], walls: &Vec<Wall>, collectibles: &mut Vec<Collectible>) {
+        for a_wall in walls {
+            a_wall.draw(frame);
+        }
+
         fn inside_all_walls(x:i16, y:i16, walls: &Vec<Wall>) -> bool {
             for a_wall in walls {
                 if x >= a_wall.wall_x
