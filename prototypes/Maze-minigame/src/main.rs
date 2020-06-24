@@ -13,9 +13,20 @@ const WIDTH: u32 = 320;
 const HEIGHT: u32 = 240;
 const BOX_SIZE: i16 = 20;
 
+/// Size and point worth of items
+const ITEM_SIZE: i8 = 10;
+const ITEM_VAL: u8 = 1;
 
+#[derive(PartialEq)]
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+    Still,
+}
 
-/// Representation of the application state. In this example, a box will bounce around the screen.
+/// Representation of the application state
 struct World {
     box_x: i16,
     box_y: i16,
@@ -31,13 +42,10 @@ struct Wall {
     wall_height: i16,
 }
 
-#[derive(PartialEq)]
-enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
-    Still,
+/// Items that can be obtained and added to score
+struct Collectible {
+    x: i16,
+    y: i16,
 }
 
 impl Wall {
@@ -60,6 +68,12 @@ impl Wall {
     }
 }
 
+impl Collectible {
+    fn new(x:i16, y:i16) -> Self {
+        Self {x: x, y: y}
+    }
+}
+
 fn main() -> Result<(), Error> {
     env_logger::init();
     let event_loop = EventLoop::new();
@@ -67,7 +81,7 @@ fn main() -> Result<(), Error> {
     let window = {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
         WindowBuilder::new()
-            .with_title("Pixels Game")
+            .with_title("maze")
             .with_inner_size(size)
             .with_min_inner_size(size)
             .build(&event_loop)
@@ -98,6 +112,11 @@ fn main() -> Result<(), Error> {
 
     let all_walls = vec![wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7, wall_8, wall_9, wall_10, wall_11, wall_12, wall_13, wall_14, wall_15, wall_16, wall_17, wall_18];
 
+    let item_1 = Collectible::new(100, 140);
+    let item_2 = Collectible::new(26, 198);
+
+    let mut all_items = &mut vec![item_1, item_2];
+    
     let mut pixels = {
         let surface = Surface::create(&window);
         let surface_texture = SurfaceTexture::new(WIDTH, HEIGHT, surface);
@@ -113,7 +132,7 @@ fn main() -> Result<(), Error> {
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            world.draw(pixels.get_frame(), &all_walls);
+            world.draw(pixels.get_frame(), &all_walls, all_items);
             if pixels
                 .render()
                 .map_err(|e| error!("pixels.render() failed: {}", e))
@@ -169,7 +188,7 @@ fn main() -> Result<(), Error> {
             });
             
             // Update internal state and request a redraw
-            world.update(movement, &all_walls);
+            world.update(movement, &all_walls, all_items);
             window.request_redraw();
         }     
     });
@@ -187,9 +206,13 @@ impl World {
     }
 
     /// Update the `World` internal state 
-    fn update(&mut self, movement: ( Direction, Direction ), walls: &Vec<Wall>) {
+    fn update(&mut self, movement: ( Direction, Direction ), walls: &Vec<Wall>, collectibles: &mut Vec<Collectible>) {
         // let box = &mut self.World;
         self.move_box(&movement, walls);
+        let i = self.touch_pickup(collectibles);
+        if i != None {
+            collectibles.remove(i.unwrap());
+        }
     }
 
     /// Move box according to arrow keys
@@ -440,10 +463,25 @@ impl World {
         self.velocity_y = temp_velocity_y;
     }
 
+    /// Check if box is touching or overlapping a pickup - only can check for one at a time, not multiple
+    fn touch_pickup(&self, collectibles: &mut Vec<Collectible>) -> Option<usize> {
+        for i in 0..collectibles.len() {
+            if self.box_x < collectibles[i].x + ITEM_SIZE as i16
+            && self.box_x + BOX_SIZE >= collectibles[i].x
+            && self.box_y < collectibles[i].y + ITEM_SIZE as i16
+            && self.box_y + BOX_SIZE >= collectibles[i].y {
+                if i < collectibles.len() {
+                    return Some(i);
+                }
+            }
+        }
+        None
+    }
+
     /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
-    fn draw(&self, frame: &mut [u8], walls: &Vec<Wall>) {
+    fn draw(&self, frame: &mut [u8], walls: &Vec<Wall>, collectibles: &mut Vec<Collectible>) {
         fn inside_all_walls(x:i16, y:i16, walls: &Vec<Wall>) -> bool {
             for a_wall in walls {
                 if x >= a_wall.wall_x
@@ -455,7 +493,19 @@ impl World {
             } 
             return false;
         }
-        
+
+        fn is_collectible(x:i16, y:i16, collectibles: &mut Vec<Collectible>) -> bool {
+            for an_item in collectibles.iter() {
+                if x >= an_item.x
+                && x < an_item.x + ITEM_SIZE as i16
+                && y >= an_item.y
+                && y < an_item.y + ITEM_SIZE as i16 {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         // Only redraw pixels that are not in the maze walls... theoretically
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
             let x = (i % WIDTH as usize) as i16;
@@ -469,6 +519,8 @@ impl World {
 
                 let rgba = if inside_the_box {
                     [0x5e, 0x48, 0xe8, 0xff]
+                } else if is_collectible(x, y, collectibles) {
+                    [0x95, 0xed, 0xc1, 0xff]
                 } else {
                     [0x48, 0xb2, 0xe8, 0xff]
                 };
