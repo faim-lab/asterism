@@ -32,7 +32,8 @@ struct World {
     box_y: i16,
     velocity_x: i16,
     velocity_y: i16,
-    walls: Vec<Wall>
+    walls: Vec<Wall>,
+    items: Vec<Collectible>,
 }
 
 /// Walls of the maze
@@ -89,11 +90,6 @@ fn main() -> Result<(), Error> {
             .unwrap()
     };
     let mut hidpi_factor = window.scale_factor();
-
-    let item_1 = Collectible::new(100, 140);
-    let item_2 = Collectible::new(26, 198);
-
-    let mut all_items = vec![item_1, item_2];
     
     let mut pixels = {
         let surface = Surface::create(&window);
@@ -106,7 +102,7 @@ fn main() -> Result<(), Error> {
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            world.draw(pixels.get_frame(), &world.walls, &mut all_items);
+            world.draw(pixels.get_frame(), &world.walls, &world.items);
             if pixels
                 .render()
                 .map_err(|e| error!("pixels.render() failed: {}", e))
@@ -162,7 +158,7 @@ fn main() -> Result<(), Error> {
             });
             
             // Update internal state and request a redraw
-            world.update(movement, &mut all_items);
+            world.update(movement);
             window.request_redraw();
         }     
     });
@@ -199,17 +195,22 @@ impl World {
                 let wall_18 = Wall::new(309, 11, 3, 218);
 
                 vec![wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7, wall_8, wall_9, wall_10, wall_11, wall_12, wall_13, wall_14, wall_15, wall_16, wall_17, wall_18]
+            },
+            items: {
+                let item_1 = Collectible::new(100, 140);
+                let item_2 = Collectible::new(26, 198);
+            
+                vec![item_1, item_2]
             }
         }
     }
 
     /// Update the `World` internal state 
-    fn update(&mut self, movement: ( Direction, Direction ), collectibles: &mut Vec<Collectible>) {
-        // let box = &mut self.World;
+    fn update(&mut self, movement: ( Direction, Direction )) {
         self.move_box(&movement);
-        let i = self.touch_pickup(collectibles);
+        let i = self.touch_pickup();
         if i != None {
-            collectibles.remove(i.unwrap());
+            self.items.remove(i.unwrap());
         }
     }
 
@@ -462,13 +463,13 @@ impl World {
     }
 
     /// Check if box is touching or overlapping a pickup - only can check for one at a time, not multiple
-    fn touch_pickup(&self, collectibles: &mut Vec<Collectible>) -> Option<usize> {
-        for i in 0..collectibles.len() {
-            if self.box_x < collectibles[i].x + ITEM_SIZE as i16
-            && self.box_x + BOX_SIZE >= collectibles[i].x
-            && self.box_y < collectibles[i].y + ITEM_SIZE as i16
-            && self.box_y + BOX_SIZE >= collectibles[i].y {
-                if i < collectibles.len() {
+    fn touch_pickup(&self) -> Option<usize> {
+        for i in 0..self.items.len() {
+            if self.box_x < self.items[i].x + ITEM_SIZE as i16
+            && self.box_x + BOX_SIZE >= self.items[i].x
+            && self.box_y < self.items[i].y + ITEM_SIZE as i16
+            && self.box_y + BOX_SIZE >= self.items[i].y {
+                if i < self.items.len() {
                     return Some(i);
                 }
             }
@@ -479,8 +480,8 @@ impl World {
     /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
-    fn draw(&self, frame: &mut [u8], walls: &Vec<Wall>, collectibles: &mut Vec<Collectible>) {
-        for a_wall in walls {
+    fn draw(&self, frame: &mut [u8], walls: &Vec<Wall>, items: &Vec<Collectible>) {
+        for a_wall in &self.walls {
             a_wall.draw(frame);
         }
 
@@ -496,8 +497,8 @@ impl World {
             return false;
         }
 
-        fn is_collectible(x:i16, y:i16, collectibles: &mut Vec<Collectible>) -> bool {
-            for an_item in collectibles.iter() {
+        fn is_item(x:i16, y:i16, items: &Vec<Collectible>) -> bool {
+            for an_item in items.iter() {
                 if x >= an_item.x
                 && x < an_item.x + ITEM_SIZE as i16
                 && y >= an_item.y
@@ -521,7 +522,7 @@ impl World {
 
                 let rgba = if inside_the_box {
                     [0x5e, 0x48, 0xe8, 0xff]
-                } else if is_collectible(x, y, collectibles) {
+                } else if is_item(x, y, items) {
                     [0x95, 0xed, 0xc1, 0xff]
                 } else {
                     [0x48, 0xb2, 0xe8, 0xff]
