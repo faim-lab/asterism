@@ -115,7 +115,7 @@ fn main() -> Result<(), Error> {
     let item_1 = Collectible::new(100, 140);
     let item_2 = Collectible::new(26, 198);
 
-    let mut all_items = &mut vec![item_1, item_2];
+    let mut all_items = vec![item_1, item_2];
     
     let mut pixels = {
         let surface = Surface::create(&window);
@@ -132,7 +132,7 @@ fn main() -> Result<(), Error> {
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            world.draw(pixels.get_frame(), &all_walls, all_items);
+            world.draw(pixels.get_frame(), &all_walls, &mut all_items);
             if pixels
                 .render()
                 .map_err(|e| error!("pixels.render() failed: {}", e))
@@ -188,7 +188,7 @@ fn main() -> Result<(), Error> {
             });
             
             // Update internal state and request a redraw
-            world.update(movement, &all_walls, all_items);
+            world.update(movement, &all_walls, &mut all_items);
             window.request_redraw();
         }     
     });
