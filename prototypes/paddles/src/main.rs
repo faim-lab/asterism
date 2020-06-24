@@ -9,7 +9,7 @@ use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, Vec3, geometry::Aabb};
 
-const WIDTH: u8 = 245;
+const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
 const PADDLE_OFF_X: u8 = 16;
 const PADDLE_HEIGHT: u8 = 48;
@@ -170,13 +170,15 @@ impl AabbCollision {
                     let displacement_x = Self::get_displacement(min_i_x, max_i_x, min_j_x, max_j_x);
                     let displacement_y = Self::get_displacement(min_i_y, max_i_y, min_j_y, max_j_y);
 
-                    Vec3::new(displacement_x, displacement_y, 0.0)
+                    if displacement_x < displacement_y {
+                        Vec3::new(displacement_x, 0.0, 0.0)
+                    } else {
+                        Vec3::new(0.0, displacement_y, 0.0)
+                    }
                 };
 
                 self.bodies[*i].min += displace;
                 self.bodies[*i].max += displace;
-                self.bodies[*j].min += displace;
-                self.bodies[*j].max += displace;
             }
         }
     }
@@ -380,13 +382,24 @@ impl World {
                     println!("p1: {}, p2: {}",
                         self.points.0,
                         self.points.1);
-
                 },
                 (CollisionID::TopWall, CollisionID::Ball) |
                     (CollisionID::BottomWall, CollisionID::Ball) =>
                     self.ball_vel.y *= -1.0,
-                (CollisionID::Ball, CollisionID::Paddle(_)) =>
-                    self.ball_vel.x *= -1.0,
+                (CollisionID::Ball, CollisionID::Paddle(player)) => {
+                    if match player {
+                        Player::P1 =>
+                            (self.ball.0 as i16 - (PADDLE_OFF_X + PADDLE_WIDTH) as i16).abs()
+                            > (self.ball.1 as i16 - self.paddles.0 as i16).abs().min((self.ball.1 as i16 - (self.paddles.0 + PADDLE_HEIGHT) as i16).abs()),
+                        Player::P2 =>
+                            (self.ball.0 as i16 - (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as i16).abs()
+                            > (self.ball.1 as i16 - self.paddles.1 as i16).abs().min((self.ball.1 as i16 - (self.paddles.1 + PADDLE_HEIGHT) as i16).abs()),
+                    } {
+                        self.ball_vel.y *= -1.1;
+                    } else {
+                        self.ball_vel.x *= -1.1;
+                    }
+                },
                 _ => {}
             }
         }
@@ -427,11 +440,11 @@ impl World {
                 Vec3::new(self.ball.0 as f32, self.ball.1 as f32, 0.0),
                 Vec3::new(self.ball.0 as f32 + BALL_SIZE as f32, self.ball.1 as f32 + BALL_SIZE as f32, 0.0)),
             Aabb::new(
-                Vec3::new((PADDLE_OFF_X + PADDLE_WIDTH - 1) as f32, self.paddles.0 as f32, 0.0),
+                Vec3::new((PADDLE_OFF_X) as f32, self.paddles.0 as f32, 0.0),
                 Vec3::new((PADDLE_OFF_X + PADDLE_WIDTH) as f32, self.paddles.0 as f32 + PADDLE_HEIGHT as f32, 0.0)),
             Aabb::new(
                 Vec3::new((WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32, self.paddles.1 as f32, 0.0),
-                Vec3::new((WIDTH - PADDLE_OFF_X - PADDLE_WIDTH + 1) as f32, self.paddles.1 as f32 + PADDLE_HEIGHT as f32, 0.0))];
+                Vec3::new((WIDTH - PADDLE_OFF_X) as f32, self.paddles.1 as f32 + PADDLE_HEIGHT as f32, 0.0))];
 
         for (i, body) in colliders.iter().enumerate() {
             collision.bodies[i] = *body;
