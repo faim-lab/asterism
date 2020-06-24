@@ -54,20 +54,6 @@ impl Wall {
     fn new(x: i16, y: i16, w: i16, h: i16) -> Wall {
         Wall {x: x, y: y, w: w, h: h}
     }
-
-    fn draw(&self, frame: &mut [u8]) {
-        for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-            let x = (i % WIDTH as usize) as i16;
-            let y = (i / WIDTH as usize) as i16;
-
-            if x >= self.x
-                && x < self.x + self.w
-                && y >= self.y
-                && y < self.y + self.h {
-                    pixel.copy_from_slice(&[0xff, 0xff, 0xff, 0xff]);
-                }
-        }
-    }
 }
 
 impl Collectible {
@@ -173,7 +159,7 @@ impl World {
             vx: 16,
             vy: 16,
             walls: {
-                // draw horizontal walls
+                // create horizontal walls
                 let wall_1 = Wall::new(8, 11, 43, 3);
                 let wall_2 = Wall::new(94, 11, 218, 3);
                 let wall_3 = Wall::new(94, 54, 46, 3);
@@ -185,7 +171,7 @@ impl World {
                 let wall_9 = Wall::new(223, 183, 43, 3);
                 let wall_10 = Wall::new(8, 226, 218, 3);
                 let wall_11 = Wall::new(266, 226, 46, 3);
-                // draw vertical walls
+                // create vertical walls
                 let wall_12 = Wall::new(8, 11, 3, 218);
                 let wall_13 = Wall::new(51, 54, 3, 89);
                 let wall_14 = Wall::new(94, 54, 3, 132);
@@ -481,10 +467,6 @@ impl World {
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
     fn draw(&self, frame: &mut [u8], walls: &Vec<Wall>, items: &Vec<Collectible>) {
-        for a_wall in &self.walls {
-            a_wall.draw(frame);
-        }
-
         fn inside_all_walls(x:i16, y:i16, walls: &Vec<Wall>) -> bool {
             for a_wall in walls {
                 if x >= a_wall.x
@@ -496,6 +478,17 @@ impl World {
             } 
             return false;
         }
+
+        let is_box = |x, y| -> bool {
+            if x >= self.x
+            && x < self.x + BOX_SIZE
+            && y >= self.y
+            && y < self.y + BOX_SIZE {
+                return true;
+            } else {
+                return false;
+            }
+        };
 
         fn is_item(x:i16, y:i16, items: &Vec<Collectible>) -> bool {
             for an_item in items.iter() {
@@ -514,22 +507,17 @@ impl World {
             let x = (i % WIDTH as usize) as i16;
             let y = (i / WIDTH as usize) as i16;
 
-            if !inside_all_walls(x, y, walls) {
-                let inside_the_box = x >= self.x
-                && x < self.x + BOX_SIZE
-                && y >= self.y
-                && y < self.y + BOX_SIZE;
+            let rgba = if inside_all_walls(x, y, walls) {
+                [0xff, 0xff, 0xff, 0xff]
+            } else if is_box(x, y) {
+                [0x5e, 0x48, 0xe8, 0xff]
+            } else if is_item(x, y, items) {
+                [0x95, 0xed, 0xc1, 0xff]
+            } else {
+                [0x48, 0xb2, 0xe8, 0xff]
+            };
 
-                let rgba = if inside_the_box {
-                    [0x5e, 0x48, 0xe8, 0xff]
-                } else if is_item(x, y, items) {
-                    [0x95, 0xed, 0xc1, 0xff]
-                } else {
-                    [0x48, 0xb2, 0xe8, 0xff]
-                };
-        
-                pixel.copy_from_slice(&rgba);
-            }
+            pixel.copy_from_slice(&rgba);
         }
     }
 }
