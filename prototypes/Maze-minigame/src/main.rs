@@ -65,6 +65,8 @@ impl Collectible {
 
 struct MazeResources {
     score: u8,
+    score_change: u8,
+    touched_item: Option<usize>,
     // can add other things later like keys, food
 }
 
@@ -72,12 +74,18 @@ impl MazeResources {
     fn new() -> Self {
         Self {
             score: 0,
+            score_change: 0,
+            touched_item: None,
         }
     }
 
-    fn update(&mut self) {
+    fn update(&mut self, all_items: &mut Vec<Collectible>) {
         // process queue 
         // destroy pickup if touched?
+        self.score += self.score_change;
+        if self.touched_item != None {
+            all_items.remove(self.touched_item.unwrap());
+        };
     }
 }
 
@@ -176,7 +184,7 @@ fn main() -> Result<(), Error> {
             });
             
             // Update internal state and request a redraw
-            world.update(movement);
+            world.update(&mut logics, movement);
             window.request_redraw();
         }     
     });
@@ -218,35 +226,48 @@ impl World {
             items: {
                 let item_1 = Collectible::new(112, 72);
                 let item_2 = Collectible::new(26, 198);
+                let item_3 = Collectible::new(195, 198);
+                let item_4 = Collectible::new(195, 29);
+                let item_5 = Collectible::new(281, 198);
             
-                vec![item_1, item_2]
+                vec![item_1, item_2, item_3, item_4, item_5]
             }
         }
     }
 
     /// Update the `World` internal state 
-    fn update(&mut self, movement: ( Direction, Direction )) {
+    fn update(&mut self, logics: &mut Logics, movement: ( Direction, Direction )) {
         self.move_box(&movement);
-        // if box touches an item, delete item from items vector
-        let i = self.touch_pickup();
-        if i != None {
-            self.items.remove(i.unwrap());
+
+        self.project_resources(&mut logics.resources);
+        logics.resources.update(&mut self.items);
+        self.unproject_resources(&logics.resources);
+
+        if logics.resources.score_change != 0 {
+            println!("score: {}", self.score);
         }
-
-        // todo: project and unproject
-        // self.project_resources(&mut logics.resources);
-        // logics.resources.update();
-        // self.unproject_resources(&logics.resources);
-
     }
 
     fn project_resources(&self, resources:&mut MazeResources) {
         // todo: create score pool?
         // todo: push resource transactions [list of rsrc changes] onto some queue
+        resources.score = self.score;
+        let i = self.touch_pickup();
+        match i {
+            None => {
+                resources.score_change = 0;
+                resources.touched_item = None;
+            },
+            _ => {
+                resources.score_change = ITEM_VAL;
+                resources.touched_item = i;
+            }
+        }
     }
 
-    fn unproject_resources(&self, resources:&mut MazeResources) {
+    fn unproject_resources(&mut self, resources: &MazeResources) {
         // todo: modify stuff in game state if changed, i.e. self.score += resources.sth
+        self.score = resources.score;
     }
 
     /// Move box according to arrow keys
