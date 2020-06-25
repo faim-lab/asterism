@@ -10,74 +10,228 @@ use vector::Vector;
 mod make_square;
 use make_square::render_thing;
 
-trait Render {
-		fn render(&self) -> (Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<u16>);
-}
-
 struct Game {
-		/*
-		maybe we have tiers,
-		non-display
-		display
-		move
-		*/
-		things: Vec<Box<dyn Render>>,
+		view_area: ViewArea,
+		
+		renderable_components: RenderableComponentVec,
+		position_components: PositionComponentVec,
+		
+}
+impl Game {
+		fn new() -> Game {
+				//something tbd--get the resources?
+				let position_component_vec = PositionComponentVec::new();
+				let renderable_component_vec = RenderableComponentVec::new();
+				let mut game: Game = Game {
+						view_area: ViewArea::new(),
+						position_components: position_component_vec,
+						renderable_components: renderable_component_vec,
+				};
+				game.add_thing();
+				println!("{:?}", game.position_components.parts);
+				println!("{:?}", game.renderable_components.parts);
+				game
+		}
+		fn add_thing(&mut self) {
+				self.position_components.add(
+						PositionComponent::new(0.5, 0_f32)
+				);
+				self.renderable_components.add(
+						RenderableComponent::new(None, Vector::new(1_f32, 0_f32), 0.2, 0_u32)
+				);
+				self.renderable_components.update_all_coords(&self.view_area, &self.position_components);
+		}
+		fn render(&self) -> (Vec<Vertex>, Vec<u16>) {
+				// will want to update as part of this--coming soon
+				self.renderable_components.render_all()
+		}
 }
 
-struct Player {
-		position: Vector,
+
+// view area
+
+struct ViewArea {
+		// location of the center of the view
+		x: f32,
+		y: f32,
+}
+
+impl ViewArea {
+		// only here until i implement zooming
+		const LENGTH: f32 = 100_f32;
+		const WIDTH: f32 = 100_f32;
+		fn new() -> ViewArea {
+				ViewArea::default()
+		}
+		//incredibly broken rn
+		fn pos_cords_to_render_cords(&self, thing_position: &PositionComponent) -> (Option<f32>, Option<f32>) {
+				let potential_render_x: f32 = (thing_position.x - self.x) / ViewArea::LENGTH;
+				println!("{}", potential_render_x);
+				let potential_render_y: f32 = -(thing_position.y - self.y) / ViewArea::WIDTH;
+				println!("{}", potential_render_y);
+				let (render_x, render_y): (Option<f32>, Option<f32>) = if potential_render_x < 1_f32
+						&& potential_render_y < 1_f32 {
+								(Some(potential_render_x), Some(potential_render_y))
+						} else {
+								(None, None)
+						};
+				println!("{:?}", render_x);
+				(render_x, render_y)
+		}
+}
+
+impl Default for ViewArea {
+		fn default() -> ViewArea {
+				ViewArea {
+						x: 50_f32,
+						y: 50_f32,
+				}
+		}
+}
+
+// position
+#[derive(Debug)]
+struct PositionComponent {
+		x: f32,
+		y: f32,
+}
+
+impl PositionComponent {
+		fn new(x: f32, y: f32) -> PositionComponent {
+				PositionComponent {
+						x,
+						y,
+				}
+		}
+}
+
+#[derive(Debug)]
+struct PositionComponentVec {
+		parts: Vec<PositionComponent>,
+}
+
+impl PositionComponentVec {
+		fn new() -> PositionComponentVec {
+				PositionComponentVec {
+						parts: Vec::new(),
+				}
+		}
+		fn add(&mut self, position_component: PositionComponent) {
+				self.parts.push(position_component);
+		}
+		fn get_render_positions(&self, view_area: &ViewArea) -> Vec<Option<Vector>> {
+				// this should eventually take grid location, adjust for size etc--maybe better as a method of
+				// render?
+				let mut render_positions: Vec<Option<Vector>> = Vec::new();
+				for i in 0..self.parts.len() {
+						let render_coords: (Option<f32>, Option<f32>) = view_area
+								.pos_cords_to_render_cords(&self.parts[i]);
+						render_positions.push(
+								match render_coords {
+										(Some(j), Some(k)) => {
+												Some(Vector::new(j, k))
+										},
+										_ => None,
+								}
+						);
+				}
+				render_positions
+		}
+}
+
+// input---------------------------------------
+
+
+
+// render--------------------------------------
+#[derive(Debug)]
+struct RenderableComponent {
+		position: Option<Vector>,
 		facing: Vector,
 		size: f32,
 		texture: u32,
+/*
+would like to have it store the result of its previous render to speed up program, only re-render those assets that need it
+		*/
+		//		z_index: u8, <-may be needed to preserve front/back stuff if list is
+		// getting shuffled to render...?
 }
 
-impl Game {
-		fn new() -> Game {
-				let mut things: Vec<Box<dyn Render>> = Vec::new();
-				things.push(Box::new(Player::new()));						
-				Game {
-						things,
+impl RenderableComponent {
+		fn new(position: Option<Vector>,
+					 facing: Vector,
+					 size: f32,
+					 texture: u32,) -> RenderableComponent {
+				RenderableComponent {
+						position,
+						facing,
+						size,
+						texture,
+				}
+		}
+		fn update_coordinates(&mut self, new_coords: &Option<Vector>) {
+				self.position = match new_coords {
+						Some(i) => Some(Vector::new(i.x, i.y)),
+						None => None,
+				};
+		}
+		// rendering everything as squares not going to work if empty -> black
+		fn render(&self) -> Option<(Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<u16>)> {
+				match &self.position {
+						Some(i) => Some(render_thing(&i, &self.facing, self.size, self.texture)),
+						None => None,
 				}
 		}
 }
 
-impl Player {
-		fn new() -> Player {
-				Player {
-						position: Vector::new(0.5, 0_f32),
-						facing: Vector::new(1_f32, 0_f32),
-						size: 0.2,
-						texture: 0,
-				}
-		}
+#[derive(Debug)]
+struct RenderableComponentVec {
+		// should be option<RenderablePart> but there are bigger problems for now
+		parts: Vec<RenderableComponent>,
 }
 
-// Rendering stuff below here
-impl Game {
+impl RenderableComponentVec {
+		fn new() -> RenderableComponentVec {
+				RenderableComponentVec {
+						parts: Vec::new(),
+				}
+		}
+		fn add(&mut self, new_component: RenderableComponent) {
+				self.parts.push(new_component);
+		}
+		fn update_all_coords(&mut self, view_area: &ViewArea, position_component_vec: &PositionComponentVec) {
+				let new_coords = position_component_vec.get_render_positions(view_area);
+				for i in 0..self.parts.len() {
+						self.parts[i].update_coordinates(&new_coords[i])
+				}
+		}
 		fn render_all(&self) -> (Vec<Vertex>, Vec<u16>) {
 				let mut indices_vec: Vec<u16> = Vec::new();
 				let mut vertices_vec: Vec<Vertex> = Vec::new();
-				for thing in self.things.iter() {
-						let mut placeholder: (Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<u16>) = thing.render();
-						indices_vec.append(&mut placeholder.2);
-						let combined_vertices: Vec<([f32; 3], [f32; 2])> = placeholder.0.into_iter()
-								.zip(placeholder.1.into_iter())
-								.collect();
-						for (pos, coords) in combined_vertices.iter() {
-								vertices_vec.push(
-										Vertex { position: *pos, tex_coords: *coords }
-								);
+				for thing in self.parts.iter() {
+						let potential_placeholder: Option<(Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<u16>)> = thing.render();
+						match potential_placeholder {
+								Some(i) => {
+										let mut placeholder = i;
+										indices_vec.append(&mut placeholder.2);
+										let combined_vertices: Vec<([f32; 3], [f32; 2])> = placeholder.0.into_iter()
+												.zip(placeholder.1.into_iter())
+												.collect();
+										for (pos, coords) in combined_vertices.iter() {
+												vertices_vec.push(
+														Vertex { position: *pos, tex_coords: *coords }
+												);
+										}
+								},
+								None => (),
 						}
 				}
 				(vertices_vec, indices_vec)
 		}
 }
 
-impl Render for Player {
-		fn render(&self) -> (Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<u16>) {
-				render_thing(&self.position, &self.facing, self.size, self.texture)
-		}
-}
+//-----------------------------------------------------------------------------------------
+
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -271,7 +425,11 @@ impl State {
 
 				let game = Game::new();
 
-				let (vertices, indices) = game.render_all();
+				let (vertices, indices) = game.render();
+
+				println!("{:?}", vertices);
+
+				println!("{:?}", indices);
 				
 				let vertex_buffer = device.create_buffer_with_data(
             bytemuck::cast_slice(vertices.as_slice()),
@@ -412,4 +570,5 @@ fn main() {
             _ => {}
         }
     });
+
 }

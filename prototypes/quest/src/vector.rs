@@ -1,4 +1,5 @@
 //pretty basic implementation of vectors because what even are crates
+#[derive(Debug)]
 pub struct Vector {
 		pub x: f32,
 		pub y: f32,
