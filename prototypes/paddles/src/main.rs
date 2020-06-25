@@ -108,9 +108,31 @@ impl Default for CollisionID {
 impl AabbCollision {
     fn new() -> Self {
         Self {
-            bodies: Vec::new(),
-            velocities: Vec::new(),
-            metadata: Vec::new(),
+            bodies: vec![
+                Aabb::new(
+                    Vec3::new(-1.0, 0.0, 0.0),
+                    Vec3::new(0.0, HEIGHT as f32, 0.0)
+                ),
+                Aabb::new(
+                    Vec3::new(WIDTH as f32, 0.0, 0.0),
+                    Vec3::new(WIDTH as f32 + 1.0, HEIGHT as f32, 0.0)
+                ),
+                Aabb::new(
+                    Vec3::new(0.0, -1.0, 0.0),
+                    Vec3::new(WIDTH as f32, 0.0, 0.0)
+                ),
+                Aabb::new(
+                    Vec3::new(0.0, HEIGHT as f32, 0.0),
+                    Vec3::new(WIDTH as f32, HEIGHT as f32 + 1.0, 0.0)
+                )
+            ],
+            velocities: vec![Vec2::new(0.0, 0.0); 4],
+            metadata: vec![
+                CollisionData{ solid: true, fixed: true, id: CollisionID::SideWall(Player::P1) },
+                CollisionData{ solid: true, fixed: true, id: CollisionID::SideWall(Player::P2) },
+                CollisionData{ solid: true, fixed: true, id: CollisionID::TopWall },
+                CollisionData{ solid: true, fixed: true, id: CollisionID::BottomWall }
+            ],
             contacts: Vec::new(),
         }
     }
@@ -419,40 +441,21 @@ impl World {
         self.ball_vel = physics.velocities[0];
     }
 
-    fn project_collision(&self, collision: &mut AabbCollision, control: &WinitControl) {
-        collision.bodies.resize_with(7, Aabb::default);
-        collision.velocities.resize_with(7, Default::default);
-        collision.metadata.resize_with(7, CollisionData::default);
-        let colliders = [
-            Aabb::new(
-                Vec3::new(-1.0, 0.0, 0.0),
-                Vec3::new(0.0, HEIGHT as f32, 0.0)),
-            Aabb::new(
-                Vec3::new(WIDTH as f32, 0.0, 0.0),
-                Vec3::new(WIDTH as f32 + 1.0, HEIGHT as f32, 0.0)),
-            Aabb::new(
-                Vec3::new(0.0, -1.0, 0.0),
-                Vec3::new(WIDTH as f32, 0.0, 0.0)),
-            Aabb::new(
-                Vec3::new(0.0, HEIGHT as f32, 0.0),
-                Vec3::new(WIDTH as f32, HEIGHT as f32 + 1.0, 0.0)),
-            Aabb::new(
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>, control: &WinitKeyboardControl<ActionID>) {
+        collision.bodies.resize_with(4, Aabb::default);
+        collision.velocities.resize_with(4, Default::default);
+        collision.metadata.resize_with(4, CollisionData::default);
+        collision.bodies.push(Aabb::new(
                 Vec3::new(self.ball.0 as f32, self.ball.1 as f32, 0.0),
-                Vec3::new(self.ball.0 as f32 + BALL_SIZE as f32, self.ball.1 as f32 + BALL_SIZE as f32, 0.0)),
-            Aabb::new(
+                Vec3::new(self.ball.0 as f32 + BALL_SIZE as f32, self.ball.1 as f32 + BALL_SIZE as f32, 0.0)));
+        collision.bodies.push(Aabb::new(
                 Vec3::new((PADDLE_OFF_X) as f32, self.paddles.0 as f32, 0.0),
-                Vec3::new((PADDLE_OFF_X + PADDLE_WIDTH) as f32, self.paddles.0 as f32 + PADDLE_HEIGHT as f32, 0.0)),
-            Aabb::new(
+                Vec3::new((PADDLE_OFF_X + PADDLE_WIDTH) as f32, self.paddles.0 as f32 + PADDLE_HEIGHT as f32, 0.0)));
+        collision.bodies.push(Aabb::new(
                 Vec3::new((WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32, self.paddles.1 as f32, 0.0),
-                Vec3::new((WIDTH - PADDLE_OFF_X) as f32, self.paddles.1 as f32 + PADDLE_HEIGHT as f32, 0.0))];
+                Vec3::new((WIDTH - PADDLE_OFF_X) as f32, self.paddles.1 as f32 + PADDLE_HEIGHT as f32, 0.0)));
 
-        for (i, body) in colliders.iter().enumerate() {
-            collision.bodies[i] = *body;
-        }
-        for vel in collision.velocities[..4].iter_mut() {
-            *vel = Vec2::new(0.0, 0.0);
-        }
-        collision.velocities[4] = self.ball_vel;
+        collision.velocities.push(self.ball_vel);
         let mut p1_vel: f32 = 0.0;
         let mut p2_vel: f32 = 0.0;
         for choice in &control.selected_actions {
@@ -466,23 +469,15 @@ impl World {
                 _ => {}
             }
         }
-        collision.velocities[5] = Vec2::new(0.0, p1_vel);
-        collision.velocities[6] = Vec2::new(0.0, p2_vel);
+        collision.velocities.push(Vec2::new(0.0, p1_vel));
+        collision.velocities.push(Vec2::new(0.0, p2_vel));
 
-        let metadata = [
-            CollisionData{ solid: true, fixed: true, id: CollisionID::SideWall(Player::P1) },
-            CollisionData{ solid: true, fixed: true, id: CollisionID::SideWall(Player::P2) },
-            CollisionData{ solid: true, fixed: true, id: CollisionID::TopWall },
-            CollisionData{ solid: true, fixed: true, id: CollisionID::BottomWall },
-            CollisionData{ solid: true, fixed: false, id: CollisionID::Ball },
-            CollisionData{ solid: true, fixed: true, id: CollisionID::Paddle(Player::P1) },
-            CollisionData{ solid: true, fixed: true, id: CollisionID::Paddle(Player::P2) }];
-        for (i, data) in metadata.iter().enumerate() {
-            collision.metadata[i] = *data;
-        }
+        collision.metadata.push(CollisionData { solid: true, fixed: false, id: CollisionID::Ball });
+        collision.metadata.push(CollisionData { solid: true, fixed: true, id: CollisionID::Paddle(Player::P1) });
+        collision.metadata.push(CollisionData { solid: true, fixed: true, id: CollisionID::Paddle(Player::P2) });
     }
 
-    fn unproject_collision(&mut self, collision: &AabbCollision) {
+    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
         self.ball.0 = collision.bodies[4].min.x.trunc() as u8;
         self.ball.1 = collision.bodies[4].min.y.trunc() as u8;
     }
