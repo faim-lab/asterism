@@ -249,8 +249,6 @@ impl World {
     }
 
     fn project_resources(&self, resources:&mut MazeResources) {
-        // todo: create score pool?
-        // todo: push resource transactions [list of rsrc changes] onto some queue
         resources.score = self.score;
         let i = self.touch_pickup();
         match i {
@@ -266,7 +264,6 @@ impl World {
     }
 
     fn unproject_resources(&mut self, resources: &MazeResources) {
-        // todo: modify stuff in game state if changed, i.e. self.score += resources.sth
         self.score = resources.score;
     }
 
@@ -572,7 +569,6 @@ impl World {
             return false;
         }
 
-        // Only redraw pixels that are not in the maze walls... theoretically
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
             let x = (i % WIDTH as usize) as i16;
             let y = (i / WIDTH as usize) as i16;
