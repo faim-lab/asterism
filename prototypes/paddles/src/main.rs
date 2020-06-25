@@ -16,44 +16,169 @@ const PADDLE_HEIGHT: u8 = 48;
 const PADDLE_WIDTH: u8 = 8;
 const BALL_SIZE: u8 = 8;
 
-// TODO: see comment on merge request
-struct WinitControl {
-    _actors: Vec<Player>,
-    // loci: Vec<>,
-    selected_actions: Vec<(Player, Action)>,
-    // keymapping
+trait Input {
+    fn min(&self) -> f32;
+    fn max(&self) -> f32;
 }
 
-impl WinitControl {
+#[derive(Clone)]
+struct KeyInput {
+    keycode: VirtualKeyCode
+}
+
+impl Input for KeyInput {
+    fn min(&self) -> f32 { 0.0 }
+    fn max(&self) -> f32 { 1.0 }
+}
+
+// Off means that the action fires (once if instantaneous and then not again, or every frame while held if it’s a continuous input, or has its axis value set to 1.0 or else 0.0) if !keydown(...), On means the same only if keydown(...), and changed could mean pressed or released (so probably needs a positive/negative/either(?) parameter instead of an f32)
+#[derive(Clone)]
+enum InputState {
+    Off, _Change(f32), On
+}
+
+enum ActionType {
+    Instant,
+    _Continuous,
+    Axis(f32, f32)
+}
+
+impl Default for ActionType {
+    fn default() -> Self { Self::Instant }
+}
+
+#[derive(Default)]
+struct Action<ID: Copy + Eq> {
+    id: ID,
+    action_type: ActionType
+}
+
+struct ActionSet<ID: Copy + Eq> {
+    actions: Vec<Action<ID>>
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ActionID {
+    Move(Player),
+    Serve(Player),
+}
+
+impl Default for ActionID {
+    fn default() -> Self { Self::Move(Player::P1) }
+}
+
+struct InputMap<I: Input, ID: Copy + Eq> {
+    inputs: Vec<(I, InputState)>,
+    actions: ActionSet<ID>
+        // Invariants: inputs.len() == actions.actions.len()
+}
+
+struct WinitKeyboardControl<ID: Copy + Eq> {
+    mapping: Vec<InputMap<KeyInput, ID>>,
+    values: Vec<Vec<f32>> // vector of values per mapping.
+        // Invariants: mapping.len() == values.len(), mapping[i].inputs.len() == values[i].len() 
+}
+
+impl WinitKeyboardControl<ActionID> {
     fn new() -> Self {
         Self {
-            _actors: vec![Player::P1, Player::P2],
-            // loci of control?  mapping: buttons -> variables. this
-            // button sets this variable to true when it's pressed,
-            // held down, etc
-            selected_actions: Vec::new(),
+            mapping: {
+                let mut mapping = Vec::new();
+                mapping.push(
+                    InputMap {
+                        inputs: vec![ (
+                                    KeyInput { keycode: VirtualKeyCode::Q },
+                                    InputState::On), (
+                                    KeyInput { keycode: VirtualKeyCode::A },
+                                    InputState::On),
+                        ],
+                        actions: WinitKeyboardControl::player_action_set(Player::P1)
+                    }
+                );
+                mapping.push(
+                    InputMap {
+                        inputs: vec![ (
+                                    KeyInput { keycode: VirtualKeyCode::O },
+                                    InputState::On), (
+                                    KeyInput { keycode: VirtualKeyCode::L },
+                                    InputState::On)],
+                                    actions: WinitKeyboardControl::player_action_set(Player::P2)
+
+                    }
+                );
+                mapping
+            },
+            values: Vec::new()
         }
     }
 
-    // handles keyboard inputs
-    fn update(&mut self, input:&WinitInputHelper) {
-        self.selected_actions.clear();
-        if input.key_held(VirtualKeyCode::Q) {
-            self.selected_actions.push((Player::P1, Action::Move(-1)));
-        } else if input.key_held(VirtualKeyCode::A) {
-            self.selected_actions.push((Player::P1, Action::Move(1)));
+    fn player_action_set(player: Player) -> ActionSet<ActionID> {
+        ActionSet {
+            actions: vec![
+                Action {
+                    id: ActionID::Move(player),
+                    action_type: ActionType::Axis(0.0, -1.0)
+                },
+                Action {
+                    id: ActionID::Move(player),
+                    action_type: ActionType::Axis(0.0, 1.0)
+                },
+            ]
         }
-        if input.key_held(VirtualKeyCode::W) {
-            self.selected_actions.push((Player::P1, Action::Serve));
+    }
+
+    fn update(&mut self, events: &WinitInputHelper) {
+        self.values.clear();
+        self.values.resize_with(self.mapping.len(), Default::default);
+        for (map, vals) in self.mapping.iter().zip(self.values.iter_mut()) {
+            vals.resize_with(map.inputs.len(), Default::default);
+            for (action_map, value) in map.inputs.iter().zip(map.actions.actions.iter()).zip(vals.iter_mut()) {
+                let ((input, input_state), action) = action_map;
+                match input_state {
+                    InputState::On => {
+                        if events.key_held(input.keycode) {
+                            match (&action.id, &action.action_type) {
+                                // this is pong specific, idk how to
+                                // deal w it in a way that isnt
+                                (ActionID::Move(_player), ActionType::Axis(_x, y)) => *value = *y,
+                                _ => {}
+                            }
+                        }
+                    }
+                    InputState::Off => {
+                        if events.key_pressed(input.keycode) {
+                            match (&action.id, &action.action_type) {
+                                (ActionID::Serve(_player), _) => *value = 1.0,
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
-        if input.key_held(VirtualKeyCode::O) {
-            self.selected_actions.push((Player::P2, Action::Move(-1)));
-        } else if input.key_held(VirtualKeyCode::L) {
-            self.selected_actions.push((Player::P2, Action::Move(1)));
+    }
+
+    // not sure how to use these
+    pub fn _get_action_by_index(&self, action_set: usize, idx: usize) -> f32 {
+        self.values[action_set][idx]
+    }
+
+    // This gets the value of the first action whose `id` is `id`.
+    pub fn _get_action(&self, id: ActionID) -> Option<f32> {
+        for (i, set) in self.mapping.iter().enumerate() {
+            if let Some(j) = set.actions.actions.iter().position(|act| act.id == id) {
+                return Some(self.values[i][j]);
+            }
         }
-        if input.key_held(VirtualKeyCode::I) {
-            self.selected_actions.push((Player::P2, Action::Serve));
+        None
+    }
+
+    pub fn _get_action_in_set(&self, action_set: usize, id: ActionID) -> Option<f32> {
+        if let Some(idx) = self.mapping[action_set].actions.actions.iter().position(|act| act.id == id) {
+            return Some(self._get_action_by_index(action_set, idx));
         }
+        None
     }
 }
 
@@ -78,10 +203,10 @@ impl PongPhysics {
     }
 }
 
-struct AabbCollision {
+struct AabbCollision<ID: Copy + Eq> {
     bodies: Vec<Aabb>,
     velocities: Vec<Vec2>,
-    metadata: Vec<CollisionData<CollisionID>>,
+    metadata: Vec<CollisionData<ID>>,
     contacts: Vec<(usize, usize)>,
 }
 
@@ -105,7 +230,7 @@ impl Default for CollisionID {
     fn default() -> Self { Self::Ball }
 }
 
-impl AabbCollision {
+impl AabbCollision<CollisionID> {
     fn new() -> Self {
         Self {
             bodies: vec![
@@ -230,16 +355,16 @@ impl PongResources {
 
 
 struct Logics {
-    control: WinitControl,
+    control: WinitKeyboardControl<ActionID>,
     physics: PongPhysics,
-    collision: AabbCollision,
+    collision: AabbCollision<CollisionID>,
 //    resources: PongResources,
 }
 
 impl Logics {
     fn new() -> Self {
         Self {
-            control: WinitControl::new(),
+            control: WinitKeyboardControl::new(),
             physics: PongPhysics::new(),
             collision: AabbCollision::new(),
 //            resources: PongResources::new(),
@@ -251,11 +376,6 @@ impl Logics {
 enum Player {
     P1,
     P2
-}
-
-enum Action {
-    Move(i8),
-    Serve
 }
 
 
@@ -342,38 +462,11 @@ impl World {
         }
     }
 
-    fn update(&mut self, logics:&mut Logics, input:&WinitInputHelper) {
+    fn update(&mut self, logics: &mut Logics, input: &WinitInputHelper) {
+        self.project_control(&mut logics.control);
         logics.control.update(input);
-        for choice in logics.control.selected_actions.iter() {
-            match choice {
-                (Player::P1, Action::Move(amt)) => 
-                    self.paddles.0 = ((self.paddles.0 as i16 + *amt as i16).max(0) as u8).min(255 - PADDLE_HEIGHT),
-                (Player::P1, Action::Serve) => {
-                    if let Some(Player::P1) = self.serving {
-                        self.ball_vel = Vec2::new(2.0, 2.0);
-                        self.serving = None;
-                    }
-                },
-                (Player::P2, Action::Move(amt)) => 
-                    self.paddles.1 = ((self.paddles.1 as i16 + *amt as i16).max(0) as u8).min(255 - PADDLE_HEIGHT),
-                (Player::P2, Action::Serve) => {
-                    if let Some(Player::P2) = self.serving {
-                        self.ball_vel = Vec2::new(-2.0, -2.0);
-                        self.serving = None;
-                    }
-                }
-            }
-        }
+        self.unproject_control(&logics.control);
 
-        //project game state to collision volumes (ball, paddles, walls)
-        //update collision
-        //unproject to game state (ball velocity and position)
-        //now, go through the contacts and perform game specific actions
-        // - if the ball touched left or right side of screen, reset to serving
-        // - if the ball touched a paddle or top or bottom of screen, reflect it normal to the collision surface and increase its speed slightly
-
-
-        //projection and unprojection
         self.project_physics(&mut logics.physics);
         logics.physics.update();
         self.unproject_physics(&logics.physics);
@@ -382,7 +475,6 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        // game specific collision stuff
         for contact in logics.collision.contacts.iter() {
             match (logics.collision.metadata[contact.0].id,
                 logics.collision.metadata[contact.1].id) {
@@ -426,7 +518,58 @@ impl World {
             }
         }
     }
-    fn project_physics(&self, physics:&mut PongPhysics) {
+
+    fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
+        for map in control.mapping.iter_mut() {
+            map.inputs.resize(2,
+                (KeyInput {keycode: VirtualKeyCode::H},
+                 InputState::On));
+            map.actions.actions.resize_with(2, Action::default);
+        }
+        if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
+            match self.serving {
+                Some(Player::P1) => {
+                    control.mapping[0].inputs.push(
+                        (KeyInput { keycode: VirtualKeyCode::W },
+                         InputState::Off));
+                    control.mapping[0].actions.actions.push(
+                        Action { id: ActionID::Serve(Player::P1),
+                            action_type: ActionType::Instant });
+                }
+                Some(Player::P2) => {
+                    control.mapping[1].inputs.push(
+                        (KeyInput { keycode: VirtualKeyCode::I },
+                         InputState::Off));
+                    control.mapping[1].actions.actions.push(
+                        Action { id: ActionID::Serve(Player::P2),
+                            action_type: ActionType::Instant });
+                }
+                None => {}
+            }
+        }
+    }
+
+    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
+        self.paddles.0 = ((self.paddles.0 as i16 + control.values[0][0] as i16 + control.values[0][1] as i16).max(0) as u8).min(255 - PADDLE_HEIGHT);
+        self.paddles.1 = ((self.paddles.1 as i16 + control.values[1][0] as i16 + control.values[1][1] as i16).max(0) as u8).min(255 - PADDLE_HEIGHT);
+        if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
+            match self.serving {
+                Some(Player::P1) => {
+                    if control.values[0][2] == 1.0 {
+                        self.ball_vel = Vec2::new(2.0, 2.0);
+                    }
+                }
+                Some(Player::P2) => {
+                    if control.values[1][2] == 1.0 {
+                        self.ball_vel = Vec2::new(-2.0, -2.0);
+                    }
+                }
+                None => {}
+            }
+        }
+    }
+
+    fn project_physics(&self, physics: &mut PongPhysics) {
         physics.positions.resize_with(1, Vec2::default);
         physics.velocities.resize_with(1, Vec2::default);
         physics.positions[0].x = self.ball.0 as f32 + self.ball_err.x;
@@ -434,7 +577,7 @@ impl World {
         physics.velocities[0] = self.ball_vel;
     }
 
-    fn unproject_physics(&mut self, physics:&PongPhysics) {
+    fn unproject_physics(&mut self, physics: &PongPhysics) {
         self.ball.0 = physics.positions[0].x.trunc().max(0.0).min((WIDTH - BALL_SIZE) as f32) as u8;
         self.ball.1 = physics.positions[0].y.trunc().max(0.0).min((HEIGHT - BALL_SIZE) as f32) as u8;
         self.ball_err = physics.positions[0] - Vec2::new(self.ball.0 as f32, self.ball.1 as f32);
@@ -456,19 +599,8 @@ impl World {
                 Vec3::new((WIDTH - PADDLE_OFF_X) as f32, self.paddles.1 as f32 + PADDLE_HEIGHT as f32, 0.0)));
 
         collision.velocities.push(self.ball_vel);
-        let mut p1_vel: f32 = 0.0;
-        let mut p2_vel: f32 = 0.0;
-        for choice in &control.selected_actions {
-            match choice {
-                (Player::P1, Action::Move(amt)) => {
-                    p1_vel = *amt as f32;
-                }
-                (Player::P2, Action::Move(amt)) => {
-                    p2_vel = *amt as f32;
-                }
-                _ => {}
-            }
-        }
+        let p1_vel: f32 = control.values[0][0] + control.values[0][1];
+        let p2_vel: f32 = control.values[1][0] + control.values[1][1];
         collision.velocities.push(Vec2::new(0.0, p1_vel));
         collision.velocities.push(Vec2::new(0.0, p2_vel));
 
