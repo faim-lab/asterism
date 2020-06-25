@@ -10,61 +10,125 @@ use vector::Vector;
 mod make_square;
 use make_square::render_thing;
 
-trait Render {
-		fn render(&self) -> (Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<u16>);
-}
-
 struct Game {
-		/*
-		maybe we have tiers,
-		non-display
-		display
-		move
-		*/
-		things: Vec<Box<dyn Render>>,
+		entities: Vec<usize>,
+
+		renderable_components: RenderableComponentVec,
+		position_components: PositionComponentVec,
+}
+impl Game {
+		fn new() -> Game {
+				//something tbd--get the resources?
+				Game {
+						entities: vec![0],
+						renderable_components: RenderableComponentVec {
+								parts: vec![
+										RenderableComponent {
+												position: Vector::new(0.5, 0_f32),
+												facing: Vector::new(1_f32, 0_f32),
+												size: 0.2,
+												texture: 0_u32,
+										}
+								],
+						},
+				}
+				
+		}
+		fn render() -> (Vec<Vertex>, Vec<u16>) {
+				// will want to update as part of this--coming soon
+				self.renderable_components::render_all();
+		}
 }
 
-struct Player {
+
+// i feel like this all needs to be together for ... cpu chaching or something?
+// not sure if this is particularly 'data' or if ive just renamed an object
+
+// position
+
+struct PositionComponent {
+		x: i32,
+		y: i32,
+}
+
+impl PositionComponent {
+		fn get_render_position(&self) -> Vector {
+				Vector{
+						self.x,
+						self.y,
+				}
+		}
+}
+
+struct PositionComponentVec {
+		parts: Vec<PositionComponent>,
+}
+
+impl PositionComponentVec {
+		fn get_render_positions(&self) -> Vec<(usize, Vector)> {
+				// this should eventually take grid location, adjust for size etc--maybe better as a method of
+				// render?
+				let mut render_positions: Vec<(usize, Vector)> = Vec::new();
+				for i in 0..self.parts.len().iter() {
+						render_positions.push(i,
+																	Vector {
+																			self.parts[i].x,
+																			self.parts[i].y,
+																	}
+						);
+				}
+				render_positions
+		}
+}
+
+// input---------------------------------------
+
+
+
+// render--------------------------------------
+
+struct RenderableComponent {
+		// does seperating out position vs rendered position even mean anything--for
+		// how many things in an rpg are these even distinct
+		// effects? like terrain, but maybe would want to render these too to give
+		// visual cue--although maybe *hitboxes*, borders, etc might have
+		// ---making stuff align to grid/move by hex/ grid space
 		position: Vector,
 		facing: Vector,
 		size: f32,
 		texture: u32,
+/*
+would like to have it store the result of its previous render to speed up program, only re-render those assets that need it
+		*/
+		//		z_index: u8, <-may be needed to preserve front/back stuff if list is
+		// getting shuffled to render...?
 }
 
-impl Game {
-		fn new() -> Game {
-				let mut things: Vec<Box<dyn Render>> = Vec::new();
-				things.push(Box::new(Player::new()));						
-				Game {
-						things,
-				}
+impl RenderableComponent {
+		// rendering everything as squares not going to work if empty -> black
+		fn render(&self) -> (Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<u16>) {
+				render_thing(&self.position, &self.facing, self.size, self.texture)
 		}
 }
 
-impl Player {
-		fn new() -> Player {
-				Player {
-						position: Vector::new(0.5, 0_f32),
-						facing: Vector::new(1_f32, 0_f32),
-						size: 0.2,
-						texture: 0,
-				}
-		}
+struct RenderableComponentVec {
+		// should be option<RenderablePart> but there are bigger problems for now
+		parts: Vec<RenderableComponent>,
 }
 
-// Rendering stuff below here
-impl Game {
+impl RenderableComponentVec {
+		// new method here or in game::new? ideally would import from resource file, tmx or otherwise
 		fn render_all(&self) -> (Vec<Vertex>, Vec<u16>) {
 				let mut indices_vec: Vec<u16> = Vec::new();
 				let mut vertices_vec: Vec<Vertex> = Vec::new();
-				for thing in self.things.iter() {
+				for thing in self.parts.iter() {
 						let mut placeholder: (Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<u16>) = thing.render();
 						indices_vec.append(&mut placeholder.2);
 						let combined_vertices: Vec<([f32; 3], [f32; 2])> = placeholder.0.into_iter()
 								.zip(placeholder.1.into_iter())
 								.collect();
 						for (pos, coords) in combined_vertices.iter() {
-								vertices_vec.push(
+			pp					vertices_vec.push(
 										Vertex { position: *pos, tex_coords: *coords }
 								);
 						}
@@ -73,11 +137,8 @@ impl Game {
 		}
 }
 
-impl Render for Player {
-		fn render(&self) -> (Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<u16>) {
-				render_thing(&self.position, &self.facing, self.size, self.texture)
-		}
-}
+//-----------------------------------------------------------------------------------------
+
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -412,4 +473,5 @@ fn main() {
             _ => {}
         }
     });
+
 }
