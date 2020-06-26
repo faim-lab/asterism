@@ -220,8 +220,14 @@ impl World {
                 let wall_16 = Wall::new(180, 11, 3, 175);
                 let wall_17 = Wall::new(223, 97, 3, 132);
                 let wall_18 = Wall::new(309, 11, 3, 218);
+                // borders
+                let top = Wall::new(-1, -1, 322, 1);
+                let bottom = Wall::new(-1, 240, 322, 1);
+                let left = Wall::new(-1, -1, 242, 1);
+                let right = Wall::new(320, -1, 242, 1);
 
-                vec![wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7, wall_8, wall_9, wall_10, wall_11, wall_12, wall_13, wall_14, wall_15, wall_16, wall_17, wall_18]
+                vec![wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7, wall_8, wall_9, wall_10, wall_11, wall_12, wall_13, wall_14, wall_15, wall_16, wall_17, wall_18,
+                top, bottom, left, right]
             },
             items: {
                 let item_1 = Collectible::new(112, 72);
@@ -240,10 +246,9 @@ impl World {
         self.move_box(&movement);
 
         self.project_resources(&mut logics.resources);
-        logics.resources.update(&mut self.items);
-        self.unproject_resources(&logics.resources);
-
         if logics.resources.score_change != 0 {
+            logics.resources.update(&mut self.items);
+            self.unproject_resources(&logics.resources);
             println!("score: {}", self.score);
         }
     }
@@ -445,24 +450,6 @@ impl World {
 
         let mut temp_y: i16 = self.y + temp_vy;
         let mut temp_x: i16 = self.x + temp_vx;
-
-        // Check for collision with window boundaries
-        if temp_y <= 0 || temp_y + BOX_SIZE > HEIGHT as i16 {
-            if temp_y <= 0 {
-                temp_vy = -self.y;
-            } else {
-                temp_vy = HEIGHT as i16 - self.y - BOX_SIZE;
-            }
-            temp_y = self.y + temp_vy;
-        }
-        if temp_x <= 0 || temp_x + BOX_SIZE > WIDTH as i16 {
-            if temp_x <= 0 {
-                temp_vx = -self.x;
-            } else {
-                temp_vx = WIDTH as i16 - self.x - BOX_SIZE;
-            }
-            temp_x = self.x + temp_vx;
-        }
 
         if movement.0 != Direction::Still && temp_vy != 0 {
             for a_wall in &self.walls {
