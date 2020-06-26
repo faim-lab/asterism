@@ -57,13 +57,16 @@ fn get_tex_coords(tex_number: u32) -> Vec<[f32; 2]> {
 		// calculated from the above
 		let mut tex_coords: Vec<[f32; 2]> = Vec::new();
 		let tex_width: f32 = 1_f32 / tex_per_line;
+
+		// fix this, very arbitrary in order to avoid getting a single column of pixels
+		// from the next column
 		let tl_tex = [
-				((tex_number as f32 % tex_per_line) * tex_width),
+				((tex_number as f32 % tex_per_line) * tex_width) + 0.002,
 				(round::floor(tex_number as f64 / tex_per_line as f64, 0) * 0.2) as f32
 		];
 		let bl_tex = [tl_tex[0], tl_tex[1] + tex_width];
-		let br_tex = [tl_tex[0] + tex_width, tl_tex[1] + tex_width];
-		let tr_tex = [tl_tex[0] + tex_width, tl_tex[1]];
+		let br_tex = [tl_tex[0] + tex_width - 0.004, tl_tex[1] + tex_width];
+		let tr_tex = [br_tex[0], tl_tex[1]];
 
 		tex_coords.push(tl_tex);
 		tex_coords.push(bl_tex);

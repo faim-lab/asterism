@@ -5,6 +5,7 @@ pub fn make_example_1() -> Vec<((f32, f32), (Vector, f32, u32))> {
 		let mut elements: Vec<((f32, f32), (Vector, f32, u32))>
 				= Vec::new();
 		make_board(&mut elements);
+		make_player(&mut elements);
 		elements
 }
 fn make_board(current_elements: &mut Vec<((f32, f32), (Vector, f32, u32))>) {
@@ -14,10 +15,16 @@ fn make_board(current_elements: &mut Vec<((f32, f32), (Vector, f32, u32))>) {
 
 				let facing: Vector = Vector::new(1_f32, 0_f32);
 				let size: f32 = 0.25;
-				let texture: u32 = (i % 2) + (round::floor((i / 8) as f64, 0) as u32 % 2);
+				let texture: u32 = (i + (round::floor((i / 8) as f64, 0) as u32 % 2)) % 2 ;
 
 				current_elements.push(
 						((x_pos, y_pos), (facing, size, texture))
 				);
 		}
+}
+
+fn make_player(current_elements: &mut Vec<((f32, f32), (Vector, f32, u32))>) {
+		current_elements.push(
+				((50_f32, 50_f32), (Vector::new(1_f32, 0_f32), 0.25, 2_u32))
+		);
 }
