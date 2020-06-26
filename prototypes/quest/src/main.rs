@@ -10,7 +10,9 @@ use vector::Vector;
 mod make_square;
 use make_square::render_thing;
 
-struct Game {
+mod example;
+
+pub struct Game {
 		view_area: ViewArea,
 		
 		renderable_components: RenderableComponentVec,
@@ -18,7 +20,7 @@ struct Game {
 		
 }
 impl Game {
-		fn new() -> Game {
+		pub fn new() -> Game {
 				//something tbd--get the resources?
 				let position_component_vec = PositionComponentVec::new();
 				let renderable_component_vec = RenderableComponentVec::new();
@@ -27,17 +29,40 @@ impl Game {
 						position_components: position_component_vec,
 						renderable_components: renderable_component_vec,
 				};
-				game.add_thing();
-				println!("{:?}", game.position_components.parts);
-				println!("{:?}", game.renderable_components.parts);
+				game.add_things(example::make_example_1());
+				// println!("{:?}", game.renderable_components);
 				game
 		}
-		fn add_thing(&mut self) {
+		pub fn add_things(&mut self, new_things_list: Vec<((f32, f32), (Vector, f32, u32))>) {
+				for thing in new_things_list.into_iter() {
+						let pos_x: f32 = (thing.0).0;
+						let pos_y: f32 = (thing.0).1;
+
+						let facing: Vector = (thing.1).0;
+						let size: f32 = (thing.1).1;
+						let texture: u32 = (thing.1).2;
+						
+						self.position_components.add(
+								PositionComponent::new(
+										pos_x, pos_y
+								)
+						);
+
+						self.renderable_components.add(
+								RenderableComponent::new(
+										None, facing, size, texture
+								)
+						);
+				}
+				self.renderable_components
+						.update_all_coords(&self.view_area, &self.position_components);
+		}
+		fn add_test_thing(&mut self) {
 				self.position_components.add(
-						PositionComponent::new(0.5, 0_f32)
+						PositionComponent::new(1_f32, 1_f32)
 				);
 				self.renderable_components.add(
-						RenderableComponent::new(None, Vector::new(1_f32, 0_f32), 0.2, 0_u32)
+						RenderableComponent::new(None, Vector::new(1_f32, 1_f32), 0.2, 0_u32)
 				);
 				self.renderable_components.update_all_coords(&self.view_area, &self.position_components);
 		}
@@ -65,17 +90,14 @@ impl ViewArea {
 		}
 		//incredibly broken rn
 		fn pos_cords_to_render_cords(&self, thing_position: &PositionComponent) -> (Option<f32>, Option<f32>) {
-				let potential_render_x: f32 = (thing_position.x - self.x) / ViewArea::LENGTH;
-				println!("{}", potential_render_x);
-				let potential_render_y: f32 = -(thing_position.y - self.y) / ViewArea::WIDTH;
-				println!("{}", potential_render_y);
+				let potential_render_x: f32 = (thing_position.x - self.x) / (ViewArea::LENGTH / 2_f32);
+				let potential_render_y: f32 = -(thing_position.y - self.y) / (ViewArea::WIDTH / 2_f32);
 				let (render_x, render_y): (Option<f32>, Option<f32>) = if potential_render_x < 1_f32
 						&& potential_render_y < 1_f32 {
 								(Some(potential_render_x), Some(potential_render_y))
 						} else {
 								(None, None)
 						};
-				println!("{:?}", render_x);
 				(render_x, render_y)
 		}
 }
@@ -208,12 +230,18 @@ impl RenderableComponentVec {
 		fn render_all(&self) -> (Vec<Vertex>, Vec<u16>) {
 				let mut indices_vec: Vec<u16> = Vec::new();
 				let mut vertices_vec: Vec<Vertex> = Vec::new();
+				let mut indices_counter: u16 = 0;
 				for thing in self.parts.iter() {
 						let potential_placeholder: Option<(Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<u16>)> = thing.render();
 						match potential_placeholder {
 								Some(i) => {
-										let mut placeholder = i;
-										indices_vec.append(&mut placeholder.2);
+										let placeholder = i;
+
+										for j in placeholder.2.iter() {
+												indices_vec.push(j + indices_counter * 4);
+										}
+										indices_counter += 1;
+
 										let combined_vertices: Vec<([f32; 3], [f32; 2])> = placeholder.0.into_iter()
 												.zip(placeholder.1.into_iter())
 												.collect();
@@ -427,9 +455,7 @@ impl State {
 
 				let (vertices, indices) = game.render();
 
-				println!("{:?}", vertices);
-
-				println!("{:?}", indices);
+				// println!("{:?}", indices);
 				
 				let vertex_buffer = device.create_buffer_with_data(
             bytemuck::cast_slice(vertices.as_slice()),
