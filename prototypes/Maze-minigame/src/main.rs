@@ -287,22 +287,6 @@ impl World {
 
         World::better_collision(self, &movement);
 
-        // Check collision with window boundaries
-        if self.y + self.vy <= 0 || self.y + BOX_SIZE + self.vy > HEIGHT as i16 {
-            if self.y + self.vy <= 0 {
-                self.vy = -self.y;
-            } else {
-                self.vy = HEIGHT as i16 - self.y - BOX_SIZE;
-            }
-        }
-        if self.x + self.vx <= 0 || self.x + BOX_SIZE + self.vx > WIDTH as i16 {
-            if self.x + self.vx <= 0 {
-                self.vx = -self.x;
-            } else {
-                self.vx = WIDTH as i16 - self.x - BOX_SIZE;
-            }
-        }
-
         self.y += self.vy;
         self.x += self.vx;
     }   
