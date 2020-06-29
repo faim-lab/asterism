@@ -1,7 +1,6 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
 
-use log::error;
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
@@ -102,7 +101,6 @@ impl Logics {
 }
 
 fn main() -> Result<(), Error> {
-    env_logger::init();
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
     let window = {
@@ -131,7 +129,7 @@ fn main() -> Result<(), Error> {
             world.draw(pixels.get_frame(), &world.walls, &world.items);
             if pixels
                 .render()
-                .map_err(|e| error!("pixels.render() failed: {}", e))
+                .map_err(|e| panic!("pixels.render() failed: {}", e))
                 .is_err()
             {
                 *control_flow = ControlFlow::Exit;
