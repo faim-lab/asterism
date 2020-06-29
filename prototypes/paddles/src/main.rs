@@ -138,8 +138,7 @@ impl WinitKeyboardControl<ActionID> {
                     InputState::On => {
                         if events.key_held(input.keycode) {
                             match (&action.id, &action.action_type) {
-                                // this is pong specific, idk how to
-                                // deal w it in a way that isnt
+                                // this is pong specific, don't know how to deal w it in a way that isnt
                                 (ActionID::Move(_player), ActionType::Axis(_x, y)) => *value = *y,
                                 _ => {}
                             }
@@ -498,21 +497,23 @@ impl World {
                         self.points.1);
                 },
                 (CollisionID::TopWall, CollisionID::Ball) |
-                    (CollisionID::BottomWall, CollisionID::Ball) =>
-                    self.ball_vel.y *= -1.0,
+                    (CollisionID::BottomWall, CollisionID::Ball) => {
+                        self.ball_vel.y *= -1.0;
+                    }
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
                     if match player {
                         Player::P1 =>
                             (self.ball.0 as i16 - (PADDLE_OFF_X + PADDLE_WIDTH) as i16).abs()
-                            > (self.ball.1 as i16 - self.paddles.0 as i16).abs().min((self.ball.1 as i16 - (self.paddles.0 + PADDLE_HEIGHT) as i16).abs()),
+                            > ((self.ball.1 + BALL_SIZE) as i16 - self.paddles.0 as i16).abs().min((self.ball.1 as i16 - (self.paddles.0 + PADDLE_HEIGHT) as i16).abs()),
                         Player::P2 =>
-                            (self.ball.0 as i16 - (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as i16).abs()
-                            > (self.ball.1 as i16 - self.paddles.1 as i16).abs().min((self.ball.1 as i16 - (self.paddles.1 + PADDLE_HEIGHT) as i16).abs()),
+                            ((self.ball.0 + BALL_SIZE) as i16 - (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as i16).abs()
+                            > ((self.ball.1 + BALL_SIZE) as i16 - self.paddles.1 as i16).abs().min((self.ball.1 as i16 - (self.paddles.1 + PADDLE_HEIGHT) as i16).abs()),
                     } {
-                        self.ball_vel.y *= -1.1;
+                        self.ball_vel.y *= -1.0;
                     } else {
-                        self.ball_vel.x *= -1.1;
+                        self.ball_vel.x *= -1.0;
                     }
+                    self.change_angle(player);
                 },
                 _ => {}
             }
@@ -556,12 +557,12 @@ impl World {
             match self.serving {
                 Some(Player::P1) => {
                     if control.values[0][2] == 1.0 {
-                        self.ball_vel = Vec2::new(2.0, 2.0);
+                        self.ball_vel = Vec2::new(1.0, 1.0);
                     }
                 }
                 Some(Player::P2) => {
                     if control.values[1][2] == 1.0 {
-                        self.ball_vel = Vec2::new(-2.0, -2.0);
+                        self.ball_vel = Vec2::new(-1.0, -1.0);
                     }
                 }
                 None => {}
@@ -614,6 +615,25 @@ impl World {
         self.ball.1 = collision.bodies[4].min.y.trunc() as u8;
     }
 
+    fn change_angle(&mut self, player: Player) {
+        let Vec2{x, y} = &mut self.ball_vel;
+        let paddle_center = match player {
+            Player::P1 => self.paddles.0 + PADDLE_HEIGHT / 2,
+            Player::P2 => self.paddles.1 + PADDLE_HEIGHT / 2
+        } as f32;
+        let angle: f32 = (((self.ball.1 + BALL_SIZE / 2) as f32 - paddle_center)
+            .max(- (PADDLE_HEIGHT as f32) / 2.0)
+            .min(PADDLE_HEIGHT as f32 / 2.0) / PADDLE_HEIGHT as f32).abs() * 80.0;
+        let magnitude = f32::sqrt(*x * *x + *y * *y);
+        *x = angle.to_radians().cos() * magnitude
+            * if *x < 0.0 { -1.0 } else { 1.0 };
+        *y = angle.to_radians().sin() * magnitude
+            * if *y < 0.0 { -1.0 } else { 1.0 };
+        if magnitude < 5.0 {
+            self.ball_vel *= Vec2::new(1.1, 1.1);
+        }
+    }
+
     /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
@@ -631,10 +651,11 @@ impl World {
             frame);
         draw_rect(self.ball.0, self.ball.1,
             BALL_SIZE, BALL_SIZE,
-            [255,255,255,255],
+            [255,200,0,255],
             frame);
     }
 }
+
 fn draw_rect(x:u8, y:u8, w:u8, h:u8, color:[u8;4], frame:&mut [u8]) {
     let x = x.min(WIDTH-1) as usize;
     let w = (w as usize).min(WIDTH as usize-x);
