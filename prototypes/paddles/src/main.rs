@@ -342,7 +342,7 @@ impl AabbCollision<CollisionID> {
 
 struct PongResources {
     items: HashMap<ItemType, f32>,
-    transactions: Vec<(ItemType, Transaction)>,
+    transactions: Vec<Vec<(ItemType, Transaction)>>,
     completed: Vec<(ItemType, Transaction)>
 }
 
@@ -362,12 +362,17 @@ impl PongResources {
 
     fn update(&mut self) {
         self.completed.clear();
-        for (item_type, transaction) in &self.transactions {
-            if self.is_possible(item_type, transaction) {
-                match (item_type, transaction) {
+        'exchange: for exchange in &self.transactions {
+            for (item_type, change) in exchange {
+                if !self.is_possible(item_type, change) {
+                    continue 'exchange;
+                }
+            }
+            for (item_type, change) in exchange {
+                match (item_type, change) {
                     (ItemType::Points(..), Transaction::Change(amt)) => {
                         *self.items.get_mut(item_type).unwrap() += *amt as f32;
-                        self.completed.push((*item_type, *transaction));
+                        self.completed.push((*item_type, *change));
                     }
                 }
             }
@@ -381,7 +386,7 @@ impl PongResources {
             let value = self.items.get(item_type);
             match (item_type, transaction) {
                 (ItemType::Points(..), Transaction::Change(amt)) => {
-                    if value.unwrap() - *amt as f32 > 0.0 {
+                    if value.unwrap() + *amt as f32 > 0.0 {
                         true
                     } else { false }
                 }
@@ -681,12 +686,12 @@ impl World {
             match (collision.metadata[contact.0].id,
                 collision.metadata[contact.1].id) {
                 (CollisionID::SideWall(Player::P1), CollisionID::Ball) => {
-                    resources.transactions.push((ItemType::Points(Player::P2),
-                            Transaction::Change(1)));
+                    resources.transactions.push(vec![(ItemType::Points(Player::P2),
+                            Transaction::Change(1))]);
                 }
                 (CollisionID::SideWall(Player::P2), CollisionID::Ball) => {
-                    resources.transactions.push((ItemType::Points(Player::P1),
-                            Transaction::Change(1)));
+                    resources.transactions.push(vec![(ItemType::Points(Player::P1),
+                            Transaction::Change(1))]);
                 }
                 _ => {}
             }
