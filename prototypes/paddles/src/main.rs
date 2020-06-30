@@ -8,6 +8,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, Vec3, geometry::Aabb};
+use std::collections::HashMap;
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -339,25 +340,76 @@ impl AabbCollision<CollisionID> {
     }
 }
 
-/* dont worry abt this for now
 struct PongResources {
+    items: HashMap<ItemType, f32>,
+    transactions: Vec<(ItemType, Transaction)>,
+    completed: Vec<(ItemType, Transaction)>
 }
 
 impl PongResources {
     fn new() -> Self {
+        Self {
+            items: {
+                let mut items = HashMap::new();
+                items.insert( ItemType::Points(Player::P1), 0.0 );
+                items.insert( ItemType::Points(Player::P2), 0.0 );
+                items
+            },
+            transactions: vec![],
+            completed: vec![],
+        }
     }
 
-    fn change(amt: i8) {
+    fn update(&mut self) {
+        self.completed.clear();
+        for (item_type, transaction) in &self.transactions {
+            if self.is_possible(item_type, transaction) {
+                match (item_type, transaction) {
+                    (ItemType::Points(..), Transaction::Change(amt)) => {
+                        *self.items.get_mut(item_type).unwrap() += *amt as f32;
+                        self.completed.push((*item_type, *transaction));
+                    }
+                }
+            }
+        }
     }
+
+    fn is_possible (&self, item_type: &ItemType, transaction: &Transaction) -> bool {
+        if !self.items.contains_key(item_type) {
+            false
+        } else {
+            let value = self.items.get(item_type);
+            match (item_type, transaction) {
+                (ItemType::Points(..), Transaction::Change(amt)) => {
+                    if value.unwrap() - *amt as f32 > 0.0 {
+                        true
+                    } else { false }
+                }
+            }
+        }
+    }
+
+    fn get_value_by_itemtype(&self, item_type: &ItemType) -> f32 {
+        *self.items.get(item_type).unwrap()
+    }
+
 }
-*/
 
+#[derive(Clone, Copy)]
+enum Transaction {
+    Change(i8),
+}
+
+#[derive(Hash, Clone, Copy, PartialEq, Eq)]
+enum ItemType {
+    Points(Player)
+}
 
 struct Logics {
     control: WinitKeyboardControl<ActionID>,
     physics: PongPhysics,
     collision: AabbCollision<CollisionID>,
-//    resources: PongResources,
+    resources: PongResources,
 }
 
 impl Logics {
@@ -366,12 +418,12 @@ impl Logics {
             control: WinitKeyboardControl::new(),
             physics: PongPhysics::new(),
             collision: AabbCollision::new(),
-//            resources: PongResources::new(),
+            resources: PongResources::new(),
         }
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 enum Player {
     P1,
     P2
@@ -384,7 +436,6 @@ struct World {
     ball_err: Vec2,
     ball_vel: Vec2,
     serving: Option<Player>,
-    points: (u8, u8),
 }
 
 
@@ -457,7 +508,6 @@ impl World {
             ball_err: Vec2::new(0.0,0.0),
             ball_vel: Vec2::new(0.0,0.0),
             serving: Some(Player::P1),
-            points: (0, 0),
         }
     }
 
@@ -482,19 +532,6 @@ impl World {
                     self.ball = (WIDTH / 2 - BALL_SIZE / 2,
                         HEIGHT / 2 - BALL_SIZE / 2);
                     self.serving = Some(player);
-                    match player {
-                        Player::P1 => {
-                            self.points.0 += 1;
-                            print!("p1 scores. ")
-                        }
-                        Player::P2 => {
-                            self.points.1 += 1;
-                            print!("p2 scores. ");
-                        }
-                    }
-                    println!("p1: {}, p2: {}",
-                        self.points.0,
-                        self.points.1);
                 },
                 (CollisionID::TopWall, CollisionID::Ball) |
                     (CollisionID::BottomWall, CollisionID::Ball) => {
@@ -518,6 +555,10 @@ impl World {
                 _ => {}
             }
         }
+        
+        self.project_resources(&mut logics.resources, &logics.collision);
+        logics.resources.update();
+        self.unproject_resources(&logics.resources);
     }
 
     fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
@@ -631,6 +672,40 @@ impl World {
             * if *y < 0.0 { -1.0 } else { 1.0 };
         if magnitude < 5.0 {
             self.ball_vel *= Vec2::new(1.1, 1.1);
+        }
+    }
+
+    fn project_resources(&self, resources: &mut PongResources, collision: &AabbCollision<CollisionID>) {
+        resources.transactions.clear();
+        for contact in collision.contacts.iter() {
+            match (collision.metadata[contact.0].id,
+                collision.metadata[contact.1].id) {
+                (CollisionID::SideWall(Player::P1), CollisionID::Ball) => {
+                    resources.transactions.push((ItemType::Points(Player::P2),
+                            Transaction::Change(1)));
+                }
+                (CollisionID::SideWall(Player::P2), CollisionID::Ball) => {
+                    resources.transactions.push((ItemType::Points(Player::P1),
+                            Transaction::Change(1)));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn unproject_resources(&mut self, resources: &PongResources) {
+        for (item_type, transaction) in &resources.completed {
+            match (item_type, transaction) {
+                (ItemType::Points(player), Transaction::Change(..)) => {
+                    match player {
+                        Player::P1 => print!("p1 scores! "),
+                        Player::P2 => print!("p2 scores! ")
+                    }
+                    println!("p1: {}, p2: {}",
+                        resources.get_value_by_itemtype(&ItemType::Points(Player::P1)),
+                        resources.get_value_by_itemtype(&ItemType::Points(Player::P2)));
+                }
+            }
         }
     }
 
