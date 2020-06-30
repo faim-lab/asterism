@@ -35,7 +35,7 @@ impl Input for KeyInput {
 // Off means that the action fires (once if instantaneous and then not again, or every frame while held if it’s a continuous input, or has its axis value set to 1.0 or else 0.0) if !keydown(...), On means the same only if keydown(...), and changed could mean pressed or released (so probably needs a positive/negative/either(?) parameter instead of an f32)
 #[derive(Clone)]
 enum InputState {
-    Off, _Change(f32), On
+    _Off, _Change(f32), On
 }
 
 enum ActionType {
@@ -137,20 +137,27 @@ impl WinitKeyboardControl<ActionID> {
                 let ((input, input_state), action) = action_map;
                 match input_state {
                     InputState::On => {
-                        if events.key_held(input.keycode) {
-                            match (&action.id, &action.action_type) {
-                                // this is pong specific, don't know how to deal w it in a way that isnt
-                                (ActionID::Move(_player), ActionType::Axis(_x, y)) => *value = *y,
-                                _ => {}
+                        match &action.action_type {
+                            ActionType::Axis(.., y) => {
+                                if *y != 0.0 {
+                                    if events.key_held(input.keycode) {
+                                        match &action.id {
+                                            // this is pong specific, don't know how to deal w it in a way that isnt
+                                            ActionID::Move(_player) => *value = *y,
+                                            _ => {}
+                                        }
+                                    }
+                                }
                             }
-                        }
-                    }
-                    InputState::Off => {
-                        if events.key_pressed(input.keycode) {
-                            match (&action.id, &action.action_type) {
-                                (ActionID::Serve(_player), _) => *value = 1.0,
-                                _ => {}
+                            ActionType::Instant => {
+                                if events.key_pressed(input.keycode) {
+                                    match (&action.id, &action.action_type) {
+                                        (ActionID::Serve(_player), _) => *value = 1.0,
+                                        _ => {}
+                                    }
+                                }
                             }
+                            _ => {}
                         }
                     }
                     _ => {}
@@ -578,7 +585,7 @@ impl World {
                 Some(Player::P1) => {
                     control.mapping[0].inputs.push(
                         (KeyInput { keycode: VirtualKeyCode::W },
-                         InputState::Off));
+                         InputState::On));
                     control.mapping[0].actions.actions.push(
                         Action { id: ActionID::Serve(Player::P1),
                             action_type: ActionType::Instant });
@@ -586,7 +593,7 @@ impl World {
                 Some(Player::P2) => {
                     control.mapping[1].inputs.push(
                         (KeyInput { keycode: VirtualKeyCode::I },
-                         InputState::Off));
+                         InputState::On));
                     control.mapping[1].actions.actions.push(
                         Action { id: ActionID::Serve(Player::P2),
                             action_type: ActionType::Instant });
