@@ -71,8 +71,8 @@ struct MazePhysics {
 impl MazePhysics {
     fn new() -> Self {
         Self {
-            pos: Vec2::new(),
-            vel: Vec2::new(), 
+            pos: Vec2::new(0.0, 0.0),
+            vel: Vec2::new(0.0, 0.0), 
         }
     }
 
@@ -84,6 +84,7 @@ impl MazePhysics {
     }
 }
 
+// what types should pos and vel be? a vector of vec2 or just vec2? how should I go about this?
 struct AabbCollision {
     player: Aabb,
     walls: Vec<Aabb>,
@@ -91,6 +92,7 @@ struct AabbCollision {
     vel: Vec<Vec2>,
 }
 
+// not sure why there's an `expected type, found 58.0` error in line 99
 impl AabbCollision {
     fn new() -> Self {
         player: Aabb::new(
@@ -128,7 +130,7 @@ impl AabbCollision {
     }
 
     fn update(&mut self) {
-        // add cases for collision....
+        // todo: add cases for collision....
     }
 }
 
@@ -323,7 +325,7 @@ impl World {
         // logics.physics.update(maybe put movement here?);
         // self.unproject_physics(&logics.physics);
 
-        // self.project_collision(&mut logics.collision);
+        // self.project_collision(&mut logics.collision, &logics.physics);
         // logics.collision.update();
         // self.unproject_collision(&logics.collision);
 
@@ -337,10 +339,10 @@ impl World {
     }
 
     fn project_physics(&self, physics: &mut MazePhysics) {
-        physics.pos.push(self.x as f32);
-        physics.pos.push(self.y as f32);
-        physics.vel.push(self.vx as f32);
-        physics.vel.push(self.vy as f32);
+        physics.pos.x = self.x as f32;
+        physics.pos.y = self.y as f32;
+        physics.vel.x = self.vx as f32;
+        physics.vel.y = self.vy as f32;
     }
 
     fn unproject_physics(&mut self, physics: &MazePhysics) {
@@ -349,14 +351,14 @@ impl World {
         self.y = physics.pos[1].trunc() as i16;
     }
 
-    fn project_collision(&self, collision: &mut AabbCollision) {
+    fn project_collision(&self, collision: &mut AabbCollision, physics: &MazePhysics) {
         collision.player = Aabb::new(
-            Vec3::new(self.x as f32, self.y as f32, 0.0);
-            Vec3::new((self.x + BOX_SIZE) as f32, (self.y + BOX_SIZE) as f32, 0.0);
+            Vec3::new(self.x as f32, self.y as f32, 0.0),
+            Vec3::new((self.x + BOX_SIZE) as f32, (self.y + BOX_SIZE) as f32, 0.0)
         );
-        // project into physics logic to get position and velocity? not sure if it can reach physics
-        collision.pos = logics.physics.pos;
-        collision.vel = logics.physics.vel;
+        // project into physics logic to get position and velocity? can't reach it at the moment
+        collision.pos.push(physics.pos);
+        collision.vel.push(physics.vel);
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision) {
