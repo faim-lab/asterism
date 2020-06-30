@@ -1,5 +1,6 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
+#![allow(dead_code)]
 
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
@@ -11,6 +12,7 @@ use ultraviolet::{Vec2, Vec3, geometry::Aabb};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
+const PLAYER_SIZE: u8 = 10;
 
 trait Input {
     fn min(&self) -> f32;
@@ -29,7 +31,7 @@ impl Input for KeyInput {
 
 #[derive(Clone)]
 enum InputState {
-    Off, _Change(f32), On
+    Off, Change(f32), On
 }
 
 enum ActionType {
@@ -81,12 +83,11 @@ impl WinitKeyboardControl<ActionID> {
                 let mut mapping = Vec::new();
                 mapping.push(
                     InputMap {
-                        inputs: vec![ ( KeyInput { keycode: VirtualKeyCode::Right },
+                        inputs: vec![ ( KeyInput { keycode: VirtualKeyCode::Left },
                                     InputState::On ),
-                                    ( KeyInput { keycode: VirtualKeyCode::Left },
+                                    ( KeyInput { keycode: VirtualKeyCode::Right },
                                     InputState::On ),
-                                    ( KeyInput { keycode: VirtualKeyCode::Space },
-                                    InputState::On ) ],
+                        ],
                         actions: WinitKeyboardControl::player_action_set(Player::P1)
                     }
                 );
@@ -107,10 +108,6 @@ impl WinitKeyboardControl<ActionID> {
                     id: ActionID::Move(player),
                     action_type: ActionType::Axis(1.0, 0.0)
                 },
-                Action {
-                    id: ActionID::Jump(player),
-                    action_type: ActionType::Continuous
-                }
             ]
         }
     }
@@ -124,20 +121,27 @@ impl WinitKeyboardControl<ActionID> {
                 let ((input, input_state), action) = action_map;
                 match input_state {
                     InputState::On => {
-                        if events.key_held(input.keycode) {
-                            match (&action.id, &action.action_type) {
-                                // this is pong specific, don't know how to deal w it in a way that isnt
-                                (ActionID::Move(_player), ActionType::Axis(_x, y)) => *value = *y,
-                                _ => {}
+                        match &action.action_type {
+                            ActionType::Axis(x, ..) => {
+                                if *x != 0.0 {
+                                    if events.key_held(input.keycode) {
+                                        match &action.id {
+                                            // this is pong specific, don't know how to deal w it in a way that isnt
+                                            ActionID::Move(..) => *value = *x,
+                                            _ => {}
+                                        }
+                                    }
+                                }
                             }
-                        }
-                    }
-                    InputState::Off => {
-                        if events.key_pressed(input.keycode) {
-                            match (&action.id, &action.action_type) {
-                                (ActionID::Jump(_player), _) => *value = 1.0,
-                                _ => {}
+                            ActionType::Instant => {
+                                if events.key_pressed(input.keycode) {
+                                    match &action.id {
+                                        ActionID::Jump(..) => *value = -1.0,
+                                        _ => {}
+                                    }
+                                }
                             }
+                            _ => {}
                         }
                     }
                     _ => {}
@@ -169,22 +173,24 @@ impl WinitKeyboardControl<ActionID> {
     }
 }
 
-struct PongPhysics {
-    // "structure of arrays"
-    positions:Vec<Vec2>,
-    velocities:Vec<Vec2>
+struct JumperPhysics {
+    positions: Vec<Vec2>,
+    velocities: Vec<Vec2>,
+    accelerations: Vec<Vec2>,
 }
 
-impl PongPhysics {
+impl JumperPhysics {
     fn new() -> Self {
         Self {
             positions: Vec::new(),
             velocities: Vec::new(),
+            accelerations: Vec::new(),
         }
     }
 
     fn update(&mut self) {
-        for (pos, vel) in self.positions.iter_mut().zip(self.velocities.iter()) {
+        for (pos, (vel, acc)) in self.positions.iter_mut().zip(self.velocities.iter_mut().zip(self.accelerations.iter())) {
+            *vel += *acc;
             *pos += *vel;
         }
     }
@@ -206,15 +212,16 @@ struct CollisionData<ID: Copy + Eq> {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum CollisionID {
-    Paddle(Player),
-    Ball,
+    Player(Player),
     TopWall,
     BottomWall,
-    SideWall(Player),
+    LeftWall,
+    RightWall,
+    Ground,
 }
 
 impl Default for CollisionID {
-    fn default() -> Self { Self::Ball }
+    fn default() -> Self { Self::LeftWall }
 }
 
 impl AabbCollision<CollisionID> {
@@ -240,8 +247,8 @@ impl AabbCollision<CollisionID> {
             ],
             velocities: vec![Vec2::new(0.0, 0.0); 4],
             metadata: vec![
-                CollisionData{ solid: true, fixed: true, id: CollisionID::SideWall(Player::P1) },
-                CollisionData{ solid: true, fixed: true, id: CollisionID::SideWall(Player::P2) },
+                CollisionData{ solid: true, fixed: true, id: CollisionID::RightWall },
+                CollisionData{ solid: true, fixed: true, id: CollisionID::LeftWall },
                 CollisionData{ solid: true, fixed: true, id: CollisionID::TopWall },
                 CollisionData{ solid: true, fixed: true, id: CollisionID::BottomWall }
             ],
@@ -327,44 +334,34 @@ impl AabbCollision<CollisionID> {
     }
 }
 
-struct PongResources {
-}
-
-impl PongResources {
-    fn new() -> Self {
-        Self {}
-    }
-
-    fn change(amt: i8) {
-    }
-}
-
 struct Logics {
     control: WinitKeyboardControl<ActionID>,
-    physics: PongPhysics,
+    physics: JumperPhysics,
     collision: AabbCollision<CollisionID>,
-    resources: PongResources,
 }
 
 impl Logics {
     fn new() -> Self {
         Self {
             control: WinitKeyboardControl::new(),
-            physics: PongPhysics::new(),
+            physics: JumperPhysics::new(),
             collision: AabbCollision::new(),
-            resources: PongResources::new(),
         }
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Player {
-    P1,
-    P2
+    P1
 }
 
 
 struct World {
+    player: (u8, u8),
+    player_vel: Vec2,
+    player_err: Vec2,
+    ground: [u8; 4],
+    is_grounded: bool,
 }
 
 
@@ -432,6 +429,11 @@ fn main() -> Result<(), Error> {
 impl World {
     fn new() -> Self {
         Self {
+            player: (50, 100),
+            player_vel: Vec2::new(0.0, 0.0),
+            player_err: Vec2::new(0.0, 0.0),
+            ground: [0, 200, WIDTH, 55],
+            is_grounded: false,
         }
     }
 
@@ -444,30 +446,85 @@ impl World {
         logics.physics.update();
         self.unproject_physics(&logics.physics);
 
-        self.project_collision(&mut logics.collision, &logics.control);
+        self.project_collision(&mut logics.collision);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
+
+        for contact in logics.collision.contacts.iter() {
+            match (logics.collision.metadata[contact.0].id,
+                logics.collision.metadata[contact.1].id) {
+                (CollisionID::Player(..), CollisionID::Ground) => {
+                    self.player_vel.y = 0.0;
+                    self.is_grounded = true;
+                }
+                _ => self.is_grounded = false
+            }
+        }
     }
 
     fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
+        for map in control.mapping.iter_mut() {
+            map.inputs.resize(2,
+                (KeyInput {keycode: VirtualKeyCode::H},
+                 InputState::On));
+            map.actions.actions.resize_with(2, Action::default);
+        }
+
+        if self.is_grounded {
+            control.mapping[0].inputs.push(
+                (KeyInput { keycode: VirtualKeyCode::Space },
+                 InputState::On));
+            control.mapping[0].actions.actions.push(
+                Action { id: ActionID::Jump(Player::P1),
+                action_type: ActionType::Instant });
+        }
+        // eventually would call from entity-state logics to figure out what keys are able to be pressed at what time
     }
 
     fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
+        self.player_vel.x = control.values[0][0] + control.values[0][1];
+        if self.is_grounded {
+            self.player_vel.y = control.values[0][2];
+        }
     }
 
-    fn project_physics(&self, physics: &mut PongPhysics) {
+    fn project_physics(&self, physics: &mut JumperPhysics) {
+        physics.accelerations.resize_with(1, Vec2::default);
+        physics.positions.resize_with(1, Vec2::default);
+        physics.velocities.resize_with(1, Vec2::default);
+        physics.accelerations[0] = Vec2::new(0.0, 0.03);
+        physics.positions[0] = Vec2::new(self.player.0 as f32, self.player.1 as f32);
+        physics.velocities[0] = self.player_vel;
     }
 
-    fn unproject_physics(&mut self, physics: &PongPhysics) {
+    fn unproject_physics(&mut self, physics: &JumperPhysics) {
+        self.player.0 = physics.positions[0].x.trunc().max(0.0).min((WIDTH - PLAYER_SIZE) as f32) as u8;
+        self.player.1 = physics.positions[0].y.trunc().max(0.0).min((HEIGHT - PLAYER_SIZE) as f32) as u8;
+        self.player_err = physics.positions[0] - Vec2::new(self.player.0 as f32, self.player.1 as f32);
+        self.player_vel = physics.velocities[0];
     }
 
-    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>, control: &WinitKeyboardControl<ActionID>) {
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>) {
+        collision.bodies.resize_with(4, Aabb::default);
+        collision.velocities.resize_with(4, Default::default);
+        collision.metadata.resize_with(4, CollisionData::default);
+        collision.bodies.push(Aabb::new(
+                Vec3::new(self.player.0 as f32, self.player.1 as f32, 0.0),
+                Vec3::new(self.player.0 as f32 + PLAYER_SIZE as f32, self.player.1 as f32 + PLAYER_SIZE as f32, 0.0)));
+        collision.bodies.push(Aabb::new(
+                Vec3::new(self.ground[0] as f32, self.ground[1] as f32, 0.0),
+                Vec3::new((self.ground[0] + self.ground[2]) as f32,
+                    (self.ground[1] + self.ground[3]) as f32, 0.0)));
+        collision.velocities.push(self.player_vel);
+        collision.velocities.push(Vec2::new(0.0, 0.0));
+
+        collision.metadata.push(CollisionData { solid: true, fixed: false, id: CollisionID::Player(Player::P1) });
+        collision.metadata.push(CollisionData { solid: true, fixed: true, id: CollisionID::Ground });
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
-    }
-
-    fn change_angle(&mut self, player: Player) {
+        self.player.0 = collision.bodies[4].min.x.trunc() as u8;
+        self.player.1 = collision.bodies[4].min.y.trunc() as u8;
     }
 
     /// Draw the `World` state to the frame buffer.
@@ -475,12 +532,14 @@ impl World {
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
     fn draw(&self, frame: &mut [u8]) {
         for pixel in frame.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&[0,0,128,255]);
+            pixel.copy_from_slice(&[128, 128, 255, 255]);
         }
+        draw_rect(self.player.0, self.player.1, PLAYER_SIZE, PLAYER_SIZE, [0, 0, 0, 255], frame);
+        draw_rect(self.ground[0], self.ground[1], self.ground[2], self.ground[3], [64, 64, 64, 255], frame);
     }
 }
 
-fn draw_rect(x:u8, y:u8, w:u8, h:u8, color:[u8;4], frame:&mut [u8]) {
+fn draw_rect(x: u8, y: u8, w: u8, h: u8, color: [u8;4], frame: &mut [u8]) {
     let x = x.min(WIDTH-1) as usize;
     let w = (w as usize).min(WIDTH as usize-x);
     let y = y.min(HEIGHT-1) as usize;
