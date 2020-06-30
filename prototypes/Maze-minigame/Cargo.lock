@@ -575,6 +575,7 @@ name = "maze-minigame"
 version = "0.1.0"
 dependencies = [
  "pixels",
+ "ultraviolet",
  "winit",
  "winit_input_helper",
 ]

@@ -7,6 +7,7 @@ use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
+use ultraviolet::{Vec2, Vec3, geometry::Aabb};
 
 const WIDTH: u32 = 320;
 const HEIGHT: u32 = 240;
@@ -61,6 +62,61 @@ impl Collectible {
         Self {x: x, y: y}
     }
 }
+
+struct AabbCollision {
+    player: Aabb,
+    walls: Vec<Aabb>,
+    pos: Vec<Vec2>,
+    vels: Vec<Vec2>,
+}
+
+impl AabbCollision {
+    fn new() -> Self {
+        player: Aabb::new(
+            Vec3::new(58.0, 8.0, 0.0),
+            Vec3::new(78.0, 28.0, 0.0),
+        ),
+        walls: vec![
+            Aabb::new(Vec3::new(8.0, 11.0, 0.0), Vec3::new(51, 14, 0.0)),
+            Aabb::new(Vec3::new(94.0, 11.0, 0.0), Vec3::new(312.0, 14.0, 0.0)),
+            Aabb::new(Vec3::new(94.0, 54.0, 0.0), Vec3::new(140.0, 57.0, 0.0)),
+            Aabb::new(Vec3::new(180.0, 54.0, 0.0), Vec3::new(266.0, 57.0, 0.0)),
+            Aabb::new(Vec3::new(223.0, 97.0, 0.0), Vec3::new(266.0, 100.0, 0.0)),
+            Aabb::new(Vec3::new(8.0, 140.0, 0.0), Vec3::new(54.0, 143.0, 0.0)),
+            Aabb::new(Vec3::new(266.0, 140.0, 0.0), Vec3::new(312.0, 143.0, 0.0)),
+            Aabb::new(Vec3::new(51.0, 183.0, 0.0), Vec3::new(183.0, 186.0, 0.0)),
+            Aabb::new(Vec3::new(223.0, 183.0, 0.0), Vec3::new(266.0, 186.0, 0.0)),
+            Aabb::new(Vec3::new(8.0, 226.0, 0.0), Vec3::new(226.0, 229.0, 0.0)),
+            Aabb::new(Vec3::new(266.0, 226.0, 0.0), Vec3::new(312.0, 229.0, 0.0)),
+            // vertical walls
+            Aabb::new(Vec3::new(8.0, 11.0, 0.0), Vec3::new(11.0, 229.0, 0.0)),
+            Aabb::new(Vec3::new(51.0, 54.0, 0.0), Vec3::new(54.0, 143.0, 0.0)),
+            Aabb::new(Vec3::new(94.0, 54.0, 0.0), Vec3::new(97.0, 186.0, 0.0)),
+            Aabb::new(Vec3::new(137.0, 54.0, 0.0), Vec3::new(140.0, 143.0, 0.0)),
+            Aabb::new(Vec3::new(180.0, 11.0, 0.0), Vec3::new(183.0, 186.0, 0.0)),
+            Aabb::new(Vec3::new(223.0, 97.0, 0.0), Vec3::new(226.0, 229.0, 0.0)),
+            Aabb::new(Vec3::new(309.0, 11.0, 0.0), Vec3::new(312.0, 229.0, 0.0)),
+            // borders
+            Aabb::new(Vec3::new(-1.0, -1.0, 0.0), Vec3::new(321.0, 0.0, 0.0)),
+            Aabb::new(Vec3::new(-1.0, 240.0, 0.0), Vec3::new(321.0, 241.0, 0.0)),
+            Aabb::new(Vec3::new(-1.0, -1.0, 0.0), Vec3::new(0.0, 241.0, 0.0)),
+            Aabb::new(Vec3::new(320.0, -1.0, 0.0), Vec3::new(321.0, 241.0, 0.0)),
+        ],
+        vels: Aabb::new(
+            Vec3::new(0.0, 0.0),
+            Vec3::new(0.0, 0.0),
+        )
+        pos: Aabb::new(
+            Vec3::new(0.0, 0.0),
+            Vec3::new(0.0, 0.0),
+        ),
+    }
+
+    fn update(&mut self) {
+        
+    }
+}
+
 
 struct MazeResources {
     score: u8,
@@ -221,8 +277,8 @@ impl World {
                 // borders
                 let top = Wall::new(-1, -1, 322, 1);
                 let bottom = Wall::new(-1, 240, 322, 1);
-                let left = Wall::new(-1, -1, 242, 1);
-                let right = Wall::new(320, -1, 242, 1);
+                let left = Wall::new(-1, -1, 1, 242);
+                let right = Wall::new(320, -1, 1, 242);
 
                 vec![wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7, wall_8, wall_9, wall_10, wall_11, wall_12, wall_13, wall_14, wall_15, wall_16, wall_17, wall_18,
                 top, bottom, left, right]
@@ -244,9 +300,9 @@ impl World {
         self.move_box(&movement);
 
         self.project_resources(&mut logics.resources);
+        logics.resources.update(&mut self.items);
+        self.unproject_resources(&logics.resources);
         if logics.resources.score_change != 0 {
-            logics.resources.update(&mut self.items);
-            self.unproject_resources(&logics.resources);
             println!("score: {}", self.score);
         }
     }
