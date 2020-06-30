@@ -63,11 +63,32 @@ impl Collectible {
     }
 }
 
+struct MazePhysics {
+    pos: Vec2,
+    vel: Vec2,
+}
+
+impl MazePhysics {
+    fn new() -> Self {
+        Self {
+            pos: Vec2::new(),
+            vel: Vec2::new(), 
+        }
+    }
+
+    // possibly add keyboard input as a parameter
+    fn update(&mut self) {
+        for i in 0..2 {
+            self.pos[i] += self.vel[i];
+        }
+    }
+}
+
 struct AabbCollision {
     player: Aabb,
     walls: Vec<Aabb>,
     pos: Vec<Vec2>,
-    vels: Vec<Vec2>,
+    vel: Vec<Vec2>,
 }
 
 impl AabbCollision {
@@ -102,18 +123,12 @@ impl AabbCollision {
             Aabb::new(Vec3::new(-1.0, -1.0, 0.0), Vec3::new(0.0, 241.0, 0.0)),
             Aabb::new(Vec3::new(320.0, -1.0, 0.0), Vec3::new(321.0, 241.0, 0.0)),
         ],
-        vels: Aabb::new(
-            Vec3::new(0.0, 0.0),
-            Vec3::new(0.0, 0.0),
-        )
-        pos: Aabb::new(
-            Vec3::new(0.0, 0.0),
-            Vec3::new(0.0, 0.0),
-        ),
+        pos: Vec::new(),
+        vels: Vec::new(),
     }
 
     fn update(&mut self) {
-        
+        // add cases for collision....
     }
 }
 
@@ -145,6 +160,8 @@ impl MazeResources {
 }
 
 struct Logics {
+    // physics: MazePhysics,
+    // collision: AabbCollision,
     resources: MazeResources,
 }
 
@@ -297,7 +314,18 @@ impl World {
 
     /// Update the `World` internal state 
     fn update(&mut self, logics: &mut Logics, movement: ( Direction, Direction )) {
+        // eventually get rid of this
+        // won't tackle control logics for now so probably have to pass `movement` into the physics OL
         self.move_box(&movement);
+
+        // remove comments when done
+        // self.project_physics(&mut logics.physics);
+        // logics.physics.update(maybe put movement here?);
+        // self.unproject_physics(&logics.physics);
+
+        // self.project_collision(&mut logics.collision);
+        // logics.collision.update();
+        // self.unproject_collision(&logics.collision);
 
         self.project_resources(&mut logics.resources);
         logics.resources.update(&mut self.items);
@@ -305,6 +333,36 @@ impl World {
         if logics.resources.score_change != 0 {
             println!("score: {}", self.score);
         }
+
+    }
+
+    fn project_physics(&self, physics: &mut MazePhysics) {
+        physics.pos.push(self.x as f32);
+        physics.pos.push(self.y as f32);
+        physics.vel.push(self.vx as f32);
+        physics.vel.push(self.vy as f32);
+    }
+
+    fn unproject_physics(&mut self, physics: &MazePhysics) {
+        // is it physics.pos.x or physics.pos[0]? 
+        self.x = physics.pos[0].trunc() as i16;
+        self.y = physics.pos[1].trunc() as i16;
+    }
+
+    fn project_collision(&self, collision: &mut AabbCollision) {
+        collision.player = Aabb::new(
+            Vec3::new(self.x as f32, self.y as f32, 0.0);
+            Vec3::new((self.x + BOX_SIZE) as f32, (self.y + BOX_SIZE) as f32, 0.0);
+        );
+        // project into physics logic to get position and velocity? not sure if it can reach physics
+        collision.pos = logics.physics.pos;
+        collision.vel = logics.physics.vel;
+    }
+
+    fn unproject_collision(&mut self, collision: &AabbCollision) {
+        // same question - pos[0] or pos.x?
+        // self.x = collision.pos[0].trunc() as i16,
+        // self.y = collision.pos[1].trunc() as i16,
     }
 
     fn project_resources(&self, resources:&mut MazeResources) {
