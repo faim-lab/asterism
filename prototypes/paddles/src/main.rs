@@ -1,5 +1,6 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
+#![allow(dead_code)]
 
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
@@ -8,7 +9,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, Vec3, geometry::Aabb};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -35,12 +36,12 @@ impl Input for KeyInput {
 // Off means that the action fires (once if instantaneous and then not again, or every frame while held if it’s a continuous input, or has its axis value set to 1.0 or else 0.0) if !keydown(...), On means the same only if keydown(...), and changed could mean pressed or released (so probably needs a positive/negative/either(?) parameter instead of an f32)
 #[derive(Clone)]
 enum InputState {
-    _Off, _Change(f32), On
+    Off, Change(f32), On
 }
 
 enum ActionType {
     Instant,
-    _Continuous,
+    Continuous,
     Axis(f32, f32)
 }
 
@@ -83,32 +84,7 @@ struct WinitKeyboardControl<ID: Copy + Eq> {
 impl WinitKeyboardControl<ActionID> {
     fn new() -> Self {
         Self {
-            mapping: {
-                let mut mapping = Vec::new();
-                mapping.push(
-                    InputMap {
-                        inputs: vec![ (
-                                    KeyInput { keycode: VirtualKeyCode::Q },
-                                    InputState::On), (
-                                    KeyInput { keycode: VirtualKeyCode::A },
-                                    InputState::On),
-                        ],
-                        actions: WinitKeyboardControl::player_action_set(Player::P1)
-                    }
-                );
-                mapping.push(
-                    InputMap {
-                        inputs: vec![ (
-                                    KeyInput { keycode: VirtualKeyCode::O },
-                                    InputState::On), (
-                                    KeyInput { keycode: VirtualKeyCode::L },
-                                    InputState::On)],
-                                    actions: WinitKeyboardControl::player_action_set(Player::P2)
-
-                    }
-                );
-                mapping
-            },
+            mapping: Vec::new(),
             values: Vec::new()
         }
     }
@@ -190,7 +166,6 @@ impl WinitKeyboardControl<ActionID> {
 }
 
 struct PongPhysics {
-    // "structure of arrays"
     positions:Vec<Vec2>,
     velocities:Vec<Vec2>
 }
@@ -240,31 +215,9 @@ impl Default for CollisionID {
 impl AabbCollision<CollisionID> {
     fn new() -> Self {
         Self {
-            bodies: vec![
-                Aabb::new(
-                    Vec3::new(-1.0, 0.0, 0.0),
-                    Vec3::new(0.0, HEIGHT as f32, 0.0)
-                ),
-                Aabb::new(
-                    Vec3::new(WIDTH as f32, 0.0, 0.0),
-                    Vec3::new(WIDTH as f32 + 1.0, HEIGHT as f32, 0.0)
-                ),
-                Aabb::new(
-                    Vec3::new(0.0, -1.0, 0.0),
-                    Vec3::new(WIDTH as f32, 0.0, 0.0)
-                ),
-                Aabb::new(
-                    Vec3::new(0.0, HEIGHT as f32, 0.0),
-                    Vec3::new(WIDTH as f32, HEIGHT as f32 + 1.0, 0.0)
-                )
-            ],
-            velocities: vec![Vec2::new(0.0, 0.0); 4],
-            metadata: vec![
-                CollisionData{ solid: true, fixed: true, id: CollisionID::SideWall(Player::P1) },
-                CollisionData{ solid: true, fixed: true, id: CollisionID::SideWall(Player::P2) },
-                CollisionData{ solid: true, fixed: true, id: CollisionID::TopWall },
-                CollisionData{ solid: true, fixed: true, id: CollisionID::BottomWall }
-            ],
+            bodies: Vec::new(),
+            velocities: Vec::new(),
+            metadata: Vec::new(),
             contacts: Vec::new(),
         }
     }
@@ -348,42 +301,46 @@ impl AabbCollision<CollisionID> {
 }
 
 struct PongResources {
-    items: HashMap<ItemType, f32>,
+    items: BTreeMap<ItemType, f32>,
     transactions: Vec<Vec<(ItemType, Transaction)>>,
-    completed: Vec<(ItemType, Transaction)>
+    completed: Vec<(bool, Option<Vec<ItemType>>)>
 }
 
 impl PongResources {
     fn new() -> Self {
         Self {
-            items: {
-                let mut items = HashMap::new();
-                items.insert( ItemType::Points(Player::P1), 0.0 );
-                items.insert( ItemType::Points(Player::P2), 0.0 );
-                items
-            },
-            transactions: vec![],
-            completed: vec![],
+            items: BTreeMap::new(),
+            transactions: Vec::new(),
+            completed: Vec::new(),
         }
     }
 
     fn update(&mut self) {
         self.completed.clear();
-        'exchange: for exchange in &self.transactions {
-            for (item_type, change) in exchange {
-                if !self.is_possible(item_type, change) {
-                    continue 'exchange;
-                }
+        'exchange: for exchange in self.transactions.iter() {
+            let mut snapshot: BTreeMap<ItemType, f32> = BTreeMap::new();
+            for (item_type, ..) in exchange {
+                snapshot.insert( *item_type, *self.items.get(&item_type).unwrap() );
             }
-            for (item_type, change) in exchange {
-                match (item_type, change) {
-                    (ItemType::Points(..), Transaction::Change(amt)) => {
-                        *self.items.get_mut(item_type).unwrap() += *amt as f32;
-                        self.completed.push((*item_type, *change));
+            let mut item_types = vec![];
+            for (item_type, change) in exchange.iter() {
+                if !self.is_possible(item_type, change) {
+                    self.completed.push((false, None));
+                    for (item_type, val) in snapshot.iter() {
+                        *self.items.get_mut(&item_type).unwrap() = *val;
+                        continue 'exchange;
+                    }
+                }
+                match change {
+                    Transaction::Change(amt) => {
+                        *self.items.get_mut(&item_type).unwrap() += *amt as f32;
+                        item_types.push(*item_type);
                     }
                 }
             }
+            self.completed.push((true, Some(item_types)));
         }
+        self.transactions.clear();
     }
 
     fn is_possible (&self, item_type: &ItemType, transaction: &Transaction) -> bool {
@@ -391,8 +348,8 @@ impl PongResources {
             false
         } else {
             let value = self.items.get(item_type);
-            match (item_type, transaction) {
-                (ItemType::Points(..), Transaction::Change(amt)) => {
+            match transaction {
+                Transaction::Change(amt) => {
                     if value.unwrap() + *amt as f32 > 0.0 {
                         true
                     } else { false }
@@ -412,7 +369,8 @@ enum Transaction {
     Change(i8),
 }
 
-#[derive(Hash, Clone, Copy, PartialEq, Eq)]
+// probably should make this a generic?
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum ItemType {
     Points(Player)
 }
@@ -427,15 +385,65 @@ struct Logics {
 impl Logics {
     fn new() -> Self {
         Self {
-            control: WinitKeyboardControl::new(),
+            control: {
+                let mut control = WinitKeyboardControl::new();
+                control.mapping.push(
+                    InputMap {
+                        inputs: vec![ (
+                                    KeyInput { keycode: VirtualKeyCode::Q },
+                                    InputState::On), (
+                                    KeyInput { keycode: VirtualKeyCode::A },
+                                    InputState::On),
+                        ],
+                        actions: WinitKeyboardControl::player_action_set(Player::P1)
+                    }
+                );
+                control.mapping.push(
+                    InputMap {
+                        inputs: vec![ (
+                                    KeyInput { keycode: VirtualKeyCode::O },
+                                    InputState::On), (
+                                    KeyInput { keycode: VirtualKeyCode::L },
+                                    InputState::On)],
+                                    actions: WinitKeyboardControl::player_action_set(Player::P2)
+                    });
+                control
+            },
             physics: PongPhysics::new(),
-            collision: AabbCollision::new(),
-            resources: PongResources::new(),
+            collision: {
+                let mut collision = AabbCollision::new();
+                collision.bodies.push(Aabb::new(
+                        Vec3::new(-1.0, 0.0, 0.0),
+                        Vec3::new(0.0, HEIGHT as f32, 0.0)));
+                collision.bodies.push(Aabb::new(
+                    Vec3::new(WIDTH as f32, 0.0, 0.0),
+                    Vec3::new(WIDTH as f32 + 1.0, HEIGHT as f32, 0.0)));
+                collision.bodies.push(Aabb::new(
+                    Vec3::new(0.0, -1.0, 0.0),
+                    Vec3::new(WIDTH as f32, 0.0, 0.0)));
+                collision.bodies.push(Aabb::new(
+                    Vec3::new(0.0, HEIGHT as f32, 0.0),
+                    Vec3::new(WIDTH as f32, HEIGHT as f32 + 1.0, 0.0)));
+                for _ in 1..4 {
+                    collision.velocities.push(Vec2::new(0.0, 0.0));
+                }
+                collision.metadata.push(CollisionData{ solid: true, fixed: true, id: CollisionID::SideWall(Player::P1) });
+                collision.metadata.push(CollisionData{ solid: true, fixed: true, id: CollisionID::SideWall(Player::P2) });
+                collision.metadata.push(CollisionData{ solid: true, fixed: true, id: CollisionID::TopWall });
+                collision.metadata.push(CollisionData{ solid: true, fixed: true, id: CollisionID::BottomWall });
+                collision
+            },
+            resources: {
+                let mut resources = PongResources::new();
+                resources.items.insert( ItemType::Points(Player::P1), 0.0 );
+                resources.items.insert( ItemType::Points(Player::P2), 0.0 );
+                resources
+            }
         }
     }
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
 enum Player {
     P1,
     P2
@@ -448,6 +456,7 @@ struct World {
     ball_err: Vec2,
     ball_vel: Vec2,
     serving: Option<Player>,
+    score: (u8, u8)
 }
 
 
@@ -520,6 +529,7 @@ impl World {
             ball_err: Vec2::new(0.0,0.0),
             ball_vel: Vec2::new(0.0,0.0),
             serving: Some(Player::P1),
+            score: (0, 0),
         }
     }
 
@@ -544,7 +554,11 @@ impl World {
                     self.ball = (WIDTH / 2 - BALL_SIZE / 2,
                         HEIGHT / 2 - BALL_SIZE / 2);
                     self.serving = Some(player);
-                },
+                    match player {
+                        Player::P1 => logics.resources.transactions.push(vec![(ItemType::Points(Player::P2), Transaction::Change(1))]),
+                        Player::P2 => logics.resources.transactions.push(vec![(ItemType::Points(Player::P1), Transaction::Change(1))]),
+                    }
+                }
                 (CollisionID::TopWall, CollisionID::Ball) |
                     (CollisionID::BottomWall, CollisionID::Ball) => {
                         self.ball_vel.y *= -1.0;
@@ -568,9 +582,27 @@ impl World {
             }
         }
         
-        self.project_resources(&mut logics.resources, &logics.collision);
+        self.project_resources(&mut logics.resources);
         logics.resources.update();
         self.unproject_resources(&logics.resources);
+
+        for (completed, item_types) in logics.resources.completed.iter() {
+            if let Some(types) = item_types {
+                if *completed {
+                    for item_type in types {
+                        match item_type {
+                            ItemType::Points(player) => {
+                                match player {
+                                    Player::P1 => print!("p1"),
+                                    Player::P2 => print!("p2")
+                                }
+                                println!(" scores! p1: {}, p2: {}", self.score.0, self.score.1);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
@@ -687,35 +719,30 @@ impl World {
         }
     }
 
-    fn project_resources(&self, resources: &mut PongResources, collision: &AabbCollision<CollisionID>) {
-        resources.transactions.clear();
-        for contact in collision.contacts.iter() {
-            match (collision.metadata[contact.0].id,
-                collision.metadata[contact.1].id) {
-                (CollisionID::SideWall(Player::P1), CollisionID::Ball) => {
-                    resources.transactions.push(vec![(ItemType::Points(Player::P2),
-                            Transaction::Change(1))]);
-                }
-                (CollisionID::SideWall(Player::P2), CollisionID::Ball) => {
-                    resources.transactions.push(vec![(ItemType::Points(Player::P1),
-                            Transaction::Change(1))]);
-                }
-                _ => {}
-            }
+    fn project_resources(&self, resources: &mut PongResources) {
+        if !resources.items.contains_key(&ItemType::Points(Player::P1)) {
+            resources.items.insert(ItemType::Points(Player::P1), 0.0);
+        }
+        if !resources.items.contains_key(&ItemType::Points(Player::P2)) {
+            resources.items.insert(ItemType::Points(Player::P1), 0.0);
         }
     }
 
     fn unproject_resources(&mut self, resources: &PongResources) {
-        for (item_type, transaction) in &resources.completed {
-            match (item_type, transaction) {
-                (ItemType::Points(player), Transaction::Change(..)) => {
-                    match player {
-                        Player::P1 => print!("p1 scores! "),
-                        Player::P2 => print!("p2 scores! ")
+        for (completed, item_types) in resources.completed.iter() {
+            if let Some(types) = item_types {
+                if *completed {
+                    for item_type in types {
+                        let value = resources.get_value_by_itemtype(item_type).min(255.0) as u8;
+                        match item_type {
+                            ItemType::Points(player) =>  {
+                                match player {
+                                    Player::P1 => self.score.0 = value,
+                                    Player::P2 => self.score.1 = value,
+                                }
+                            }
+                        }
                     }
-                    println!("p1: {}, p2: {}",
-                        resources.get_value_by_itemtype(&ItemType::Points(Player::P1)),
-                        resources.get_value_by_itemtype(&ItemType::Points(Player::P2)));
                 }
             }
         }
