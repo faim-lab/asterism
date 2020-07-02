@@ -686,6 +686,11 @@ impl World {
             return false;
         }
 
+        // draw background first
+        for pixel in frame.chunks_exact_mut(4) {
+            pixel.copy_from_slice(&[0x48, 0xb2, 0xe8, 0xff]);
+        }
+
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
             let x = (i % WIDTH as usize) as i16;
             let y = (i / WIDTH as usize) as i16;
@@ -697,7 +702,7 @@ impl World {
             } else if is_item(x, y, items) {
                 [0x95, 0xed, 0xc1, 0xff]
             } else {
-                [0x48, 0xb2, 0xe8, 0xff]
+                continue;
             };
 
             pixel.copy_from_slice(&rgba);
