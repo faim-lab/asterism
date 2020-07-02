@@ -77,7 +77,7 @@ struct WinitKeyboardControl<ID: Copy + Eq> {
         // Invariants: mapping.len() == values.len(), mapping[i].inputs.len() == values[i].len() 
 }
 
-impl WinitKeyboardControl<ActionID> {
+impl<ID: Copy + Eq> WinitKeyboardControl<ID> {
     fn new() -> Self {
         Self {
             mapping: Vec::new(),
@@ -128,7 +128,7 @@ impl WinitKeyboardControl<ActionID> {
     }
 
     // This gets the value of the first action whose `id` is `id`.
-    pub fn get_action(&self, id: ActionID) -> Option<f32> {
+    pub fn get_action(&self, id: ID) -> Option<f32> {
         for (i, set) in self.mapping.iter().enumerate() {
             if let Some(j) = set.actions.iter().position(|act| act.id == id) {
                 return Some(self.values[i][j]);
@@ -137,7 +137,7 @@ impl WinitKeyboardControl<ActionID> {
         None
     }
 
-    pub fn get_action_in_set(&self, action_set: usize, id: ActionID) -> Option<f32> {
+    pub fn get_action_in_set(&self, action_set: usize, id: ID) -> Option<f32> {
         if let Some(idx) = self.mapping[action_set].actions.iter().position(|act| act.id == id) {
             return Some(self.get_action_by_index(action_set, idx));
         }
@@ -192,7 +192,7 @@ impl Default for CollisionID {
     fn default() -> Self { Self::Ball }
 }
 
-impl AabbCollision<CollisionID> {
+impl<ID: Copy + Eq> AabbCollision<ID> {
     fn new() -> Self {
         Self {
             bodies: Vec::new(),
@@ -280,13 +280,13 @@ impl AabbCollision<CollisionID> {
     }
 }
 
-struct PongResources {
-    items: BTreeMap<ItemType, f32>,
-    transactions: Vec<Vec<(ItemType, Transaction)>>,
-    completed: Vec<(bool, Option<Vec<ItemType>>)>
+struct PongResources<ID: Copy + Ord> {
+    items: BTreeMap<ID, f32>,
+    transactions: Vec<Vec<(ID, Transaction)>>,
+    completed: Vec<(bool, Option<Vec<ID>>)>
 }
 
-impl PongResources {
+impl<ID: Copy + Ord> PongResources<ID> {
     fn new() -> Self {
         Self {
             items: BTreeMap::new(),
@@ -298,7 +298,7 @@ impl PongResources {
     fn update(&mut self) {
         self.completed.clear();
         'exchange: for exchange in self.transactions.iter() {
-            let mut snapshot: BTreeMap<ItemType, f32> = BTreeMap::new();
+            let mut snapshot: BTreeMap<ID, f32> = BTreeMap::new();
             for (item_type, ..) in exchange {
                 snapshot.insert( *item_type, *self.items.get(&item_type).unwrap() );
             }
@@ -323,7 +323,7 @@ impl PongResources {
         self.transactions.clear();
     }
 
-    fn is_possible (&self, item_type: &ItemType, transaction: &Transaction) -> bool {
+    fn is_possible (&self, item_type: &ID, transaction: &Transaction) -> bool {
         if !self.items.contains_key(item_type) {
             false
         } else {
@@ -338,7 +338,7 @@ impl PongResources {
         }
     }
 
-    fn get_value_by_itemtype(&self, item_type: &ItemType) -> f32 {
+    fn get_value_by_itemtype(&self, item_type: &ID) -> f32 {
         *self.items.get(item_type).unwrap()
     }
 
@@ -349,9 +349,8 @@ enum Transaction {
     Change(i8),
 }
 
-// probably should make this a generic?
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-enum ItemType {
+enum PoolID {
     Points(Player)
 }
 
@@ -359,7 +358,7 @@ struct Logics {
     control: WinitKeyboardControl<ActionID>,
     physics: PongPhysics,
     collision: AabbCollision<CollisionID>,
-    resources: PongResources,
+    resources: PongResources<PoolID>,
 }
 
 impl Logics {
@@ -413,8 +412,8 @@ impl Logics {
             },
             resources: {
                 let mut resources = PongResources::new();
-                resources.items.insert( ItemType::Points(Player::P1), 0.0 );
-                resources.items.insert( ItemType::Points(Player::P2), 0.0 );
+                resources.items.insert( PoolID::Points(Player::P1), 0.0 );
+                resources.items.insert( PoolID::Points(Player::P2), 0.0 );
                 resources
             }
         }
@@ -533,8 +532,8 @@ impl World {
                         HEIGHT / 2 - BALL_SIZE / 2);
                     self.serving = Some(player);
                     match player {
-                        Player::P1 => logics.resources.transactions.push(vec![(ItemType::Points(Player::P2), Transaction::Change(1))]),
-                        Player::P2 => logics.resources.transactions.push(vec![(ItemType::Points(Player::P1), Transaction::Change(1))]),
+                        Player::P1 => logics.resources.transactions.push(vec![(PoolID::Points(Player::P2), Transaction::Change(1))]),
+                        Player::P2 => logics.resources.transactions.push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]),
                     }
                 }
                 (CollisionID::TopWall, CollisionID::Ball) |
@@ -569,7 +568,7 @@ impl World {
                 if *completed {
                     for item_type in types {
                         match item_type {
-                            ItemType::Points(player) => {
+                            PoolID::Points(player) => {
                                 match player {
                                     Player::P1 => print!("p1"),
                                     Player::P2 => print!("p2")
@@ -695,23 +694,23 @@ impl World {
         }
     }
 
-    fn project_resources(&self, resources: &mut PongResources) {
-        if !resources.items.contains_key(&ItemType::Points(Player::P1)) {
-            resources.items.insert(ItemType::Points(Player::P1), 0.0);
+    fn project_resources(&self, resources: &mut PongResources<PoolID>) {
+        if !resources.items.contains_key(&PoolID::Points(Player::P1)) {
+            resources.items.insert(PoolID::Points(Player::P1), 0.0);
         }
-        if !resources.items.contains_key(&ItemType::Points(Player::P2)) {
-            resources.items.insert(ItemType::Points(Player::P1), 0.0);
+        if !resources.items.contains_key(&PoolID::Points(Player::P2)) {
+            resources.items.insert(PoolID::Points(Player::P1), 0.0);
         }
     }
 
-    fn unproject_resources(&mut self, resources: &PongResources) {
+    fn unproject_resources(&mut self, resources: &PongResources<PoolID>) {
         for (completed, item_types) in resources.completed.iter() {
             if let Some(types) = item_types {
                 if *completed {
                     for item_type in types {
                         let value = resources.get_value_by_itemtype(item_type).min(255.0) as u8;
                         match item_type {
-                            ItemType::Points(player) =>  {
+                            PoolID::Points(player) =>  {
                                 match player {
                                     Player::P1 => self.score.0 = value,
                                     Player::P2 => self.score.1 = value,
