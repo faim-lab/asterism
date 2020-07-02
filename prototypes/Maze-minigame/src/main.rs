@@ -1,5 +1,6 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
+#![allow(dead_code)]
 
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
@@ -282,44 +283,42 @@ impl World {
             vy: 16,
             score: 0,
             walls: {
-                // don't need names! condense
-                // create horizontal walls
-                let wall_1 = Wall::new(8, 11, 43, 3);
-                let wall_2 = Wall::new(94, 11, 218, 3);
-                let wall_3 = Wall::new(94, 54, 46, 3);
-                let wall_4 = Wall::new(180, 54, 86, 3);
-                let wall_5 = Wall::new(223, 97, 43, 3);
-                let wall_6 = Wall::new(8, 140, 46, 3);
-                let wall_7 = Wall::new(266, 140, 46, 3);
-                let wall_8 = Wall::new(51, 183, 132, 3);
-                let wall_9 = Wall::new(223, 183, 43, 3);
-                let wall_10 = Wall::new(8, 226, 218, 3);
-                let wall_11 = Wall::new(266, 226, 46, 3);
-                // create vertical walls
-                let wall_12 = Wall::new(8, 11, 3, 218);
-                let wall_13 = Wall::new(51, 54, 3, 89);
-                let wall_14 = Wall::new(94, 54, 3, 132);
-                let wall_15 = Wall::new(137, 54, 3, 89);
-                let wall_16 = Wall::new(180, 11, 3, 175);
-                let wall_17 = Wall::new(223, 97, 3, 132);
-                let wall_18 = Wall::new(309, 11, 3, 218);
-                // borders
-                let top = Wall::new(-1, -1, 322, 1);
-                let bottom = Wall::new(-1, 240, 322, 1);
-                let left = Wall::new(-1, -1, 1, 242);
-                let right = Wall::new(320, -1, 1, 242);
-
-                vec![wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7, wall_8, wall_9, wall_10, wall_11, wall_12, wall_13, wall_14, wall_15, wall_16, wall_17, wall_18,
-                top, bottom, left, right]
+                vec![
+                    // create horizontal walls
+                    Wall::new(8, 11, 43, 3),
+                    Wall::new(94, 11, 218, 3),
+                    Wall::new(94, 54, 46, 3),
+                    Wall::new(180, 54, 86, 3),
+                    Wall::new(223, 97, 43, 3),
+                    Wall::new(8, 140, 46, 3),
+                    Wall::new(266, 140, 46, 3),
+                    Wall::new(51, 183, 132, 3),
+                    Wall::new(223, 183, 43, 3),
+                    Wall::new(8, 226, 218, 3),
+                    Wall::new(266, 226, 46, 3),
+                    // create vertical walls
+                    Wall::new(8, 11, 3, 218),
+                    Wall::new(51, 54, 3, 89),
+                    Wall::new(94, 54, 3, 132),
+                    Wall::new(137, 54, 3, 89),
+                    Wall::new(180, 11, 3, 175),
+                    Wall::new(223, 97, 3, 132),
+                    Wall::new(309, 11, 3, 218),
+                    // borders
+                    Wall::new(-1, -1, 322, 1),
+                    Wall::new(-1, 240, 322, 1),
+                    Wall::new(-1, -1, 1, 242),
+                    Wall::new(320, -1, 1, 242),
+                ]
             },
             items: {
-                let item_1 = Collectible::new(112, 72);
-                let item_2 = Collectible::new(26, 198);
-                let item_3 = Collectible::new(195, 198);
-                let item_4 = Collectible::new(195, 29);
-                let item_5 = Collectible::new(281, 198);
-            
-                vec![item_1, item_2, item_3, item_4, item_5]
+                vec![
+                    Collectible::new(112, 72),
+                    Collectible::new(26, 198),
+                    Collectible::new(195, 198),
+                    Collectible::new(195, 29),
+                    Collectible::new(281, 198),
+                ]
             }
         }
     }
