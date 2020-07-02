@@ -9,6 +9,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, Vec3, geometry::Aabb};
+use std::collections::BTreeMap;
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -334,10 +335,54 @@ impl AabbCollision<CollisionID> {
     }
 }
 
+
+
+struct PhysicsEntityState {
+    states: BTreeMap<StateID, State>,
+    current_state: Option<StateID>,
+    change: Option<StateID>
+}
+
+impl PhysicsEntityState {
+    fn new() -> Self {
+        Self {
+            states: BTreeMap::new(),
+            current_state: None,
+            change: None,
+        }
+    }
+
+    fn update(&mut self) {
+        if let Some(new_state) = self.change {
+            self.current_state = Some(new_state);
+        }
+    }
+
+}
+
+struct State {
+    physics: (Vec<Vec2>, Vec<Vec2>, Vec<Vec2>),
+    edges: Vec<Edge>,
+}
+
+struct Edge {
+    id: StateID,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+enum StateID {
+    Grounded,
+    Walk,
+    Jump,
+    Fall
+}
+
+
 struct Logics {
     control: WinitKeyboardControl<ActionID>,
     physics: JumperPhysics,
     collision: AabbCollision<CollisionID>,
+    entity_state: PhysicsEntityState,
 }
 
 impl Logics {
@@ -346,6 +391,7 @@ impl Logics {
             control: WinitKeyboardControl::new(),
             physics: JumperPhysics::new(),
             collision: AabbCollision::new(),
+            entity_state: PhysicsEntityState::new(),
         }
     }
 }
@@ -454,12 +500,25 @@ impl World {
             match (logics.collision.metadata[contact.0].id,
                 logics.collision.metadata[contact.1].id) {
                 (CollisionID::Player(..), CollisionID::Ground) => {
-                    self.player_vel.y = 0.0;
-                    self.is_grounded = true;
+                    if self.player_vel.x == 0.0 {
+                        logics.entity_state.change = Some(StateID::Grounded);
+                    } else {
+                        logics.entity_state.change = Some(StateID::Walk);
+                    }
                 }
-                _ => self.is_grounded = false
+                _ => {
+                    if self.player_vel.y < 0.0 {
+                        logics.entity_state.change = Some(StateID::Fall);
+                    } else {
+                        logics.entity_state.change = Some(StateID::Jump);
+                    }
+                }
             }
         }
+
+        self.project_entity_state(&mut logics.entity_state);
+        logics.entity_state.update();
+        self.unproject_entity_state(&logics.entity_state);
     }
 
     fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
@@ -525,6 +584,16 @@ impl World {
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
         self.player.0 = collision.bodies[4].min.x.trunc() as u8;
         self.player.1 = collision.bodies[4].min.y.trunc() as u8;
+    }
+
+
+    fn project_entity_state(&self, entity_state: &mut PhysicsEntityState) {
+        // ???
+    }
+
+    fn unproject_entity_state(&mut self, entity_state: &PhysicsEntityState) {
+        // update game physics
+        // will this perpetually be a frame behind??
     }
 
     /// Draw the `World` state to the frame buffer.
