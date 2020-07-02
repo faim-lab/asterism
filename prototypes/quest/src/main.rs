@@ -57,7 +57,7 @@ impl Game {
 				self.renderable_components
 						.update_all_coords(&self.view_area, &self.position_components);
 		}
-		fn add_test_thing(&mut self) {
+		/*fn add_test_thing(&mut self) {
 				self.position_components.add(
 						PositionComponent::new(1_f32, 1_f32)
 				);
@@ -65,7 +65,7 @@ impl Game {
 						RenderableComponent::new(None, Vector::new(1_f32, 1_f32), 0.2, 0_u32)
 				);
 				self.renderable_components.update_all_coords(&self.view_area, &self.position_components);
-		}
+		}*/
 		fn render(&self) -> (Vec<Vertex>, Vec<u16>) {
 				// will want to update as part of this--coming soon
 				self.renderable_components.render_all()
@@ -473,11 +473,11 @@ impl State {
 				
 				let vertex_buffer = device.create_buffer_with_data(
             bytemuck::cast_slice(vertices.as_slice()),
-            wgpu::BufferUsage::VERTEX,
+            wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
         );
         let index_buffer = device.create_buffer_with_data(
             bytemuck::cast_slice(indices.as_slice()),
-            wgpu::BufferUsage::INDEX,
+            wgpu::BufferUsage::INDEX | wgpu::BufferUsage::COPY_DST,
         );
         
         let num_indices = indices.len() as u32;
@@ -514,6 +514,31 @@ impl State {
 
     fn update(&mut self) {
 
+
+				let (vertices, indices) = self.game.render();
+
+				let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+						label: Some("update encoder"),
+				});
+				
+				let staging_vertex_buffer = self.device.create_buffer_with_data(
+            bytemuck::cast_slice(vertices.as_slice()),
+            wgpu::BufferUsage::COPY_SRC,
+        );
+				let staging_index_buffer = self.device.create_buffer_with_data(
+            bytemuck::cast_slice(indices.as_slice()),
+            wgpu::BufferUsage::COPY_SRC,
+        );
+
+				encoder.copy_buffer_to_buffer(&staging_vertex_buffer, 0, &self.vertex_buffer, 0, std::mem::size_of_val(&vertices) as wgpu::BufferAddress);
+
+				encoder.copy_buffer_to_buffer(&staging_index_buffer, 0, &self.index_buffer, 0, std::mem::size_of_val(&indices) as wgpu::BufferAddress);
+
+				self.num_indices = indices.len() as u32;
+				
+				self.queue.submit(&[encoder.finish()]);
+
+				
     }
 
     fn render(&mut self) {
@@ -564,7 +589,6 @@ fn main() {
 
     use futures::executor::block_on;
 
-    // Since main can't be async, we're going to need to block
     let mut state = block_on(State::new(&window));
 
     event_loop.run(move |event, _, control_flow| {
