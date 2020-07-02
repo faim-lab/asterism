@@ -84,49 +84,42 @@ impl MazePhysics {
     }
 }
 
-// what types should pos and vel be? a vector of vec2 or just vec2? how should I go about this?
-struct AabbCollision {
-    player: Aabb,
-    walls: Vec<Aabb>,
-    pos: Vec<Vec2>,
-    vel: Vec<Vec2>,
+
+
+// thanks paddles
+struct AabbCollision<ID: Copy + Eq> {
+    bodies: Vec<Aabb>,
+    velocities: Vec<Vec2>,
+    metadata: Vec<CollisionData<ID>>,
+    contacts: Vec<(usize, usize)>
 }
 
-// not sure why there's an `expected type, found 58.0` error in line 99
-impl AabbCollision {
+#[derive(Default, Clone, Copy)]
+struct CollisionData<ID: Copy + Eq> {
+    solid: bool, // true = participates in restitution, false = no
+    fixed: bool, // collision system cannot move it
+    id: ID,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CollisionID {
+    Player,
+    Wall,
+    Item,
+}
+
+impl Default for CollisionID {
+    fn default() -> Self { Self::Player }
+}
+
+impl AabbCollision<CollisionID> {
     fn new() -> Self {
-        player: Aabb::new(
-            Vec3::new(58.0, 8.0, 0.0),
-            Vec3::new(78.0, 28.0, 0.0),
-        ),
-        walls: vec![
-            Aabb::new(Vec3::new(8.0, 11.0, 0.0), Vec3::new(51, 14, 0.0)),
-            Aabb::new(Vec3::new(94.0, 11.0, 0.0), Vec3::new(312.0, 14.0, 0.0)),
-            Aabb::new(Vec3::new(94.0, 54.0, 0.0), Vec3::new(140.0, 57.0, 0.0)),
-            Aabb::new(Vec3::new(180.0, 54.0, 0.0), Vec3::new(266.0, 57.0, 0.0)),
-            Aabb::new(Vec3::new(223.0, 97.0, 0.0), Vec3::new(266.0, 100.0, 0.0)),
-            Aabb::new(Vec3::new(8.0, 140.0, 0.0), Vec3::new(54.0, 143.0, 0.0)),
-            Aabb::new(Vec3::new(266.0, 140.0, 0.0), Vec3::new(312.0, 143.0, 0.0)),
-            Aabb::new(Vec3::new(51.0, 183.0, 0.0), Vec3::new(183.0, 186.0, 0.0)),
-            Aabb::new(Vec3::new(223.0, 183.0, 0.0), Vec3::new(266.0, 186.0, 0.0)),
-            Aabb::new(Vec3::new(8.0, 226.0, 0.0), Vec3::new(226.0, 229.0, 0.0)),
-            Aabb::new(Vec3::new(266.0, 226.0, 0.0), Vec3::new(312.0, 229.0, 0.0)),
-            // vertical walls
-            Aabb::new(Vec3::new(8.0, 11.0, 0.0), Vec3::new(11.0, 229.0, 0.0)),
-            Aabb::new(Vec3::new(51.0, 54.0, 0.0), Vec3::new(54.0, 143.0, 0.0)),
-            Aabb::new(Vec3::new(94.0, 54.0, 0.0), Vec3::new(97.0, 186.0, 0.0)),
-            Aabb::new(Vec3::new(137.0, 54.0, 0.0), Vec3::new(140.0, 143.0, 0.0)),
-            Aabb::new(Vec3::new(180.0, 11.0, 0.0), Vec3::new(183.0, 186.0, 0.0)),
-            Aabb::new(Vec3::new(223.0, 97.0, 0.0), Vec3::new(226.0, 229.0, 0.0)),
-            Aabb::new(Vec3::new(309.0, 11.0, 0.0), Vec3::new(312.0, 229.0, 0.0)),
-            // borders
-            Aabb::new(Vec3::new(-1.0, -1.0, 0.0), Vec3::new(321.0, 0.0, 0.0)),
-            Aabb::new(Vec3::new(-1.0, 240.0, 0.0), Vec3::new(321.0, 241.0, 0.0)),
-            Aabb::new(Vec3::new(-1.0, -1.0, 0.0), Vec3::new(0.0, 241.0, 0.0)),
-            Aabb::new(Vec3::new(320.0, -1.0, 0.0), Vec3::new(321.0, 241.0, 0.0)),
-        ],
-        pos: Vec::new(),
-        vels: Vec::new(),
+        Self {
+            bodies: Vec::new(),
+            velocities: Vec::new(),
+            metadata: Vec::new(),
+            contacts: Vec::new(),
+        }
     }
 
     fn update(&mut self) {
@@ -163,13 +156,29 @@ impl MazeResources {
 
 struct Logics {
     // physics: MazePhysics,
-    // collision: AabbCollision,
+    collision: AabbCollision<CollisionID>,
     resources: MazeResources,
 }
 
 impl Logics {
-    fn new() -> Self {
+    fn new(walls: &Vec<Wall>) -> Self {
         Self {
+            collision: {
+                let mut collision = AabbCollision::new();
+                // create collider for each wall
+                for wall in walls {
+                    collision.bodies.push(Aabb::new(
+                        Vec3::new(wall.x as f32, wall.y as f32, 0.0),
+                        Vec3::new((wall.x + wall.w) as f32, (wall.y + wall.h) as f32, 0.0)
+                    ));
+                    collision.metadata.push(CollisionData {
+                        solid: true, 
+                        fixed: true, 
+                        id: CollisionID::Wall,
+                    });
+                }
+                collision
+            },
             resources: MazeResources::new(),
         }
     }
@@ -196,7 +205,7 @@ fn main() -> Result<(), Error> {
     };
 
     let mut world = World::new();
-    let mut logics = Logics::new();
+    let mut logics = Logics::new(&world.walls);
 
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
@@ -273,6 +282,7 @@ impl World {
             vy: 16,
             score: 0,
             walls: {
+                // don't need names! condense
                 // create horizontal walls
                 let wall_1 = Wall::new(8, 11, 43, 3);
                 let wall_2 = Wall::new(94, 11, 218, 3);
@@ -351,17 +361,39 @@ impl World {
         self.y = physics.pos[1].trunc() as i16;
     }
 
-    fn project_collision(&self, collision: &mut AabbCollision, physics: &MazePhysics) {
-        collision.player = Aabb::new(
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>, physics: &MazePhysics) {
+        collision.bodies.resize_with(self.walls.len(), Aabb::default);
+        collision.velocities.resize_with(self.walls.len(), Default::default);
+        collision.metadata.resize_with(self.walls.len(), CollisionData::default);
+
+        // create collider for each item
+        for item in &self.items {
+            collision.bodies.push(Aabb::new(
+                Vec3::new(item.x as f32, item.y as f32, 0.0),
+                Vec3::new((item.x + ITEM_SIZE as i16) as f32, (item.y + ITEM_SIZE as i16) as f32, 0.0)
+            ));
+            collision.metadata.push(CollisionData {
+                solid: false, 
+                fixed: true, 
+                id: CollisionID::Item,
+            });
+        }
+        // create collider for player
+        collision.bodies.push(Aabb::new(
             Vec3::new(self.x as f32, self.y as f32, 0.0),
             Vec3::new((self.x + BOX_SIZE) as f32, (self.y + BOX_SIZE) as f32, 0.0)
-        );
-        // project into physics logic to get position and velocity? can't reach it at the moment
-        collision.pos.push(physics.pos);
-        collision.vel.push(physics.vel);
+        ));
+        collision.metadata.push(CollisionData {
+            solid: true,
+            fixed: false,
+            id: CollisionID::Player,
+        });
+        
+        // project into physics logic to get position and velocity? 
+        collision.velocities.push(physics.vel);
     }
 
-    fn unproject_collision(&mut self, collision: &AabbCollision) {
+    fn unproject_collision(&mut self) {
         // same question - pos[0] or pos.x?
         // self.x = collision.pos[0].trunc() as i16,
         // self.y = collision.pos[1].trunc() as i16,
