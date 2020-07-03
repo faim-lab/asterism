@@ -66,9 +66,13 @@ impl Game {
 				);
 				self.renderable_components.update_all_coords(&self.view_area, &self.position_components);
 		}*/
-		fn render(&self) -> (Vec<Vertex>, Vec<u16>) {
-				// will want to update as part of this--coming soon
+		fn render(&self) -> (Vec<Vertex>, Vec<u16>) {				
 				self.renderable_components.render_all()
+		}
+		fn update(&mut self) {
+				self.renderable_components
+						.update_all_coords(&self.view_area, &self.position_components);
+				self.position_components.slide_to_the_left();
 		}
 }
 
@@ -88,7 +92,6 @@ impl ViewArea {
 		fn new() -> ViewArea {
 				ViewArea::default()
 		}
-		//incredibly broken rn
 		fn pos_cords_to_render_cords(&self, thing_position: &PositionComponent) -> (Option<f32>, Option<f32>) {
 				let potential_render_x: f32 = (thing_position.x - self.x) / (ViewArea::LENGTH / 2_f32);
 				let potential_render_y: f32 = -(thing_position.y - self.y) / (ViewArea::WIDTH / 2_f32);
@@ -125,6 +128,9 @@ impl PositionComponent {
 						y,
 				}
 		}
+		fn move_left(&mut self) {
+				self.x += 0.01;
+		}
 }
 
 #[derive(Debug)]
@@ -133,6 +139,12 @@ struct PositionComponentVec {
 }
 
 impl PositionComponentVec {
+		fn slide_to_the_left(&mut self) {
+				/*for i in 0..self.parts.len() {
+						self.parts[i].move_left();
+				}*/
+				self.parts[64].move_left();
+		}
 		fn new() -> PositionComponentVec {
 				PositionComponentVec {
 						parts: Vec::new(),
@@ -142,8 +154,6 @@ impl PositionComponentVec {
 				self.parts.push(position_component);
 		}
 		fn get_render_positions(&self, view_area: &ViewArea) -> Vec<Option<Vector>> {
-				// this should eventually take grid location, adjust for size etc--maybe better as a method of
-				// render?
 				let mut render_positions: Vec<Option<Vector>> = Vec::new();
 				for i in 0..self.parts.len() {
 						let render_coords: (Option<f32>, Option<f32>) = view_area
@@ -157,6 +167,7 @@ impl PositionComponentVec {
 								}
 						);
 				}
+				//println!("{:?}", render_positions);
 				render_positions
 		}
 }
@@ -513,10 +524,14 @@ impl State {
     }
 
     fn update(&mut self) {
-
-
+				self.game.update();
+	
 				let (vertices, indices) = self.game.render();
 
+				for i in 256..260 {
+					println!("{:?}", vertices[i]);
+				}
+/*
 				let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
 						label: Some("update encoder"),
 				});
@@ -533,10 +548,19 @@ impl State {
 				encoder.copy_buffer_to_buffer(&staging_vertex_buffer, 0, &self.vertex_buffer, 0, std::mem::size_of_val(&vertices) as wgpu::BufferAddress);
 
 				encoder.copy_buffer_to_buffer(&staging_index_buffer, 0, &self.index_buffer, 0, std::mem::size_of_val(&indices) as wgpu::BufferAddress);
+*/
 
+				self.vertex_buffer = self.device.create_buffer_with_data(
+            bytemuck::cast_slice(vertices.as_slice()),
+            wgpu::BufferUsage::VERTEX,
+        );
+				self.index_buffer = self.device.create_buffer_with_data(
+            bytemuck::cast_slice(indices.as_slice()),
+            wgpu::BufferUsage::INDEX,
+        );
 				self.num_indices = indices.len() as u32;
 				
-				self.queue.submit(&[encoder.finish()]);
+				//self.queue.submit(&[encoder.finish()]);
 
 				
     }
