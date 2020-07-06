@@ -137,7 +137,7 @@ impl AabbCollision<CollisionID> {
             let CollisionData { solid: j_solid, fixed: j_fixed, .. } =
                 self.metadata[*j];
 
-            if !(i_solid && j_solid) || (i_fixed && j_fixed) {
+            if !(i_solid && j_solid) || i_fixed && j_fixed {
                 continue;
             }
 
@@ -159,14 +159,14 @@ impl AabbCollision<CollisionID> {
                     let displacement_y = Self::get_displacement(min_i_y, max_i_y, min_j_y, max_j_y);
 
                     ( Vec3::new(displacement_x * vel_i_x, displacement_y * vel_i_y, 0.0),
-                    Vec3::new(displacement_x * vel_j_x, displacement_y * vel_j_y, 0.0) )
+                        Vec3::new(displacement_x * vel_j_x, displacement_y * vel_j_y, 0.0) )
                 };
 
                 self.bodies[*i].min += i_displace;
                 self.bodies[*i].max += i_displace;
                 self.bodies[*j].min += j_displace;
                 self.bodies[*j].max += j_displace;
-            } else { 
+            } else {
                 let i_swap = if !j_fixed { j } else { i };
                 let j_swap = if !j_fixed { i } else { j };
                 let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
@@ -198,6 +198,7 @@ impl AabbCollision<CollisionID> {
                 self.bodies[*i_swap].max += displace;
             }
         }
+
     }
 
     fn get_displacement(min_i: f32, max_i: f32, min_j: f32, max_j: f32)
@@ -672,8 +673,8 @@ impl World {
             }
         }
 
-        let mut temp_y: i16 = self.y + temp_vy;
-        let mut temp_x: i16 = self.x + temp_vx;
+        let temp_y: i16 = self.y + temp_vy;
+        let temp_x: i16 = self.x + temp_vx;
 
         if movement.0 != Direction::Still && temp_vy != 0 {
             for a_wall in &self.walls {
