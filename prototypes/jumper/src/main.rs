@@ -219,6 +219,7 @@ enum CollisionID {
     LeftWall,
     RightWall,
     Ground,
+    Wall,
 }
 
 impl Default for CollisionID {
@@ -273,7 +274,7 @@ impl AabbCollision<CollisionID> {
             let CollisionData { solid: j_solid, fixed: j_fixed, .. } =
                 self.metadata[*j];
 
-            if i_solid && j_solid {
+            if !(i_solid && j_solid) || (i_fixed && j_fixed) {
                 continue;
             }
 
@@ -303,24 +304,35 @@ impl AabbCollision<CollisionID> {
                 self.bodies[*j].min += j_displace;
                 self.bodies[*j].max += j_displace;
             } else {
-                let i = if !j_fixed { j } else { i };
+                let i_swap = if !j_fixed { j } else { i };
+                let j_swap = if !j_fixed { i } else { j };
                 let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
-                    max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i];
+                    max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i_swap];
                 let Aabb { min: Vec3 { x: min_j_x, y: min_j_y, .. },
-                    max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[*j];
+                    max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[*j_swap];
                 let displace = {
                     let displacement_x = Self::get_displacement(min_i_x, max_i_x, min_j_x, max_j_x);
                     let displacement_y = Self::get_displacement(min_i_y, max_i_y, min_j_y, max_j_y);
 
-                    if displacement_x < displacement_y {
-                        Vec3::new(displacement_x, 0.0, 0.0)
+                    if displacement_x == displacement_y {
+                        Vec3::new(displacement_x, displacement_y, 0.0)
+                    } else if displacement_x < displacement_y {
+                        if min_i_x < min_j_x {
+                            Vec3::new(-displacement_x, 0.0, 0.0)
+                        } else {
+                            Vec3::new(displacement_x, 0.0, 0.0)
+                        }
                     } else {
-                        Vec3::new(0.0, displacement_y, 0.0)
+                        if min_i_y < min_j_y {
+                            Vec3::new(0.0, -displacement_y, 0.0)
+                        } else {
+                            Vec3::new(0.0, displacement_y, 0.0)
+                        }
                     }
                 };
 
-                self.bodies[*i].min += displace;
-                self.bodies[*i].max += displace;
+                self.bodies[*i_swap].min += displace;
+                self.bodies[*i_swap].max += displace;
             }
         }
     }
@@ -330,7 +342,7 @@ impl AabbCollision<CollisionID> {
             if max_i - min_j < max_j - min_i {
                 max_i - min_j
             } else {
-                min_i - max_j
+                max_j - min_i
             }
     }
 }
@@ -338,23 +350,22 @@ impl AabbCollision<CollisionID> {
 
 
 struct PhysicsEntityState {
-    states: BTreeMap<StateID, State>,
-    current_state: Option<StateID>,
-    change: Option<StateID>
+    states: Vec<BTreeMap<StateID, State>>,
+    current_state: Vec<Vec<(EntityID, StateID)>>,
+    changes: Vec<Vec<(EntityID, StateID)>>
 }
 
 impl PhysicsEntityState {
     fn new() -> Self {
         Self {
-            states: BTreeMap::new(),
-            current_state: None,
-            change: None,
+            states: Vec::new(),
+            current_state: Vec::new(),
+            changes: Vec::new(),
         }
     }
 
     fn update(&mut self) {
-        if let Some(new_state) = self.change {
-            self.current_state = Some(new_state);
+        for ((_change, _current), _state) in self.changes.iter().zip(self.current_state.iter_mut()).zip(self.states.iter()) {
         }
     }
 
@@ -362,11 +373,7 @@ impl PhysicsEntityState {
 
 struct State {
     physics: (Vec<Vec2>, Vec<Vec2>, Vec<Vec2>),
-    edges: Vec<Edge>,
-}
-
-struct Edge {
-    id: StateID,
+    edges: Vec<StateID>,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
@@ -377,6 +384,10 @@ enum StateID {
     Fall
 }
 
+enum EntityID {
+    Player(Player),
+    // Enemy(u8) etc?????????
+}
 
 struct Logics {
     control: WinitKeyboardControl<ActionID>,
@@ -407,6 +418,7 @@ struct World {
     player_vel: Vec2,
     player_err: Vec2,
     ground: [u8; 4],
+    wall: [u8; 4],
     is_grounded: bool,
 }
 
@@ -475,10 +487,11 @@ fn main() -> Result<(), Error> {
 impl World {
     fn new() -> Self {
         Self {
-            player: (50, 100),
+            player: (50, 70),
             player_vel: Vec2::new(0.0, 0.0),
             player_err: Vec2::new(0.0, 0.0),
-            ground: [0, 200, WIDTH, 55],
+            ground: [0, 100, WIDTH, 55],
+            wall: [140, 50, 55, 100],
             is_grounded: false,
         }
     }
@@ -500,17 +513,20 @@ impl World {
             match (logics.collision.metadata[contact.0].id,
                 logics.collision.metadata[contact.1].id) {
                 (CollisionID::Player(..), CollisionID::Ground) => {
+                        self.is_grounded = true;
+                        self.player_vel.y = 0.0;
                     if self.player_vel.x == 0.0 {
-                        logics.entity_state.change = Some(StateID::Grounded);
+                        // logics.entity_state.change = Some(StateID::Grounded);
                     } else {
-                        logics.entity_state.change = Some(StateID::Walk);
+                        // logics.entity_state.change = Some(StateID::Walk);
                     }
                 }
                 _ => {
+                        self.is_grounded = false;
                     if self.player_vel.y < 0.0 {
-                        logics.entity_state.change = Some(StateID::Fall);
+                        // logics.entity_state.change = Some(StateID::Fall);
                     } else {
-                        logics.entity_state.change = Some(StateID::Jump);
+                        // logics.entity_state.change = Some(StateID::Jump);
                     }
                 }
             }
@@ -537,7 +553,6 @@ impl World {
                 Action { id: ActionID::Jump(Player::P1),
                 action_type: ActionType::Instant });
         }
-        // eventually would call from entity-state logics to figure out what keys are able to be pressed at what time
     }
 
     fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
@@ -574,11 +589,18 @@ impl World {
                 Vec3::new(self.ground[0] as f32, self.ground[1] as f32, 0.0),
                 Vec3::new((self.ground[0] + self.ground[2]) as f32,
                     (self.ground[1] + self.ground[3]) as f32, 0.0)));
+        collision.bodies.push(Aabb::new(
+                Vec3::new(self.wall[0] as f32, self.wall[1] as f32, 0.0),
+                Vec3::new((self.wall[0] + self.wall[2]) as f32,
+                    (self.wall[1] + self.wall[3]) as f32, 0.0)));
+
         collision.velocities.push(self.player_vel);
+        collision.velocities.push(Vec2::new(0.0, 0.0));
         collision.velocities.push(Vec2::new(0.0, 0.0));
 
         collision.metadata.push(CollisionData { solid: true, fixed: false, id: CollisionID::Player(Player::P1) });
         collision.metadata.push(CollisionData { solid: true, fixed: true, id: CollisionID::Ground });
+        collision.metadata.push(CollisionData { solid: true, fixed: true, id: CollisionID::Wall });
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
@@ -587,11 +609,11 @@ impl World {
     }
 
 
-    fn project_entity_state(&self, entity_state: &mut PhysicsEntityState) {
+    fn project_entity_state(&self, _entity_state: &mut PhysicsEntityState) {
         // ???
     }
 
-    fn unproject_entity_state(&mut self, entity_state: &PhysicsEntityState) {
+    fn unproject_entity_state(&mut self, _entity_state: &PhysicsEntityState) {
         // update game physics
         // will this perpetually be a frame behind??
     }
@@ -605,6 +627,7 @@ impl World {
         }
         draw_rect(self.player.0, self.player.1, PLAYER_SIZE, PLAYER_SIZE, [0, 0, 0, 255], frame);
         draw_rect(self.ground[0], self.ground[1], self.ground[2], self.ground[3], [64, 64, 64, 255], frame);
+        draw_rect(self.wall[0], self.wall[1], self.wall[2], self.wall[3], [64, 64, 64, 255], frame);
     }
 }
 
