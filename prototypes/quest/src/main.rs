@@ -17,21 +17,24 @@ pub struct Game {
 		
 		renderable_components: RenderableComponentVec,
 		position_components: PositionComponentVec,
-		
+
+		user_inputs: UserInputs,
 }
 impl Game {
 		pub fn new() -> Game {
 				//something tbd--get the resources?
 				let position_component_vec = PositionComponentVec::new();
 				let renderable_component_vec = RenderableComponentVec::new();
+				let user_inputs = UserInputs::new();
 				let mut game: Game = Game {
 						view_area: ViewArea::new(),
 						position_components: position_component_vec,
 						renderable_components: renderable_component_vec,
+						user_inputs: user_inputs,
 				};
 				game.add_things(example::make_example_1());
-				// println!("{:?}", game.renderable_components);
 				game
+				// println!("{:?}", game.renderable_components);
 		}
 		pub fn add_things(&mut self, new_things_list: Vec<((f32, f32), (Vector, f32, u32))>) {
 				for thing in new_things_list.into_iter() {
@@ -70,46 +73,75 @@ impl Game {
 				self.renderable_components.render_all()
 		}
 		fn update(&mut self) {
+				self.position_components.slide_to_the_left();
+				self.view_area.update_using_input(&self.user_inputs);
 				self.renderable_components
 						.update_all_coords(&self.view_area, &self.position_components);
-				self.position_components.slide_to_the_left();
 		}
 }
+
+// input
+
+
 
 
 // view area
 
 struct ViewArea {
 		// location of the center of the view
-		x: f32,
-		y: f32,
+		position: Vector,
 }
 
 impl ViewArea {
 		// only here until i implement zooming
 		const LENGTH: f32 = 100_f32;
 		const WIDTH: f32 = 100_f32;
+		const SPEED: f32 = 0.1;
 		fn new() -> ViewArea {
 				ViewArea::default()
 		}
-		fn pos_cords_to_render_cords(&self, thing_position: &PositionComponent) -> (Option<f32>, Option<f32>) {
-				let potential_render_x: f32 = (thing_position.x - self.x) / (ViewArea::LENGTH / 2_f32);
-				let potential_render_y: f32 = -(thing_position.y - self.y) / (ViewArea::WIDTH / 2_f32);
-				let (render_x, render_y): (Option<f32>, Option<f32>) = if potential_render_x < 1_f32
-						&& potential_render_y < 1_f32 {
-								(Some(potential_render_x), Some(potential_render_y))
-						} else {
-								(None, None)
-						};
-				(render_x, render_y)
+		fn pos_cords_to_render_cords(&self, thing_position: &PositionComponent) -> (f32, f32) {
+				let potential_render_x: f32 = (thing_position.x - self.position.x) / (ViewArea::LENGTH / 2_f32);
+				let potential_render_y: f32 = -(thing_position.y - self.position.y) / (ViewArea::WIDTH / 2_f32);
+				(potential_render_x, potential_render_y)
+		}
+		fn update_using_input(&mut self, user_inputs: &UserInputs) {
+				let mut movement_vec = Vector::new(0_f32, 0_f32);
+				if user_inputs.va_up {
+						movement_vec.y += -1_f32;
+				}
+				if user_inputs.va_down {
+						movement_vec.y += 1_f32;
+				}
+				if user_inputs.va_left {
+						movement_vec.x += -1_f32;
+				}
+				if user_inputs.va_right {
+						movement_vec.x += 1_f32;
+				}
+
+				if movement_vec.length() != 0_f32 {
+						movement_vec = movement_vec.normalize().scale_by(ViewArea::SPEED);
+				}
+
+				self.position = movement_vec.add(&self.position);
+				
+				// level needs bounds
+				self.position.x = self.position.x.max(0_f32 + (ViewArea::LENGTH / 2_f32));
+				self.position.x = self.position.x.min(150_f32 - (ViewArea::LENGTH / 2_f32));
+
+				self.position.y = self.position.y.max(0_f32 + (ViewArea::WIDTH / 2_f32));
+				self.position.y = self.position.y.min(150_f32 - (ViewArea::WIDTH / 2_f32));
 		}
 }
 
 impl Default for ViewArea {
 		fn default() -> ViewArea {
 				ViewArea {
-						x: 50_f32,
-						y: 50_f32,
+						position: Vector {
+								x: 50_f32,
+								y: 50_f32,
+						}
 				}
 		}
 }
@@ -153,19 +185,12 @@ impl PositionComponentVec {
 		fn add(&mut self, position_component: PositionComponent) {
 				self.parts.push(position_component);
 		}
-		fn get_render_positions(&self, view_area: &ViewArea) -> Vec<Option<Vector>> {
-				let mut render_positions: Vec<Option<Vector>> = Vec::new();
+		fn get_render_positions(&self, view_area: &ViewArea) -> Vec<Vector> {
+				let mut render_positions: Vec<Vector> = Vec::new();
 				for i in 0..self.parts.len() {
-						let render_coords: (Option<f32>, Option<f32>) = view_area
+						let (render_x, render_y): (f32, f32) = view_area
 								.pos_cords_to_render_cords(&self.parts[i]);
-						render_positions.push(
-								match render_coords {
-										(Some(j), Some(k)) => {
-												Some(Vector::new(j, k))
-										},
-										_ => None,
-								}
-						);
+						render_positions.push(Vector::new(render_x, render_y));
 				}
 				//println!("{:?}", render_positions);
 				render_positions
@@ -174,7 +199,23 @@ impl PositionComponentVec {
 
 // input---------------------------------------
 
+struct UserInputs {
+		pub va_up: bool,
+		pub va_down: bool,
+	  pub va_left: bool,
+		pub va_right: bool,
+}
 
+impl UserInputs {
+		fn new() -> UserInputs {
+				UserInputs {
+						va_up: false,
+						va_down: false,
+						va_left: false,
+						va_right: false,
+				}
+		}
+}
 
 // render--------------------------------------
 #[derive(Debug)]
@@ -202,11 +243,13 @@ impl RenderableComponent {
 						texture,
 				}
 		}
-		fn update_coordinates(&mut self, new_coords: &Option<Vector>) {
-				self.position = match new_coords {
-						Some(i) => Some(Vector::new(i.x, i.y)),
-						None => None,
-				};
+		fn update_coordinates(&mut self, new_coords: Vector) {
+				self.position = if (new_coords.x.abs() - (self.size / 2_f32)) < 1_f32
+						|| (new_coords.y.abs() - (self.size / 2_f32)) < 1_f32 {
+								Some(new_coords)
+						} else {
+								None
+						}
 		}
 		// rendering everything as squares not going to work if empty -> black
 		fn render(&self) -> Option<(Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<u16>)> {
@@ -235,7 +278,7 @@ impl RenderableComponentVec {
 		fn update_all_coords(&mut self, view_area: &ViewArea, position_component_vec: &PositionComponentVec) {
 				let new_coords = position_component_vec.get_render_positions(view_area);
 				for i in 0..self.parts.len() {
-						self.parts[i].update_coordinates(&new_coords[i])
+						self.parts[i].update_coordinates(new_coords[i])
 				}
 		}
 		fn render_all(&self) -> (Vec<Vertex>, Vec<u16>) {
@@ -520,35 +563,32 @@ impl State {
 
 		#[allow(unused_variables)]
     fn input(&mut self, event: &WindowEvent) -> bool {
-        false
+				match event {
+						WindowEvent::KeyboardInput {
+								input: KeyboardInput {
+										state,
+										virtual_keycode: Some(virtual_key_code),
+										..
+								},
+								..
+						} => {
+								match virtual_key_code {
+										VirtualKeyCode::W => self.game.user_inputs.va_up = *state == ElementState::Pressed,
+										VirtualKeyCode::S => self.game.user_inputs.va_down = *state == ElementState::Pressed,
+										VirtualKeyCode::A => self.game.user_inputs.va_left = *state == ElementState::Pressed,
+										VirtualKeyCode::D => self.game.user_inputs.va_right = *state == ElementState::Pressed,
+										_ => (),
+								}
+								true
+						},
+						_ => false,
+				}
     }
 
     fn update(&mut self) {
 				self.game.update();
 	
 				let (vertices, indices) = self.game.render();
-
-				for i in 256..260 {
-					println!("{:?}", vertices[i]);
-				}
-/*
-				let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-						label: Some("update encoder"),
-				});
-				
-				let staging_vertex_buffer = self.device.create_buffer_with_data(
-            bytemuck::cast_slice(vertices.as_slice()),
-            wgpu::BufferUsage::COPY_SRC,
-        );
-				let staging_index_buffer = self.device.create_buffer_with_data(
-            bytemuck::cast_slice(indices.as_slice()),
-            wgpu::BufferUsage::COPY_SRC,
-        );
-
-				encoder.copy_buffer_to_buffer(&staging_vertex_buffer, 0, &self.vertex_buffer, 0, std::mem::size_of_val(&vertices) as wgpu::BufferAddress);
-
-				encoder.copy_buffer_to_buffer(&staging_index_buffer, 0, &self.index_buffer, 0, std::mem::size_of_val(&indices) as wgpu::BufferAddress);
-*/
 
 				self.vertex_buffer = self.device.create_buffer_with_data(
             bytemuck::cast_slice(vertices.as_slice()),
@@ -559,10 +599,6 @@ impl State {
             wgpu::BufferUsage::INDEX,
         );
 				self.num_indices = indices.len() as u32;
-				
-				//self.queue.submit(&[encoder.finish()]);
-
-				
     }
 
     fn render(&mut self) {
