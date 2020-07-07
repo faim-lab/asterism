@@ -31,12 +31,13 @@ enum KeyInput {
 
 impl Input for KeyInput {
     fn min(&self) -> f32 { 0.0 }
+
     fn max(&self) -> f32 { 1.0 }
 }
 
 #[derive(Clone)]
 enum InputState {
-    Off, PressUp, PressDown, On
+    On, Off, Pressed, Released
 }
 
 enum ActionType {
@@ -86,35 +87,46 @@ impl<ID: Copy + Eq> WinitKeyboardControl<ID> {
     }
 
     fn update(&mut self, events: &WinitInputHelper) {
-        self.values.clear();
         self.values.resize_with(self.mapping.len(), Default::default);
         for (map, vals) in self.mapping.iter().zip(self.values.iter_mut()) {
             vals.resize_with(map.inputs.len(), Default::default);
-            for (action_map, value) in map.inputs.iter().zip(vals.iter_mut()) {
-                let (input, input_state) = action_map;
+            for (action_map, value) in map.inputs.iter().zip(map.actions.iter()).zip(vals.iter_mut()) {
+                let ((input, input_state), action) = action_map;
                 let is_activated = |keycode: VirtualKeyCode| {
                     match input_state {
                         InputState::On => events.key_held(keycode),
                         InputState::Off => !events.key_held(keycode),
-                        InputState::PressDown => events.key_pressed(keycode),
-                        InputState::PressUp => events.key_released(keycode)
+                        InputState::Pressed => events.key_pressed(keycode),
+                        InputState::Released => events.key_released(keycode)
                     }
                 };
-                match input {
-                    KeyInput::Single(keycode) => {
+                match (&action.action_type, input) {
+                    (ActionType::Instant, KeyInput::Single(keycode)) |
+                        (ActionType::Continuous, KeyInput::Single(keycode)) => {
                         if is_activated(*keycode) {
-                            *value = 1.0;
+                            *value = input.max();
+                        } else {
+                            *value = input.min();
                         }
                     }
-                    KeyInput::Pair(keycode_min, keycode_max) => {
+                    (ActionType::Axis(axis_min, axis_max), KeyInput::Pair(keycode_min, keycode_max)) => {
                         *value = 0.0;
-                        let min_performed = is_activated(*keycode_min);
-                        let max_performed = is_activated(*keycode_max);
-                        if min_performed {
-                            *value += -1.0;
+                        if is_activated(*keycode_min) {
+                            *value += input.max() * axis_min;
                         }
-                        if max_performed {
-                            *value += 1.0;
+                        if is_activated(*keycode_max) {
+                            *value += input.max() * axis_max;
+                        }
+                    }
+                    (ActionType::Instant, KeyInput::Pair(..)) |
+                        (ActionType::Continuous, KeyInput::Pair(..)) => {
+                            // like theres just no way you can do this right
+                        }
+                    (ActionType::Axis(axis_min, axis_max), KeyInput::Single(keycode)) => {
+                        if is_activated(*keycode) {
+                            *value = input.min() * axis_min;
+                        } else {
+                            *value = input.max() * axis_max;
                         }
                     }
                 }
@@ -382,7 +394,10 @@ impl Logics {
                         inputs: vec![(KeyInput::Pair(VirtualKeyCode::Q, VirtualKeyCode::A),
                                     InputState::On),
                         ],
-                        actions: vec![]
+                        actions: vec![Action {
+                            id: ActionID::Move(Player::P1),
+                            action_type: ActionType::Axis(-1.0, 1.0)
+                        }]
                     }
                 );
                 control.mapping.push(
@@ -603,7 +618,7 @@ impl World {
                 Some(Player::P1) => {
                     control.mapping[0].inputs.push(
                         (KeyInput::Single(VirtualKeyCode::W),
-                         InputState::PressDown));
+                         InputState::Pressed));
                     control.mapping[0].actions.push(
                         Action { id: ActionID::Serve(Player::P1),
                             action_type: ActionType::Instant });
@@ -611,7 +626,7 @@ impl World {
                 Some(Player::P2) => {
                     control.mapping[1].inputs.push(
                         (KeyInput::Single(VirtualKeyCode::I),
-                         InputState::PressDown));
+                         InputState::Released));
                     control.mapping[1].actions.push(
                         Action { id: ActionID::Serve(Player::P2),
                             action_type: ActionType::Instant });
