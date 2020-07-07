@@ -79,20 +79,7 @@ struct WinitKeyboardControl<ID: Copy + Eq> {
 impl WinitKeyboardControl<ActionID> {
     fn new() -> Self {
         Self {
-            mapping: {
-                let mut mapping = Vec::new();
-                mapping.push(
-                    InputMap {
-                        inputs: vec![ ( KeyInput { keycode: VirtualKeyCode::Left },
-                                    InputState::On ),
-                                    ( KeyInput { keycode: VirtualKeyCode::Right },
-                                    InputState::On ),
-                        ],
-                        actions: WinitKeyboardControl::player_action_set(Player::P1)
-                    }
-                );
-                mapping
-            },
+            mapping: Vec::new(),
             values: Vec::new()
         }
     }
@@ -225,39 +212,17 @@ impl Default for CollisionID {
     fn default() -> Self { Self::LeftWall }
 }
 
-impl AabbCollision<CollisionID> {
-    fn new() -> Self {
+impl<ID: Copy + Eq> AabbCollision<ID> {
+    pub fn new() -> Self {
         Self {
-            bodies: vec![
-                Aabb::new(
-                    Vec3::new(-1.0, 0.0, 0.0),
-                    Vec3::new(0.0, HEIGHT as f32, 0.0)
-                ),
-                Aabb::new(
-                    Vec3::new(WIDTH as f32, 0.0, 0.0),
-                    Vec3::new(WIDTH as f32 + 1.0, HEIGHT as f32, 0.0)
-                ),
-                Aabb::new(
-                    Vec3::new(0.0, -1.0, 0.0),
-                    Vec3::new(WIDTH as f32, 0.0, 0.0)
-                ),
-                Aabb::new(
-                    Vec3::new(0.0, HEIGHT as f32, 0.0),
-                    Vec3::new(WIDTH as f32, HEIGHT as f32 + 1.0, 0.0)
-                )
-            ],
-            velocities: vec![Vec2::new(0.0, 0.0); 4],
-            metadata: vec![
-                CollisionData{ solid: true, fixed: true, id: CollisionID::RightWall },
-                CollisionData{ solid: true, fixed: true, id: CollisionID::LeftWall },
-                CollisionData{ solid: true, fixed: true, id: CollisionID::TopWall },
-                CollisionData{ solid: true, fixed: true, id: CollisionID::BottomWall }
-            ],
+            bodies: Vec::new(),
+            metadata: Vec::new(),
+            velocities: Vec::new(),
             contacts: Vec::new(),
         }
     }
 
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         self.contacts.clear();
         for (i, body) in self.bodies.iter().enumerate() {
             for (j, body2) in self.bodies[i + 1..].iter().enumerate() {
@@ -414,9 +379,46 @@ struct Logics {
 impl Logics {
     fn new() -> Self {
         Self {
-            control: WinitKeyboardControl::new(),
+            control: {
+                let mut control = WinitKeyboardControl::new();
+                control.mapping.push(InputMap {
+                    inputs: vec![ ( KeyInput { keycode: VirtualKeyCode::Left },
+                                InputState::On ),
+                                ( KeyInput { keycode: VirtualKeyCode::Right },
+                                  InputState::On ),
+                    ],
+                    actions: WinitKeyboardControl::player_action_set(Player::P1)
+                });
+                control
+            },
             physics: JumperPhysics::new(),
-            collision: AabbCollision::new(),
+            collision: {
+                let mut collision = AabbCollision::new();
+                collision.bodies.push(Aabb::new(
+                    Vec3::new(-1.0, 0.0, 0.0),
+                    Vec3::new(0.0, HEIGHT as f32, 0.0)
+                ));
+                collision.bodies.push(Aabb::new(
+                    Vec3::new(WIDTH as f32, 0.0, 0.0),
+                    Vec3::new(WIDTH as f32 + 1.0, HEIGHT as f32, 0.0)
+                ));
+                collision.bodies.push(Aabb::new(
+                    Vec3::new(0.0, -1.0, 0.0),
+                    Vec3::new(WIDTH as f32, 0.0, 0.0)
+                ));
+                collision.bodies.push(Aabb::new(
+                    Vec3::new(0.0, HEIGHT as f32, 0.0),
+                    Vec3::new(WIDTH as f32, HEIGHT as f32 + 1.0, 0.0)
+                ));
+                for _ in 0..4 {
+                    collision.velocities.push(Vec2::new(0.0, 0.0));
+                }
+                collision.metadata.push(CollisionData{ solid: true, fixed: true, id: CollisionID::RightWall });
+                collision.metadata.push(CollisionData{ solid: true, fixed: true, id: CollisionID::LeftWall });
+                collision.metadata.push(CollisionData{ solid: true, fixed: true, id: CollisionID::TopWall });
+                collision.metadata.push(CollisionData{ solid: true, fixed: true, id: CollisionID::BottomWall });
+                collision
+            },
             entity_state: {
                 let mut entity_state = JumperEntityState::new();
                 entity_state.maps.push(StateMap {
@@ -434,26 +436,19 @@ impl Logics {
                     }
                 });
                 entity_state.maps.push(StateMap {
-                    states: {
-                        let mut states = Vec::new();
-                        states.push(State {
+                    states: vec![State {
                             id: StateID::PlayerGrounded,
                             edges: vec![1, 2],
-                        });
-                        states.push(State {
+                        }, State {
                             id: StateID::PlayerWalk,
                             edges: vec![0, 2],
-                        });
-                        states.push(State {
+                        }, State {
                             id: StateID::PlayerJump,
                             edges: vec![3],
-                        });
-                        states.push(State {
+                        }, State {
                             id: StateID::PlayerFall,
                             edges: vec![0],
-                        });
-                        states
-                    },
+                        }]
                 });
                 for map in &mut entity_state.maps {
                     entity_state.conditions.push(vec![false; map.states.len()]);
