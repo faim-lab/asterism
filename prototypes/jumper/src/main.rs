@@ -348,8 +348,8 @@ impl AabbCollision<CollisionID> {
 
 
 
-struct JumperEntityState {
-    maps: Vec<StateMap>,
+struct JumperEntityState<ID: Copy + Eq> {
+    maps: Vec<StateMap<ID>>,
     conditions: Vec<Vec<bool>>,
     states: Vec<usize>
 }
@@ -359,8 +359,8 @@ struct JumperEntityState {
 // 3. use condition table to change state.
 // 4. ???
 // 5. profit
-impl JumperEntityState {
-    fn new() -> Self {
+impl<ID: Copy + Eq> JumperEntityState<ID> {
+    pub fn new() -> Self {
         Self {
             // one map per entity
             maps: Vec::new(),
@@ -369,7 +369,7 @@ impl JumperEntityState {
         }
     }
 
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         // update states
         for (i, state_idx) in self.states.iter_mut().enumerate() {
             for edge in &self.maps[i].states[*state_idx].edges {
@@ -379,14 +379,18 @@ impl JumperEntityState {
             }
         }
     }
+
+    pub fn get_id_for_entity(&self, ent: usize) -> ID {
+        self.maps[ent].states[self.states[ent]].id
+    }
 }
 
-struct StateMap {
-    states: Vec<State>,
+struct StateMap<ID> {
+    states: Vec<State<ID>>,
 }
 
-struct State {
-    id: StateID,
+struct State<ID> {
+    id: ID,
     edges: Vec<usize>
 }
 
@@ -404,7 +408,7 @@ struct Logics {
     control: WinitKeyboardControl<ActionID>,
     physics: JumperPhysics,
     collision: AabbCollision<CollisionID>,
-    entity_state: JumperEntityState,
+    entity_state: JumperEntityState<StateID>,
 }
 
 impl Logics {
@@ -474,7 +478,6 @@ struct World {
     ground: [u8; 4],
     platform: [u8; 4],
     platform_vel: Vec2,
-    is_grounded: bool,
 }
 
 
@@ -548,14 +551,13 @@ impl World {
             ground: [0, 200, WIDTH, 55],
             platform: [25, 50, 55, 9],
             platform_vel: Vec2::new(-1.0, 0.0),
-            is_grounded: false,
         }
     }
 
     fn update(&mut self, logics: &mut Logics, input: &WinitInputHelper) {
-        self.project_control(&mut logics.control);
+        self.project_control(&mut logics.control, &logics.entity_state);
         logics.control.update(input);
-        self.unproject_control(&logics.control);
+        self.unproject_control(&logics.control, &logics.entity_state);
 
         self.project_physics(&mut logics.physics);
         logics.physics.update();
@@ -565,25 +567,12 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for contact in logics.collision.contacts.iter() {
-            match (logics.collision.metadata[contact.0].id,
-                logics.collision.metadata[contact.1].id) {
-                (CollisionID::Player(..), CollisionID::Ground) => {
-                    self.is_grounded = true;
-                    self.player_vel.y = 0.0;
-                }
-                _ => {
-                    self.is_grounded = false;
-                }
-            }
-        }
-
-        self.project_entity_state(&mut logics.entity_state);
+        self.project_entity_state(&mut logics.entity_state, &logics.collision);
         logics.entity_state.update();
         self.unproject_entity_state(&logics.entity_state);
     }
 
-    fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
+    fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>, entity_state: &JumperEntityState<StateID>) {
         for map in control.mapping.iter_mut() {
             map.inputs.resize(2,
                 (KeyInput {keycode: VirtualKeyCode::H},
@@ -591,20 +580,24 @@ impl World {
             map.actions.actions.resize_with(2, Action::default);
         }
 
-        if self.is_grounded {
-            control.mapping[0].inputs.push(
-                (KeyInput { keycode: VirtualKeyCode::Space },
-                 InputState::On));
-            control.mapping[0].actions.actions.push(
-                Action { id: ActionID::Jump(Player::P1),
-                action_type: ActionType::Instant });
+        match entity_state.get_id_for_entity(1) {
+            StateID::PlayerGrounded | StateID::PlayerWalk => {
+                control.mapping[0].inputs.push(
+                    (KeyInput { keycode: VirtualKeyCode::Space },
+                     InputState::On));
+                control.mapping[0].actions.actions.push(
+                    Action { id: ActionID::Jump(Player::P1),
+                    action_type: ActionType::Instant });
+            }
+            _ => {}
         }
     }
 
-    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
+    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>, entity_state: &JumperEntityState<StateID>) {
         self.player_vel.x = control.values[0][0] + control.values[0][1];
-        if self.is_grounded {
-            self.player_vel.y = control.values[0][2];
+        match entity_state.get_id_for_entity(1) {
+            StateID::PlayerGrounded | StateID::PlayerWalk => self.player_vel.y = control.values[0][2],
+            _ => {}
         }
     }
 
@@ -661,19 +654,41 @@ impl World {
     }
 
 
-    fn project_entity_state(&self, entity_state: &mut JumperEntityState) {
+    fn project_entity_state(&self, entity_state: &mut JumperEntityState<StateID>, collision: &AabbCollision<CollisionID>) {
         // update condition table
+        for state_conditions in entity_state.conditions.iter_mut() {
+            state_conditions.clear();
+        }
+        entity_state.conditions[0].resize(2, false);
+        entity_state.conditions[1].resize(4, false);
         if self.platform[0] < 30 {
-            entity_state.conditions[0][0] = false;
             entity_state.conditions[0][1] = true;
         }
         if self.platform[0] > 150 {
             entity_state.conditions[0][0] = true;
-            entity_state.conditions[0][1] = false;
+        }
+        for contact in collision.contacts.iter() {
+            match (collision.metadata[contact.0].id,
+                collision.metadata[contact.1].id) {
+                (CollisionID::Player(..), CollisionID::Ground) => {
+                    if self.player_vel.x == 0.0 {
+                        entity_state.conditions[1][0] = true;
+                    } else {
+                        entity_state.conditions[1][1] = true;
+                    }
+                }
+                _ => {
+                    if self.player_vel.y < 0.0 {
+                        entity_state.conditions[1][2] = true;
+                    } else {
+                        entity_state.conditions[1][3] = true;
+                    }
+                }
+            }
         }
     }
 
-    fn unproject_entity_state(&mut self, entity_state: &JumperEntityState) {
+    fn unproject_entity_state(&mut self, entity_state: &JumperEntityState<StateID>) {
         for (map, state) in entity_state.maps.iter().zip(entity_state.states.iter()) {
             match map.states[*state].id {
                 StateID::PlatformLeft => {
@@ -682,14 +697,7 @@ impl World {
                 StateID::PlatformRight => {
                     self.platform_vel.x = 1.0;
                 }
-                StateID::PlayerGrounded => {
-                }
-                StateID::PlayerWalk => {
-                }
-                StateID::PlayerJump => {
-                }
-                StateID::PlayerFall => {
-                }
+                _ => {}
             }
         }
     }
