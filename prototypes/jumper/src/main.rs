@@ -9,7 +9,6 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, Vec3, geometry::Aabb};
-use std::collections::BTreeMap;
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -349,51 +348,63 @@ impl AabbCollision<CollisionID> {
 
 
 
-struct PhysicsEntityState {
-    states: Vec<BTreeMap<StateID, State>>,
-    current_state: Vec<Vec<(EntityID, StateID)>>,
-    changes: Vec<Vec<(EntityID, StateID)>>
+struct JumperEntityState {
+    maps: Vec<StateMap>,
+    conditions: Vec<Vec<bool>>,
+    states: Vec<usize>
 }
 
-impl PhysicsEntityState {
+// 1. create condition table.
+// 2. update condition table in project.
+// 3. use condition table to change state.
+// 4. ???
+// 5. profit
+impl JumperEntityState {
     fn new() -> Self {
         Self {
-            states: Vec::new(),
-            current_state: Vec::new(),
-            changes: Vec::new(),
+            // one map per entity
+            maps: Vec::new(),
+            conditions: Vec::new(),
+            states: Vec::new()
         }
     }
 
     fn update(&mut self) {
-        for ((_change, _current), _state) in self.changes.iter().zip(self.current_state.iter_mut()).zip(self.states.iter()) {
+        // update states
+        for (i, state_idx) in self.states.iter_mut().enumerate() {
+            for edge in &self.maps[i].states[*state_idx].edges {
+                if self.conditions[i][*edge] {
+                    *state_idx = *edge;
+                }
+            }
         }
     }
+}
 
+struct StateMap {
+    states: Vec<State>,
 }
 
 struct State {
-    physics: (Vec<Vec2>, Vec<Vec2>, Vec<Vec2>),
-    edges: Vec<StateID>,
+    id: StateID,
+    edges: Vec<usize>
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 enum StateID {
-    Grounded,
-    Walk,
-    Jump,
-    Fall
-}
-
-enum EntityID {
-    Player(Player),
-    // Enemy(u8) etc?????????
+    PlatformLeft,
+    PlatformRight,
+    PlayerGrounded,
+    PlayerWalk,
+    PlayerJump,
+    PlayerFall,
 }
 
 struct Logics {
     control: WinitKeyboardControl<ActionID>,
     physics: JumperPhysics,
     collision: AabbCollision<CollisionID>,
-    entity_state: PhysicsEntityState,
+    entity_state: JumperEntityState,
 }
 
 impl Logics {
@@ -402,7 +413,50 @@ impl Logics {
             control: WinitKeyboardControl::new(),
             physics: JumperPhysics::new(),
             collision: AabbCollision::new(),
-            entity_state: PhysicsEntityState::new(),
+            entity_state: {
+                let mut entity_state = JumperEntityState::new();
+                entity_state.maps.push(StateMap {
+                    states: {
+                        let mut states = Vec::new();
+                        states.push(State {
+                            id: StateID::PlatformLeft,
+                            edges: vec![1],
+                        });
+                        states.push(State {
+                            id: StateID::PlatformRight,
+                            edges: vec![0],
+                        });
+                        states
+                    }
+                });
+                entity_state.maps.push(StateMap {
+                    states: {
+                        let mut states = Vec::new();
+                        states.push(State {
+                            id: StateID::PlayerGrounded,
+                            edges: vec![1, 2],
+                        });
+                        states.push(State {
+                            id: StateID::PlayerWalk,
+                            edges: vec![0, 2],
+                        });
+                        states.push(State {
+                            id: StateID::PlayerJump,
+                            edges: vec![3],
+                        });
+                        states.push(State {
+                            id: StateID::PlayerFall,
+                            edges: vec![0],
+                        });
+                        states
+                    },
+                });
+                for map in &mut entity_state.maps {
+                    entity_state.conditions.push(vec![false; map.states.len()]);
+                }
+                entity_state.states = vec![0, 3];
+                entity_state
+            }
         }
     }
 }
@@ -418,7 +472,8 @@ struct World {
     player_vel: Vec2,
     player_err: Vec2,
     ground: [u8; 4],
-    wall: [u8; 4],
+    platform: [u8; 4],
+    platform_vel: Vec2,
     is_grounded: bool,
 }
 
@@ -490,8 +545,9 @@ impl World {
             player: (50, 70),
             player_vel: Vec2::new(0.0, 0.0),
             player_err: Vec2::new(0.0, 0.0),
-            ground: [0, 100, WIDTH, 55],
-            wall: [140, 50, 55, 100],
+            ground: [0, 200, WIDTH, 55],
+            platform: [25, 50, 55, 9],
+            platform_vel: Vec2::new(-1.0, 0.0),
             is_grounded: false,
         }
     }
@@ -513,21 +569,11 @@ impl World {
             match (logics.collision.metadata[contact.0].id,
                 logics.collision.metadata[contact.1].id) {
                 (CollisionID::Player(..), CollisionID::Ground) => {
-                        self.is_grounded = true;
-                        self.player_vel.y = 0.0;
-                    if self.player_vel.x == 0.0 {
-                        // logics.entity_state.change = Some(StateID::Grounded);
-                    } else {
-                        // logics.entity_state.change = Some(StateID::Walk);
-                    }
+                    self.is_grounded = true;
+                    self.player_vel.y = 0.0;
                 }
                 _ => {
-                        self.is_grounded = false;
-                    if self.player_vel.y < 0.0 {
-                        // logics.entity_state.change = Some(StateID::Fall);
-                    } else {
-                        // logics.entity_state.change = Some(StateID::Jump);
-                    }
+                    self.is_grounded = false;
                 }
             }
         }
@@ -563,12 +609,15 @@ impl World {
     }
 
     fn project_physics(&self, physics: &mut JumperPhysics) {
-        physics.accelerations.resize_with(1, Vec2::default);
-        physics.positions.resize_with(1, Vec2::default);
-        physics.velocities.resize_with(1, Vec2::default);
+        physics.accelerations.resize_with(2, Vec2::default);
+        physics.positions.resize_with(2, Vec2::default);
+        physics.velocities.resize_with(2, Vec2::default);
         physics.accelerations[0] = Vec2::new(0.0, 0.03);
+        physics.accelerations[1] = Vec2::new(0.0, 0.0);
         physics.positions[0] = Vec2::new(self.player.0 as f32, self.player.1 as f32);
+        physics.positions[1] = Vec2::new(self.platform[0] as f32, self.platform[1] as f32);
         physics.velocities[0] = self.player_vel;
+        physics.velocities[1] = self.platform_vel;
     }
 
     fn unproject_physics(&mut self, physics: &JumperPhysics) {
@@ -576,6 +625,9 @@ impl World {
         self.player.1 = physics.positions[0].y.trunc().max(0.0).min((HEIGHT - PLAYER_SIZE) as f32) as u8;
         self.player_err = physics.positions[0] - Vec2::new(self.player.0 as f32, self.player.1 as f32);
         self.player_vel = physics.velocities[0];
+        self.platform[0] = physics.positions[1].x.trunc().max(0.0).min((WIDTH - self.platform[2]) as f32) as u8;
+        self.platform[1] = physics.positions[1].y.trunc().max(0.0).min((HEIGHT - self.platform[3]) as f32) as u8;
+        self.platform_vel = physics.velocities[1];
     }
 
     fn project_collision(&self, collision: &mut AabbCollision<CollisionID>) {
@@ -590,13 +642,13 @@ impl World {
                 Vec3::new((self.ground[0] + self.ground[2]) as f32,
                     (self.ground[1] + self.ground[3]) as f32, 0.0)));
         collision.bodies.push(Aabb::new(
-                Vec3::new(self.wall[0] as f32, self.wall[1] as f32, 0.0),
-                Vec3::new((self.wall[0] + self.wall[2]) as f32,
-                    (self.wall[1] + self.wall[3]) as f32, 0.0)));
+                Vec3::new(self.platform[0] as f32, self.platform[1] as f32, 0.0),
+                Vec3::new((self.platform[0] + self.platform[2]) as f32,
+                    (self.platform[1] + self.platform[3]) as f32, 0.0)));
 
         collision.velocities.push(self.player_vel);
         collision.velocities.push(Vec2::new(0.0, 0.0));
-        collision.velocities.push(Vec2::new(0.0, 0.0));
+        collision.velocities.push(self.platform_vel);
 
         collision.metadata.push(CollisionData { solid: true, fixed: false, id: CollisionID::Player(Player::P1) });
         collision.metadata.push(CollisionData { solid: true, fixed: true, id: CollisionID::Ground });
@@ -609,13 +661,37 @@ impl World {
     }
 
 
-    fn project_entity_state(&self, _entity_state: &mut PhysicsEntityState) {
-        // ???
+    fn project_entity_state(&self, entity_state: &mut JumperEntityState) {
+        // update condition table
+        if self.platform[0] < 30 {
+            entity_state.conditions[0][0] = false;
+            entity_state.conditions[0][1] = true;
+        }
+        if self.platform[0] > 150 {
+            entity_state.conditions[0][0] = true;
+            entity_state.conditions[0][1] = false;
+        }
     }
 
-    fn unproject_entity_state(&mut self, _entity_state: &PhysicsEntityState) {
-        // update game physics
-        // will this perpetually be a frame behind??
+    fn unproject_entity_state(&mut self, entity_state: &JumperEntityState) {
+        for (map, state) in entity_state.maps.iter().zip(entity_state.states.iter()) {
+            match map.states[*state].id {
+                StateID::PlatformLeft => {
+                    self.platform_vel.x = -1.0;
+                }
+                StateID::PlatformRight => {
+                    self.platform_vel.x = 1.0;
+                }
+                StateID::PlayerGrounded => {
+                }
+                StateID::PlayerWalk => {
+                }
+                StateID::PlayerJump => {
+                }
+                StateID::PlayerFall => {
+                }
+            }
+        }
     }
 
     /// Draw the `World` state to the frame buffer.
@@ -627,7 +703,7 @@ impl World {
         }
         draw_rect(self.player.0, self.player.1, PLAYER_SIZE, PLAYER_SIZE, [0, 0, 0, 255], frame);
         draw_rect(self.ground[0], self.ground[1], self.ground[2], self.ground[3], [64, 64, 64, 255], frame);
-        draw_rect(self.wall[0], self.wall[1], self.wall[2], self.wall[3], [64, 64, 64, 255], frame);
+        draw_rect(self.platform[0], self.platform[1], self.platform[2], self.platform[3], [64, 64, 64, 255], frame);
     }
 }
 
