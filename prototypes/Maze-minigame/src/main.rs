@@ -166,8 +166,49 @@ impl AabbCollision<CollisionID> {
                 self.bodies[*i].max += i_displace;
                 self.bodies[*j].min += j_displace;
                 self.bodies[*j].max += j_displace;
-            } else {
-                let i_swap = if !j_fixed { j } else { i };
+            } else { // if only one of the objects is fixed
+                let i_swap = if !j_fixed {j} else {i};
+                let j_swap = if !j_fixed {i} else {j}; // i_swap is unfixed, j_swap is fixed object
+
+                let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
+                max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i_swap];
+                let Aabb { min: Vec3 { x: min_j_x, y: min_j_y, .. },
+                max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[*j_swap];
+
+                let half_isize_x = (min_i_x + max_i_x) / 2;
+                let half_isize_y = (min_i_y + max_i_y) / 2;
+                let half_jsize_x = (min_j_x + max_j_x) / 2;
+                let half_jsize_y = (min_j_y + max_j_y) / 2;
+
+                let i_center = find_center(self.bodies[*i_swap]);
+                let j_center = find_center(self.bodies[*j_swap]);
+
+                // eventually have to have more vectors in self.velocities, and use self.velocities[*i_swap].x...
+                let overlapped_before_x = |i_center, j_center|{
+                    old_x_center = i_center.x - self.velocities.x;
+                    (old_x_center - j_center.x).abs() < half_isize_x + half_jsize_x
+                }
+
+                let overlapped_before_y = |i_center, j_center| {
+                    old_y_center = i_center.y - self.velocities.y;
+                    (old_y_center - j_center.y).abs() < half_isize_y + half_jsize_y
+                }
+                
+                let displace = {
+                    // overlapped horizontally
+                    if !overlapped_before_x && overlapped_before_y {
+
+                    
+                    } else if overlapped_before_x && !overlapped_before_y { // overlapped vertically
+                        
+                    } else { // overlapped diagonally
+
+                    }
+                    
+
+                }
+                
+                /* let i_swap = if !j_fixed { j } else { i };
                 let j_swap = if !j_fixed { i } else { j };
                 let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
                     max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i_swap];
@@ -195,10 +236,18 @@ impl AabbCollision<CollisionID> {
                 };
 
                 self.bodies[*i_swap].min += displace;
-                self.bodies[*i_swap].max += displace;
+                self.bodies[*i_swap].max += displace; */
             }
         }
 
+    }
+
+
+    fn find_center(body_data: Aabb) -> Vec2 {
+        Vec2::new(
+            (body_data.min.x + body_data.max.x) / 2,
+            (body_data.min.y + body_data.max.y) / 2
+        )
     }
 
     fn get_displacement(min_i: f32, max_i: f32, min_j: f32, max_j: f32)
@@ -415,13 +464,13 @@ impl World {
 
         // temporary mapping of keyboard controls to velocities
         match movement.0 {
-            Direction::Up => self.vy = -3,
-            Direction::Down => self.vy = 3,
+            Direction::Up => self.vy = -8,
+            Direction::Down => self.vy = 8,
             _ => self.vy = 0,
         }
         match movement.1 {
-            Direction::Left => self.vx = -3,
-            Direction::Right => self.vx = 3,
+            Direction::Left => self.vx = -8,
+            Direction::Right => self.vx = 8,
             _ => self.vx = 0,
         }
 
