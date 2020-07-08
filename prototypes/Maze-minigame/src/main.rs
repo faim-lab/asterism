@@ -271,13 +271,6 @@ impl AabbCollision<CollisionID> {
         }
         
         // can condense later but for now temporary fix since i_swap can't be reached
-        /* if (!i_fixed && j_fixed) || (i_fixed && !j_fixed) {
-            let i_swap = if !j_fixed {j} else {i};
-            let j_swap = if !j_fixed {i} else {j};
-            self.bodies[*i_swap].min += self.displacements[*i_swap];
-            self.bodies[*i_swap].max += self.displacements[*i_swap];
-        }*/
-
         for i in 0..self.displacements.len() {
             match self.displacements[i] {
                 None => {
