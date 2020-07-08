@@ -91,6 +91,7 @@ struct AabbCollision<ID: Copy + Eq> {
     velocities: Vec<Vec2>,
     metadata: Vec<CollisionData<ID>>,
     contacts: Vec<(usize, usize)>,
+    displacements: Vec<Option<Vec3>>,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -118,6 +119,7 @@ impl AabbCollision<CollisionID> {
             velocities: Vec::new(),
             metadata: Vec::new(),
             contacts: Vec::new(),
+            displacements: Vec::new(),
         }
     }
 
@@ -175,37 +177,65 @@ impl AabbCollision<CollisionID> {
                 let Aabb { min: Vec3 { x: min_j_x, y: min_j_y, .. },
                 max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[*j_swap];
 
-                let half_isize_x = (min_i_x + max_i_x) / 2;
-                let half_isize_y = (min_i_y + max_i_y) / 2;
-                let half_jsize_x = (min_j_x + max_j_x) / 2;
-                let half_jsize_y = (min_j_y + max_j_y) / 2;
+                let half_isize_x = (min_i_x + max_i_x) / 2.0;
+                let half_isize_y = (min_i_y + max_i_y) / 2.0;
+                let half_jsize_x = (min_j_x + max_j_x) / 2.0;
+                let half_jsize_y = (min_j_y + max_j_y) / 2.0;
 
-                let i_center = find_center(self.bodies[*i_swap]);
-                let j_center = find_center(self.bodies[*j_swap]);
+                let i_center = Self::find_center(self.bodies[*i_swap]);
+                let j_center = Self::find_center(self.bodies[*j_swap]);
 
                 // eventually have to have more vectors in self.velocities, and use self.velocities[*i_swap].x...
-                let overlapped_before_x = |i_center, j_center|{
-                    old_x_center = i_center.x - self.velocities.x;
+                let overlapped_before_x = {
+                    let old_x_center = i_center.x - self.velocities[0].x;
                     (old_x_center - j_center.x).abs() < half_isize_x + half_jsize_x
-                }
+                };
 
-                let overlapped_before_y = |i_center, j_center| {
-                    old_y_center = i_center.y - self.velocities.y;
+                let overlapped_before_y = {
+                    let old_y_center = i_center.y - self.velocities[0].y;
                     (old_y_center - j_center.y).abs() < half_isize_y + half_jsize_y
-                }
+                };
                 
+                // todo: use correct index when more velocities are added
                 let displace = {
                     // overlapped horizontally
                     if !overlapped_before_x && overlapped_before_y {
-
-                    
-                    } else if overlapped_before_x && !overlapped_before_y { // overlapped vertically
-                        
-                    } else { // overlapped diagonally
-
+                        if self.velocities[0].x < 0.0 {  // player collided from the right
+                            Vec3::new(max_j_x - min_i_x, 0.0, 0.0)
+                        } else {  // player collided from the left
+                            Vec3::new(min_j_x - max_i_x, 0.0, 0.0)
+                        }
+                    } else if overlapped_before_x && !overlapped_before_y {  // overlapped vertically
+                        if self.velocities[0].y < 0.0 {  // player collided from bottom
+                            Vec3::new(0.0, max_j_y - min_i_y, 0.0)
+                        } else {  // player collided from top
+                            Vec3::new(0.0, min_j_y - max_i_y, 0.0)
+                        }
+                    } else {  // overlapped diagonally
+                        if self.velocities[0].x < 0.0 && self.velocities[0].y < 0.0 {
+                            Vec3::new(max_j_x - min_i_x, max_j_y - min_i_y, 0.0)
+                        } else if self.velocities[0].x < 0.0 && self.velocities[0].y > 0.0 {
+                            Vec3::new(max_j_x - min_i_x, min_j_y - max_i_y, 0.0)
+                        } else if self.velocities[0].x > 0.0 && self.velocities[0].y < 0.0 {
+                            Vec3::new(min_j_x - max_i_x, max_j_y - min_i_y, 0.0) 
+                        } else {
+                            Vec3::new(min_j_x - max_i_x, min_j_y - max_i_y, 0.0)
+                        }
                     }
-                    
+                };
 
+                match self.displacements[*i_swap] {
+                    None => {
+                        self.displacements[*i_swap] = Some(displace);
+                    },
+                    _ => {
+                        if displace.x < self.displacements[*i_swap].unwrap().x  {
+                            self.displacements[*i_swap].unwrap().x = displace.x;
+                        }
+                        if displace.y < self.displacements[*i_swap].unwrap().y {
+                            self.displacements[*i_swap].unwrap().y = displace.y;
+                        }
+                    }
                 }
                 
                 /* let i_swap = if !j_fixed { j } else { i };
@@ -239,14 +269,33 @@ impl AabbCollision<CollisionID> {
                 self.bodies[*i_swap].max += displace; */
             }
         }
+        
+        // can condense later but for now temporary fix since i_swap can't be reached
+        /* if (!i_fixed && j_fixed) || (i_fixed && !j_fixed) {
+            let i_swap = if !j_fixed {j} else {i};
+            let j_swap = if !j_fixed {i} else {j};
+            self.bodies[*i_swap].min += self.displacements[*i_swap];
+            self.bodies[*i_swap].max += self.displacements[*i_swap];
+        }*/
 
+        for i in 0..self.displacements.len() {
+            match self.displacements[i] {
+                None => {
+                    continue;
+                }
+                _ => {
+                    self.bodies[i].min += self.displacements[i].unwrap();
+                    self.bodies[i].max += self.displacements[i].unwrap();
+                }
+            }
+        }
     }
 
 
     fn find_center(body_data: Aabb) -> Vec2 {
         Vec2::new(
-            (body_data.min.x + body_data.max.x) / 2,
-            (body_data.min.y + body_data.max.y) / 2
+            (body_data.min.x + body_data.max.x) / 2.0,
+            (body_data.min.y + body_data.max.y) / 2.0
         )
     }
 
@@ -310,6 +359,7 @@ impl Logics {
                         fixed: true, 
                         id: CollisionID::Wall,
                     });
+                    collision.displacements.push(None);
                 }
                 collision
             },
@@ -521,6 +571,7 @@ impl World {
                 fixed: true, 
                 id: CollisionID::Item,
             });
+            collision.displacements.push(None);
         }
         // create collider for player
         collision.bodies.push(Aabb::new(
@@ -532,6 +583,7 @@ impl World {
             fixed: false,
             id: CollisionID::Player,
         });
+        collision.displacements.push(None);
         
         // project into physics logic to get position and velocity? 
         collision.velocities.push(physics.vel);
@@ -562,219 +614,7 @@ impl World {
         self.score = resources.score;
     }
 
-    /// Move box according to arrow keys
-    fn move_box(&mut self, movement: &(Direction, Direction)) {
-        match movement.0 {
-            Direction::Up => self.vy = -16,
-            Direction::Down => self.vy = 16,
-            _ => self.vy = 0,
-        }
-        match movement.1 {
-            Direction::Left => self.vx = -16,
-            Direction::Right => self.vx = 16,
-            _ => self.vx = 0,
-        }
-
-        World::better_collision(self, &movement);
-
-        self.y += self.vy;
-        self.x += self.vx;
-    }   
-
-    /// Check if box is already touching from above
-    fn touching_hz_above(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.x + a_wall.w > self.x
-            && a_wall.x < self.x + BOX_SIZE {
-                if a_wall.y + a_wall.h == self.y {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    /// Check if box is already touching from below
-    fn touching_hz_below(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.x + a_wall.w > self.x
-            && a_wall.x < self.x + BOX_SIZE {
-                if a_wall.y == self.y + BOX_SIZE {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-        
-    /// Check if box is already touching from the left
-    fn touching_vt_left(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.y < self.y + BOX_SIZE
-            && a_wall.y + a_wall.h > self.y {
-                if a_wall.x + a_wall.w == self.x {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    /// Check if box is already touching from the right
-    fn touching_vt_right(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.y < self.y + BOX_SIZE
-            && a_wall.y + a_wall.h > self.y {
-                if a_wall.x == self.x + BOX_SIZE {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    fn corner_above_check(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.x + a_wall.w >= self.x
-            && a_wall.x <= self.x + BOX_SIZE {
-                if a_wall.y + a_wall.h == self.y {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    fn corner_below_check(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.x + a_wall.w >= self.x
-            && a_wall.x <= self.x + BOX_SIZE {
-                if a_wall.y == self.y + BOX_SIZE {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    fn corner_left_check(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.y <= self.y + BOX_SIZE
-            && a_wall.y + a_wall.h >= self.y {
-                if a_wall.x + a_wall.w == self.x {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    fn corner_right_check(&self, walls:&Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.y <= self.y + BOX_SIZE
-            && a_wall.y + a_wall.h >= self.y {
-                if a_wall.x == self.x + BOX_SIZE {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    /// Detect collision
-    fn better_collision(&mut self, movement: &(Direction, Direction)) {
-        let mut temp_vy: i16 = self.vy;
-        let mut temp_vx: i16 = self.vx;
-
-        let touching_above: bool = self.touching_hz_above(&self.walls);
-        let touching_below: bool = self.touching_hz_below(&self.walls);
-        let touching_left: bool = self.touching_vt_left(&self.walls);
-        let touching_right: bool = self.touching_vt_right(&self.walls);
-
-        if {touching_above && movement.0 == Direction::Up} || {touching_below && movement.0 == Direction::Down} {
-            temp_vy = 0;
-        }
-        if {touching_left && movement.1 == Direction::Left} || {touching_right && movement.1 == Direction::Right} {
-            temp_vx = 0;
-        }
-
-        // Don't move if two arrow keys are pressed in the direction of a corner that the box is perfectly touching
-        if movement.0 != Direction::Still && movement.1 != Direction::Still 
-        && touching_above == false && touching_below == false 
-        && touching_left == false && touching_right == false {
-            let touch_vt: bool;
-            let touch_hz: bool;
-
-            if movement.0 == Direction::Up {
-                touch_vt = self.corner_above_check(&self.walls);
-            } else {
-                touch_vt = self.corner_below_check(&self.walls);
-            }
-            if movement.1 == Direction::Left {
-                touch_hz = self.corner_left_check(&self.walls);
-            } else {
-                touch_hz = self.corner_right_check(&self.walls);
-            }
-
-            if touch_vt == true && touch_hz == true {
-                temp_vy = 0;
-                temp_vx = 0;
-            }
-        }
-
-        let temp_y: i16 = self.y + temp_vy;
-        let temp_x: i16 = self.x + temp_vx;
-
-        if movement.0 != Direction::Still && temp_vy != 0 {
-            for a_wall in &self.walls {
-                if movement.0 == Direction::Up {
-                    if a_wall.y + a_wall.h < self.y
-                    && a_wall.y + a_wall.h > temp_y
-                    && a_wall.x + a_wall.w > temp_x
-                    && a_wall.x < temp_x + BOX_SIZE {
-                        if i16::abs(a_wall.y + a_wall.h - self.y) < i16::abs(temp_vy) {
-                            temp_vy = a_wall.y + a_wall.h - self.y;
-                        }
-                    }
-                } else {
-                    if a_wall.y > self.y + BOX_SIZE
-                    && a_wall.y < temp_y + BOX_SIZE 
-                    && a_wall.x < temp_x + BOX_SIZE
-                    && a_wall.x + a_wall.w > temp_x {
-                        if a_wall.y - self.y - BOX_SIZE < temp_vy {
-                            temp_vy = a_wall.y - self.y - BOX_SIZE;
-                        }
-                    }
-                }
-            }
-        }
-        if movement.1 != Direction::Still && temp_vx != 0 {
-            for a_wall in &self.walls {
-                if movement.1 == Direction::Left {
-                    if a_wall.x + a_wall.w < self.x
-                    && a_wall.x + a_wall.w > temp_x
-                    && a_wall.y < temp_y + BOX_SIZE
-                    && a_wall.y + a_wall.h > temp_y {
-                        if i16::abs(a_wall.x + a_wall.w - self.x) < i16::abs(temp_vx) {
-                            temp_vx = a_wall.x + a_wall.w - self.x;
-                        }
-                    }
-                } else {
-                    if a_wall.x >= self.x + BOX_SIZE
-                    && a_wall.x < temp_x + BOX_SIZE
-                    && a_wall.y < temp_y + BOX_SIZE
-                    && a_wall.y + a_wall.h > temp_y {
-                        if a_wall.x - self.x - BOX_SIZE < temp_vx {
-                            temp_vx = a_wall.x - self.x - BOX_SIZE;
-                        }
-                    } 
-                }
-            }
-        }
-
-        self.vx = temp_vx;
-        self.vy = temp_vy;
-    }
+    
 
     /// Check if box is touching or overlapping a pickup - only can check for one at a time, not multiple
     fn touch_pickup(&self) -> Option<usize> {
