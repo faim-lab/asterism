@@ -168,61 +168,63 @@ impl AabbCollision<CollisionID> {
                 self.bodies[*i].max += i_displace;
                 self.bodies[*j].min += j_displace;
                 self.bodies[*j].max += j_displace;
-            } else { // if only one of the objects is fixed
+            } else {  // if only one of the objects is fixed
                 let i_swap = if !j_fixed {j} else {i};
-                let j_swap = if !j_fixed {i} else {j}; // i_swap is unfixed, j_swap is fixed object
+                let j_swap = if !j_fixed {i} else {j};  // i_swap is unfixed, j_swap is fixed object
 
                 let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
                 max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i_swap];
                 let Aabb { min: Vec3 { x: min_j_x, y: min_j_y, .. },
                 max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[*j_swap];
 
-                let half_isize_x = (min_i_x + max_i_x) / 2.0;
-                let half_isize_y = (min_i_y + max_i_y) / 2.0;
-                let half_jsize_x = (min_j_x + max_j_x) / 2.0;
-                let half_jsize_y = (min_j_y + max_j_y) / 2.0;
+                let half_isize_x = (max_i_x - min_i_x) / 2.0;
+                let half_isize_y = (max_i_y - min_i_y) / 2.0;
+                let half_jsize_x = (max_j_x - min_j_x) / 2.0;
+                let half_jsize_y = (max_j_y - min_j_y) / 2.0;
 
                 let i_center = Self::find_center(self.bodies[*i_swap]);
                 let j_center = Self::find_center(self.bodies[*j_swap]);
 
-                // eventually have to have more vectors in self.velocities, and use self.velocities[*i_swap].x...
+                let i_player: usize = self.velocities.len() - 1;
+                
                 let overlapped_before_x = {
-                    let old_x_center = i_center.x - self.velocities[0].x;
+                    let old_x_center = i_center.x - self.velocities[i_player].x;
                     (old_x_center - j_center.x).abs() < half_isize_x + half_jsize_x
                 };
 
                 let overlapped_before_y = {
-                    let old_y_center = i_center.y - self.velocities[0].y;
+                    let old_y_center = i_center.y - self.velocities[i_player].y;
                     (old_y_center - j_center.y).abs() < half_isize_y + half_jsize_y
                 };
-                
-                // todo: use correct index when more velocities are added
+
                 let displace = {
                     // overlapped horizontally
                     if !overlapped_before_x && overlapped_before_y {
-                        if self.velocities[0].x < 0.0 {  // player collided from the right
+                        if self.velocities[i_player].x < 0.0 {  // player collided from the right
                             Vec3::new(max_j_x - min_i_x, 0.0, 0.0)
                         } else {  // player collided from the left
                             Vec3::new(min_j_x - max_i_x, 0.0, 0.0)
                         }
                     } else if overlapped_before_x && !overlapped_before_y {  // overlapped vertically
-                        if self.velocities[0].y < 0.0 {  // player collided from bottom
+                        if self.velocities[i_player].y < 0.0 {  // player collided from bottom
                             Vec3::new(0.0, max_j_y - min_i_y, 0.0)
                         } else {  // player collided from top
                             Vec3::new(0.0, min_j_y - max_i_y, 0.0)
                         }
                     } else {  // overlapped diagonally
-                        if self.velocities[0].x < 0.0 && self.velocities[0].y < 0.0 {
+                        if self.velocities[i_player].x < 0.0 && self.velocities[i_player].y < 0.0 {
                             Vec3::new(max_j_x - min_i_x, max_j_y - min_i_y, 0.0)
-                        } else if self.velocities[0].x < 0.0 && self.velocities[0].y > 0.0 {
+                        } else if self.velocities[i_player].x < 0.0 && self.velocities[i_player].y > 0.0 {
                             Vec3::new(max_j_x - min_i_x, min_j_y - max_i_y, 0.0)
-                        } else if self.velocities[0].x > 0.0 && self.velocities[0].y < 0.0 {
+                        } else if self.velocities[i_player].x > 0.0 && self.velocities[i_player].y < 0.0 {
                             Vec3::new(min_j_x - max_i_x, max_j_y - min_i_y, 0.0) 
                         } else {
                             Vec3::new(min_j_x - max_i_x, min_j_y - max_i_y, 0.0)
                         }
                     }
                 };
+
+                println!("{:?}", displace);
 
                 match self.displacements[*i_swap] {
                     None => {
@@ -237,6 +239,8 @@ impl AabbCollision<CollisionID> {
                         }
                     }
                 }
+
+                println!("{:?}", self.displacements);
                 
                 /* let i_swap = if !j_fixed { j } else { i };
                 let j_swap = if !j_fixed { i } else { j };
@@ -270,7 +274,6 @@ impl AabbCollision<CollisionID> {
             }
         }
         
-        // can condense later but for now temporary fix since i_swap can't be reached
         for i in 0..self.displacements.len() {
             match self.displacements[i] {
                 None => {
@@ -283,7 +286,6 @@ impl AabbCollision<CollisionID> {
             }
         }
     }
-
 
     fn find_center(body_data: Aabb) -> Vec2 {
         Vec2::new(
@@ -347,6 +349,7 @@ impl Logics {
                         Vec3::new(wall.x as f32, wall.y as f32, 0.0),
                         Vec3::new((wall.x + wall.w) as f32, (wall.y + wall.h) as f32, 0.0)
                     ));
+                    collision.velocities.push(Vec2::new(0.0, 0.0));
                     collision.metadata.push(CollisionData {
                         solid: true, 
                         fixed: true, 
@@ -383,6 +386,8 @@ fn main() -> Result<(), Error> {
 
     let mut world = World::new();
     let mut logics = Logics::new(&world.walls);
+
+    
 
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
@@ -517,7 +522,6 @@ impl World {
             _ => self.vx = 0,
         }
 
-        // remove comments when done
         self.project_physics(&mut logics.physics);
         logics.physics.update();
         self.unproject_physics(&logics.physics);
@@ -542,8 +546,7 @@ impl World {
         physics.vel.y = self.vy as f32;
     }
 
-    fn unproject_physics(&mut self, physics: &MazePhysics) {
-        // is it physics.pos.x or physics.pos[0]? 
+    fn unproject_physics(&mut self, physics: &MazePhysics) { 
         self.x = physics.pos[0].trunc() as i16;
         self.y = physics.pos[1].trunc() as i16;
     }
@@ -552,6 +555,7 @@ impl World {
         collision.bodies.resize_with(self.walls.len(), Aabb::default);
         collision.velocities.resize_with(self.walls.len(), Default::default);
         collision.metadata.resize_with(self.walls.len(), CollisionData::default);
+        collision.displacements.resize_with(self.walls.len(), Default::default);
 
         // create collider for each item
         for item in &self.items {
@@ -559,6 +563,7 @@ impl World {
                 Vec3::new(item.x as f32, item.y as f32, 0.0),
                 Vec3::new((item.x + ITEM_SIZE as i16) as f32, (item.y + ITEM_SIZE as i16) as f32, 0.0)
             ));
+            collision.velocities.push(Vec2::new(0.0, 0.0));
             collision.metadata.push(CollisionData {
                 solid: false, 
                 fixed: true, 
@@ -571,15 +576,14 @@ impl World {
             Vec3::new(self.x as f32, self.y as f32, 0.0),
             Vec3::new((self.x + BOX_SIZE) as f32, (self.y + BOX_SIZE) as f32, 0.0)
         ));
+        // project into physics logic to get position and velocity? 
+        collision.velocities.push(physics.vel);
         collision.metadata.push(CollisionData {
             solid: true,
             fixed: false,
             id: CollisionID::Player,
         });
         collision.displacements.push(None);
-        
-        // project into physics logic to get position and velocity? 
-        collision.velocities.push(physics.vel);
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
