@@ -202,14 +202,18 @@ impl AabbCollision<CollisionID> {
                     if !overlapped_before_x && overlapped_before_y {
                         if self.velocities[i_player].x < 0.0 {  // player collided from the right
                             Vec3::new(max_j_x - min_i_x, 0.0, 0.0)
-                        } else {  // player collided from the left
+                        } else if self.velocities[i_player].x > 0.0 {  // player collided from the left
                             Vec3::new(min_j_x - max_i_x, 0.0, 0.0)
+                        } else {
+                            Vec3::new(0.0, 0.0, 0.0)
                         }
                     } else if overlapped_before_x && !overlapped_before_y {  // overlapped vertically
                         if self.velocities[i_player].y < 0.0 {  // player collided from bottom
                             Vec3::new(0.0, max_j_y - min_i_y, 0.0)
-                        } else {  // player collided from top
+                        } else if self.velocities[i_player].y > 0.0 {  // player collided from top
                             Vec3::new(0.0, min_j_y - max_i_y, 0.0)
+                        } else {
+                            Vec3::new(0.0, 0.0, 0.0)
                         }
                     } else {  // overlapped diagonally
                         if self.velocities[i_player].x < 0.0 && self.velocities[i_player].y < 0.0 {
@@ -224,23 +228,25 @@ impl AabbCollision<CollisionID> {
                     }
                 };
 
-                println!("{:?}", displace);
+                // println!("velocity: {:?}", self.velocities[i_player]);
+                // println!("displace by {:?}", displace);
 
                 match self.displacements[*i_swap] {
                     None => {
                         self.displacements[*i_swap] = Some(displace);
                     },
                     _ => {
-                        if displace.x < self.displacements[*i_swap].unwrap().x  {
+                        if displace.x.abs() < self.displacements[*i_swap].unwrap().x.abs()  {
                             self.displacements[*i_swap].unwrap().x = displace.x;
                         }
-                        if displace.y < self.displacements[*i_swap].unwrap().y {
+                        if displace.y.abs() < self.displacements[*i_swap].unwrap().y.abs() {
                             self.displacements[*i_swap].unwrap().y = displace.y;
                         }
                     }
                 }
 
-                println!("{:?}", self.displacements);
+                // println!("{:?}", self.displacements);
+                // println!("");
                 
                 /* let i_swap = if !j_fixed { j } else { i };
                 let j_swap = if !j_fixed { i } else { j };
