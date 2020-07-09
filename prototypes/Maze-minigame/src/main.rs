@@ -198,16 +198,15 @@ impl AabbCollision<CollisionID> {
                 };
 
                 let displace = {
-                    // overlapped horizontally
                     if !overlapped_before_x && overlapped_before_y {
-                        if self.velocities[i_player].x < 0.0 {  // player collided from the right
+                        if self.velocities[i_player].x < 0.0 {
                             Vec3::new(max_j_x - min_i_x, 0.0, 0.0)
-                        } else if self.velocities[i_player].x > 0.0 {  // player collided from the left
+                        } else if self.velocities[i_player].x > 0.0 {
                             Vec3::new(min_j_x - max_i_x, 0.0, 0.0)
                         } else {
                             Vec3::new(0.0, 0.0, 0.0)
                         }
-                    } else if overlapped_before_x && !overlapped_before_y {  // overlapped vertically
+                    } else if overlapped_before_x && !overlapped_before_y {
                         if self.velocities[i_player].y < 0.0 {  // player collided from bottom
                             Vec3::new(0.0, max_j_y - min_i_y, 0.0)
                         } else if self.velocities[i_player].y > 0.0 {  // player collided from top
@@ -215,21 +214,25 @@ impl AabbCollision<CollisionID> {
                         } else {
                             Vec3::new(0.0, 0.0, 0.0)
                         }
-                    } else {  // overlapped diagonally
+                    } else {
                         if self.velocities[i_player].x < 0.0 && self.velocities[i_player].y < 0.0 {
                             Vec3::new(max_j_x - min_i_x, max_j_y - min_i_y, 0.0)
                         } else if self.velocities[i_player].x < 0.0 && self.velocities[i_player].y > 0.0 {
                             Vec3::new(max_j_x - min_i_x, min_j_y - max_i_y, 0.0)
                         } else if self.velocities[i_player].x > 0.0 && self.velocities[i_player].y < 0.0 {
                             Vec3::new(min_j_x - max_i_x, max_j_y - min_i_y, 0.0) 
-                        } else {
+                        } else if self.velocities[i_player].x > 0.0 && self.velocities[i_player].y > 0.0 {
                             Vec3::new(min_j_x - max_i_x, min_j_y - max_i_y, 0.0)
+                        } else {
+                            Vec3::new(0.0, 0.0, 0.0)
                         }
                     }
                 };
 
-                // println!("velocity: {:?}", self.velocities[i_player]);
-                // println!("displace by {:?}", displace);
+                /* for testing purposes only
+                println!("velocity: {:?}", self.velocities[i_player]);
+                println!("displace by {:?}", displace);
+                println!(""); */
 
                 match self.displacements[*i_swap] {
                     None => {
@@ -244,39 +247,6 @@ impl AabbCollision<CollisionID> {
                         }
                     }
                 }
-
-                // println!("{:?}", self.displacements);
-                // println!("");
-                
-                /* let i_swap = if !j_fixed { j } else { i };
-                let j_swap = if !j_fixed { i } else { j };
-                let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
-                    max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i_swap];
-                let Aabb { min: Vec3 { x: min_j_x, y: min_j_y, .. },
-                    max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[*j_swap];
-                let displace = {
-                    let displacement_x = Self::get_displacement(min_i_x, max_i_x, min_j_x, max_j_x);
-                    let displacement_y = Self::get_displacement(min_i_y, max_i_y, min_j_y, max_j_y);
-
-                    if displacement_x == displacement_y {
-                        Vec3::new(displacement_x, displacement_y, 0.0)
-                    } else if displacement_x < displacement_y {
-                        if min_i_x < min_j_x {
-                            Vec3::new(-displacement_x, 0.0, 0.0)
-                        } else {
-                            Vec3::new(displacement_x, 0.0, 0.0)
-                        }
-                    } else {
-                        if min_i_y < min_j_y {
-                            Vec3::new(0.0, -displacement_y, 0.0)
-                        } else {
-                            Vec3::new(0.0, displacement_y, 0.0)
-                        }
-                    }
-                };
-
-                self.bodies[*i_swap].min += displace;
-                self.bodies[*i_swap].max += displace; */
             }
         }
         
@@ -328,8 +298,7 @@ impl MazeResources {
     }
 
     fn update(&mut self, all_items: &mut Vec<Collectible>) {
-        // process queue 
-        // destroy pickup if touched?
+        // todo: switch out self.touched_item and use Aabbcollision... somehow
         self.score += self.score_change;
         if self.touched_item != None {
             all_items.remove(self.touched_item.unwrap());
@@ -349,7 +318,6 @@ impl Logics {
             physics: MazePhysics::new(),
             collision: {
                 let mut collision = AabbCollision::new();
-                // create collider for each wall
                 for wall in walls {
                     collision.bodies.push(Aabb::new(
                         Vec3::new(wall.x as f32, wall.y as f32, 0.0),
@@ -461,7 +429,7 @@ fn main() -> Result<(), Error> {
 }
 
 impl World {
-    /// Create a new `World` instance that can draw a moving box
+    /// Create a new `World` instance that can draw walls, items, and player
     fn new() -> Self {
         Self {
             x: 58,
@@ -514,17 +482,16 @@ impl World {
     fn update(&mut self, logics: &mut Logics, movement: ( Direction, Direction )) {
         // eventually get rid of this
         // won't tackle control logics for now so probably have to pass `movement` into the physics OL
-        // self.move_box(&movement);
 
         // temporary mapping of keyboard controls to velocities
         match movement.0 {
-            Direction::Up => self.vy = -8,
-            Direction::Down => self.vy = 8,
+            Direction::Up => self.vy = -10,
+            Direction::Down => self.vy = 10,
             _ => self.vy = 0,
         }
         match movement.1 {
-            Direction::Left => self.vx = -8,
-            Direction::Right => self.vx = 8,
+            Direction::Left => self.vx = -10,
+            Direction::Right => self.vx = 10,
             _ => self.vx = 0,
         }
 
@@ -593,7 +560,6 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
-        // same question - pos[0] or pos.x?
         self.x = collision.bodies[collision.bodies.len() - 1].min.x.trunc() as i16;
         self.y = collision.bodies[collision.bodies.len() - 1].min.y.trunc() as i16;
     }
