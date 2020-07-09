@@ -14,13 +14,13 @@ const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
 const PLAYER_SIZE: u8 = 10;
 
-trait Input {
+pub trait Input {
     fn min(&self) -> f32;
     fn max(&self) -> f32;
 }
 
 #[derive(Clone)]
-enum KeyInput {
+pub enum KeyInput {
     Single(VirtualKeyCode),
     Pair(VirtualKeyCode, VirtualKeyCode)
 }
@@ -62,27 +62,32 @@ impl Default for ActionID {
     fn default() -> Self { Self::Move(Player::P1) }
 }
 
-struct InputMap<I: Input, ID: Copy + Eq> {
+pub struct InputMap<I: Input, ID: Copy + Eq> {
     inputs: Vec<(I, InputState)>,
+    is_valid: Vec<bool>,
     actions: Vec<Action<ID>>
         // Invariants: inputs.len() == actions.actions.len()
 }
 
-struct WinitKeyboardControl<ID: Copy + Eq> {
-    mapping: Vec<InputMap<KeyInput, ID>>,
-    values: Vec<Vec<f32>> // vector of values per mapping.
+pub struct WinitKeyboardControl<ID: Copy + Eq> {
+    pub mapping: Vec<InputMap<KeyInput, ID>>,
+    pub values: Vec<Vec<f32>>, // vector of values per mapping.
+    last_frame_inputs: Vec<VirtualKeyCode>,
+    this_frame_inputs: Vec<VirtualKeyCode>,
         // Invariants: mapping.len() == values.len(), mapping[i].inputs.len() == values[i].len() 
 }
 
 impl<ID: Copy + Eq> WinitKeyboardControl<ID> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             mapping: Vec::new(),
-            values: Vec::new()
+            values: Vec::new(),
+            last_frame_inputs: Vec::new(),
+            this_frame_inputs: Vec::new()
         }
     }
 
-    fn update(&mut self, events: &WinitInputHelper) {
+    pub fn update(&mut self, events: &WinitInputHelper) {
         self.values.resize_with(self.mapping.len(), Default::default);
         for (map, vals) in self.mapping.iter().zip(self.values.iter_mut()) {
             vals.resize_with(map.inputs.len(), Default::default);
@@ -90,33 +95,43 @@ impl<ID: Copy + Eq> WinitKeyboardControl<ID> {
                 let ((input, input_state), action) = action_map;
                 let is_activated = |keycode: VirtualKeyCode| {
                     match input_state {
-                        InputState::On => events.key_held(keycode),
-                        InputState::Off => !events.key_held(keycode),
-                        InputState::Pressed => events.key_pressed(keycode),
-                        InputState::Released => events.key_released(keycode)
+                        InputState::On | InputState::Pressed => events.key_held(keycode),
+                        InputState::Off | InputState::Released => !events.key_held(keycode),
                     }
                 };
                 match (&action.action_type, input) {
                     (ActionType::Instant(val), KeyInput::Single(keycode)) |
                         (ActionType::Continuous(val), KeyInput::Single(keycode)) => {
-                        if is_activated(*keycode) {
-                            *value = input.max() * val;
-                        } else {
-                            *value = input.min();
+                            if is_activated(*keycode) {
+                                self.this_frame_inputs.push(*keycode);
+                                if Self::action_occurs(*keycode, input_state, &self.last_frame_inputs) {
+                                    *value = input.max() * val;
+                                } else {
+                                    *value = input.min();
+                                }
+                            }
                         }
-                    }
                     (ActionType::Axis(axis_min, axis_max), KeyInput::Pair(keycode_min, keycode_max)) => {
                         *value = input.min();
                         if is_activated(*keycode_min) {
-                            *value += input.max() * axis_min;
+                            self.this_frame_inputs.push(*keycode_min);
+                            if Self::action_occurs(*keycode_min, input_state, &self.last_frame_inputs) {
+                                *value += input.max() * axis_min;
+                            }
                         }
                         if is_activated(*keycode_max) {
-                            *value += input.max() * axis_max;
+                            self.this_frame_inputs.push(*keycode_max);
+                            if Self::action_occurs(*keycode_max, input_state, &self.last_frame_inputs) {
+                                *value += input.max() * axis_max;
+                            }
                         }
                     }
                     (ActionType::Axis(axis_min, axis_max), KeyInput::Single(keycode)) => {
                         if is_activated(*keycode) {
-                            *value = input.min() * axis_min;
+                            self.this_frame_inputs.push(*keycode);
+                            if Self::action_occurs(*keycode, input_state, &self.last_frame_inputs) {
+                                *value = input.min() * axis_min;
+                            }
                         } else {
                             *value = input.max() * axis_max;
                         }
@@ -124,6 +139,25 @@ impl<ID: Copy + Eq> WinitKeyboardControl<ID> {
                     _ => {}
                 }
             }
+        }
+        self.last_frame_inputs.clear();
+        for input in self.this_frame_inputs.iter() {
+            self.last_frame_inputs.push(*input);
+        }
+        self.this_frame_inputs.clear();
+    }
+
+    fn action_occurs(keycode: VirtualKeyCode, input_state: &InputState, last_frame_inputs: &[VirtualKeyCode]) -> bool {
+        match input_state {
+            InputState::Pressed | InputState::Released => {
+                for key in last_frame_inputs.iter() {
+                    if *key == keycode {
+                        return false;
+                    }
+                }
+                true
+            }
+            _ => true
         }
     }
 
@@ -374,11 +408,16 @@ impl Logics {
                     InputMap {
                         inputs: vec![(KeyInput::Pair(VirtualKeyCode::Left, VirtualKeyCode::Right),
                                     InputState::On),
+                                    (KeyInput::Single(VirtualKeyCode::Space), InputState::Pressed),
                         ],
                         actions: vec![Action {
                             id: ActionID::Move(Player::P1),
                             action_type: ActionType::Axis(-1.0, 1.0)
-                        }]
+                        }, Action {
+                            id: ActionID::Jump(Player::P1),
+                            action_type: ActionType::Continuous(-1.0)
+                        }],
+                        is_valid: vec![false; 2],
                     }
                 );
                 control
@@ -560,28 +599,19 @@ impl World {
     }
 
     fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>, entity_state: &JumperEntityState<StateID>) {
-        for map in control.mapping.iter_mut() {
-            map.inputs.resize(1, (KeyInput::Single(VirtualKeyCode::H), InputState::On));
-            map.actions.resize_with(1, Action::default);
-        }
-
-        match entity_state.get_id_for_entity(1) {
-            StateID::PlayerGrounded | StateID::PlayerWalk => {
-                control.mapping[0].inputs.push(
-                    (KeyInput::Single(VirtualKeyCode::Space), InputState::Pressed));
-                control.mapping[0].actions.push(
-                    Action { id: ActionID::Jump(Player::P1),
-                    action_type: ActionType::Continuous(-1.0) });
-            }
-            _ => {}
+        control.mapping[0].is_valid[0] = true;
+        control.mapping[0].is_valid[1] = match entity_state.get_id_for_entity(1) {
+            StateID::PlayerGrounded | StateID::PlayerWalk => true,
+            _ => false,
         }
     }
 
-    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>, _entity_state: &JumperEntityState<StateID>) {
+    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>, entity_state: &JumperEntityState<StateID>) {
         self.player_vel.x = control.values[0][0];
-        if control.values[0].len() > 1 {
-            self.player_vel.y = control.values[0][1];
-        }
+        match entity_state.get_id_for_entity(1) {
+            StateID::PlayerGrounded | StateID::PlayerWalk => self.player_vel.y = control.values[0][1],
+            _ => {}
+        } 
     }
 
     fn project_physics(&self, physics: &mut JumperPhysics) {
