@@ -168,9 +168,9 @@ impl AabbCollision<CollisionID> {
                 self.bodies[*i].max += i_displace;
                 self.bodies[*j].min += j_displace;
                 self.bodies[*j].max += j_displace;
-            } else {  // if only one of the objects is fixed
+            } else {
                 let i_swap = if !j_fixed {j} else {i};
-                let j_swap = if !j_fixed {i} else {j};  // i_swap is unfixed, j_swap is fixed object
+                let j_swap = if !j_fixed {i} else {j};
 
                 let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
                 max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i_swap];
@@ -207,9 +207,9 @@ impl AabbCollision<CollisionID> {
                             Vec3::new(0.0, 0.0, 0.0)
                         }
                     } else if overlapped_before_x && !overlapped_before_y {
-                        if self.velocities[i_player].y < 0.0 {  // player collided from bottom
+                        if self.velocities[i_player].y < 0.0 {
                             Vec3::new(0.0, max_j_y - min_i_y, 0.0)
-                        } else if self.velocities[i_player].y > 0.0 {  // player collided from top
+                        } else if self.velocities[i_player].y > 0.0 {
                             Vec3::new(0.0, min_j_y - max_i_y, 0.0)
                         } else {
                             Vec3::new(0.0, 0.0, 0.0)
@@ -229,20 +229,19 @@ impl AabbCollision<CollisionID> {
                     }
                 };
 
-                /* for testing purposes only
-                println!("velocity: {:?}", self.velocities[i_player]);
-                println!("displace by {:?}", displace);
-                println!(""); */
-
                 match self.displacements[*i_swap] {
                     None => {
                         self.displacements[*i_swap] = Some(displace);
                     },
                     _ => {
-                        if displace.x.abs() < self.displacements[*i_swap].unwrap().x.abs()  {
-                            self.displacements[*i_swap].unwrap().x = displace.x;
+                        if displace.x.abs() > self.displacements[*i_swap].unwrap().x.abs() {
+                            let mut new_displace = self.displacements[*i_swap].unwrap().clone();
+                            new_displace.x = displace.x;
+                            self.displacements[*i_swap] = Some(new_displace);
                         }
-                        if displace.y.abs() < self.displacements[*i_swap].unwrap().y.abs() {
+                        if displace.y.abs() > self.displacements[*i_swap].unwrap().y.abs() {
+                            let mut new_displace = self.displacements[*i_swap].unwrap().clone();
+                            new_displace.y = displace.y;
                             self.displacements[*i_swap].unwrap().y = displace.y;
                         }
                     }
