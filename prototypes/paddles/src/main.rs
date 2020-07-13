@@ -1,6 +1,5 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
-#![allow(dead_code)]
 
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
@@ -8,8 +7,8 @@ use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
-use ultraviolet::{Vec2, Vec3, geometry::Aabb};
-use std::collections::BTreeMap;
+use ultraviolet::{Vec2, geometry::Aabb};
+use asterism::{Resources, resources::Transaction, AabbCollision, PointPhysics, control::*};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -17,44 +16,6 @@ const PADDLE_OFF_X: u8 = 16;
 const PADDLE_HEIGHT: u8 = 48;
 const PADDLE_WIDTH: u8 = 8;
 const BALL_SIZE: u8 = 8;
-
-trait Input {
-    fn min(&self) -> f32;
-    fn max(&self) -> f32;
-}
-
-#[derive(Clone)]
-enum KeyInput {
-    Single(VirtualKeyCode),
-    Pair(VirtualKeyCode, VirtualKeyCode)
-}
-
-impl Input for KeyInput {
-    fn min(&self) -> f32 { 0.0 }
-
-    fn max(&self) -> f32 { 1.0 }
-}
-
-#[derive(Clone)]
-enum InputState {
-    On, Off, Pressed, Released
-}
-
-enum ActionType {
-    Instant,
-    Continuous,
-    Axis(f32, f32)
-}
-
-impl Default for ActionType {
-    fn default() -> Self { Self::Instant }
-}
-
-#[derive(Default)]
-struct Action<ID: Copy + Eq> {
-    id: ID,
-    action_type: ActionType
-}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ActionID {
@@ -64,131 +25,6 @@ enum ActionID {
 
 impl Default for ActionID {
     fn default() -> Self { Self::Move(Player::P1) }
-}
-
-struct InputMap<I: Input, ID: Copy + Eq> {
-    inputs: Vec<(I, InputState)>,
-    actions: Vec<Action<ID>>
-        // Invariants: inputs.len() == actions.actions.len()
-}
-
-struct WinitKeyboardControl<ID: Copy + Eq> {
-    mapping: Vec<InputMap<KeyInput, ID>>,
-    values: Vec<Vec<f32>> // vector of values per mapping.
-        // Invariants: mapping.len() == values.len(), mapping[i].inputs.len() == values[i].len() 
-}
-
-impl<ID: Copy + Eq> WinitKeyboardControl<ID> {
-    fn new() -> Self {
-        Self {
-            mapping: Vec::new(),
-            values: Vec::new()
-        }
-    }
-
-    fn update(&mut self, events: &WinitInputHelper) {
-        self.values.resize_with(self.mapping.len(), Default::default);
-        for (map, vals) in self.mapping.iter().zip(self.values.iter_mut()) {
-            vals.resize_with(map.inputs.len(), Default::default);
-            for (action_map, value) in map.inputs.iter().zip(map.actions.iter()).zip(vals.iter_mut()) {
-                let ((input, input_state), action) = action_map;
-                let is_activated = |keycode: VirtualKeyCode| {
-                    match input_state {
-                        InputState::On => events.key_held(keycode),
-                        InputState::Off => !events.key_held(keycode),
-                        InputState::Pressed => events.key_pressed(keycode),
-                        InputState::Released => events.key_released(keycode)
-                    }
-                };
-                match (&action.action_type, input) {
-                    (ActionType::Instant, KeyInput::Single(keycode)) |
-                        (ActionType::Continuous, KeyInput::Single(keycode)) => {
-                        if is_activated(*keycode) {
-                            *value = input.max();
-                        } else {
-                            *value = input.min();
-                        }
-                    }
-                    (ActionType::Axis(axis_min, axis_max), KeyInput::Pair(keycode_min, keycode_max)) => {
-                        *value = 0.0;
-                        if is_activated(*keycode_min) {
-                            *value += input.max() * axis_min;
-                        }
-                        if is_activated(*keycode_max) {
-                            *value += input.max() * axis_max;
-                        }
-                    }
-                    (ActionType::Instant, KeyInput::Pair(..)) |
-                        (ActionType::Continuous, KeyInput::Pair(..)) => {
-                            // like theres just no way you can do this right
-                        }
-                    (ActionType::Axis(axis_min, axis_max), KeyInput::Single(keycode)) => {
-                        if is_activated(*keycode) {
-                            *value = input.min() * axis_min;
-                        } else {
-                            *value = input.max() * axis_max;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // not sure how to use these
-    pub fn get_action_by_index(&self, action_set: usize, idx: usize) -> f32 {
-        self.values[action_set][idx]
-    }
-
-    // This gets the value of the first action whose `id` is `id`.
-    pub fn get_action(&self, id: ID) -> Option<f32> {
-        for (i, set) in self.mapping.iter().enumerate() {
-            if let Some(j) = set.actions.iter().position(|act| act.id == id) {
-                return Some(self.values[i][j]);
-            }
-        }
-        None
-    }
-
-    pub fn get_action_in_set(&self, action_set: usize, id: ID) -> Option<f32> {
-        if let Some(idx) = self.mapping[action_set].actions.iter().position(|act| act.id == id) {
-            return Some(self.get_action_by_index(action_set, idx));
-        }
-        None
-    }
-}
-
-struct PongPhysics {
-    positions:Vec<Vec2>,
-    velocities:Vec<Vec2>
-}
-
-impl PongPhysics {
-    fn new() -> Self {
-        Self {
-            positions: Vec::new(),
-            velocities: Vec::new(),
-        }
-    }
-
-    fn update(&mut self) {
-        for (pos, vel) in self.positions.iter_mut().zip(self.velocities.iter()) {
-            *pos += *vel;
-        }
-    }
-}
-
-struct AabbCollision<ID: Copy + Eq> {
-    bodies: Vec<Aabb>,
-    velocities: Vec<Vec2>,
-    metadata: Vec<CollisionData<ID>>,
-    contacts: Vec<(usize, usize)>,
-}
-
-#[derive(Default, Clone, Copy)]
-struct CollisionData<ID: Copy + Eq> {
-    solid: bool, // true = participates in restitution, false = no
-    fixed: bool, // collision system cannot move it
-    id: ID
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -204,174 +40,6 @@ impl Default for CollisionID {
     fn default() -> Self { Self::Ball }
 }
 
-impl<ID: Copy + Eq> AabbCollision<ID> {
-    fn new() -> Self {
-        Self {
-            bodies: Vec::new(),
-            velocities: Vec::new(),
-            metadata: Vec::new(),
-            contacts: Vec::new(),
-        }
-    }
-
-    fn update(&mut self) {
-        self.contacts.clear();
-        for (i, body) in self.bodies.iter().enumerate() {
-            for (j, body2) in self.bodies[i + 1..].iter().enumerate() {
-                if body.intersects(body2) {
-                    self.contacts.push((i, j + i + 1));
-                }
-            }
-        }
-
-        for (i, j) in self.contacts.iter() {
-            let CollisionData { solid: i_solid, fixed: i_fixed, .. } =
-                self.metadata[*i];
-            let CollisionData { solid: j_solid, fixed: j_fixed, .. } =
-                self.metadata[*j];
-
-            if !(i_solid && j_solid) || (i_fixed && j_fixed) {
-                continue;
-            }
-
-            if !i_fixed && !j_fixed {
-                let Vec2 { x: vel_i_x, y: vel_i_y } = self.velocities[*i];
-                let Vec2 { x: vel_j_x, y: vel_j_y } = self.velocities[*j];
-                let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
-                    max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i];
-                let Aabb { min: Vec3 { x: min_j_x, y: min_j_y, .. },
-                    max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[*j];
-
-                let ( i_displace, j_displace ) = {
-                    let vel_i_x = vel_i_x / (vel_i_x.abs() + vel_j_x.abs());
-                    let vel_i_y = vel_i_y / (vel_i_y.abs() + vel_j_y.abs());
-                    let vel_j_x = vel_j_x / (vel_i_x.abs() + vel_j_x.abs());
-                    let vel_j_y = vel_j_y / (vel_i_y.abs() + vel_j_y.abs());
-
-                    let displacement_x = Self::get_displacement(min_i_x, max_i_x, min_j_x, max_j_x);
-                    let displacement_y = Self::get_displacement(min_i_y, max_i_y, min_j_y, max_j_y);
-
-                    ( Vec3::new(displacement_x * vel_i_x, displacement_y * vel_i_y, 0.0),
-                        Vec3::new(displacement_x * vel_j_x, displacement_y * vel_j_y, 0.0) )
-                };
-
-                self.bodies[*i].min += i_displace;
-                self.bodies[*i].max += i_displace;
-                self.bodies[*j].min += j_displace;
-                self.bodies[*j].max += j_displace;
-            } else {
-                let i_swap = if !j_fixed { j } else { i };
-                let j_swap = if !j_fixed { i } else { j };
-                let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
-                    max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i_swap];
-                let Aabb { min: Vec3 { x: min_j_x, y: min_j_y, .. },
-                    max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[*j_swap];
-                let displace = {
-                    let displacement_x = Self::get_displacement(min_i_x, max_i_x, min_j_x, max_j_x);
-                    let displacement_y = Self::get_displacement(min_i_y, max_i_y, min_j_y, max_j_y);
-
-                    if displacement_x == displacement_y {
-                        Vec3::new(displacement_x, displacement_y, 0.0)
-                    } else if displacement_x < displacement_y {
-                        if min_i_x < min_j_x {
-                            Vec3::new(-displacement_x, 0.0, 0.0)
-                        } else {
-                            Vec3::new(displacement_x, 0.0, 0.0)
-                        }
-                    } else {
-                        if min_i_y < min_j_y {
-                            Vec3::new(0.0, -displacement_y, 0.0)
-                        } else {
-                            Vec3::new(0.0, displacement_y, 0.0)
-                        }
-                    }
-                };
-
-                self.bodies[*i_swap].min += displace;
-                self.bodies[*i_swap].max += displace;
-            }
-        }
-    }
-
-    fn get_displacement(min_i: f32, max_i: f32, min_j: f32, max_j: f32)
-        -> f32 {
-            if max_i - min_j < max_j - min_i {
-                max_i - min_j
-            } else {
-                max_j - min_i
-            }
-    }
-}
-
-struct PongResources<ID: Copy + Ord> {
-    items: BTreeMap<ID, f32>,
-    transactions: Vec<Vec<(ID, Transaction)>>,
-    completed: Vec<(bool, Option<Vec<ID>>)>
-}
-
-impl<ID: Copy + Ord> PongResources<ID> {
-    fn new() -> Self {
-        Self {
-            items: BTreeMap::new(),
-            transactions: Vec::new(),
-            completed: Vec::new(),
-        }
-    }
-
-    fn update(&mut self) {
-        self.completed.clear();
-        'exchange: for exchange in self.transactions.iter() {
-            let mut snapshot: BTreeMap<ID, f32> = BTreeMap::new();
-            for (item_type, ..) in exchange {
-                snapshot.insert( *item_type, *self.items.get(&item_type).unwrap() );
-            }
-            let mut item_types = vec![];
-            for (item_type, change) in exchange.iter() {
-                if !self.is_possible(item_type, change) {
-                    self.completed.push((false, None));
-                    for (item_type, val) in snapshot.iter() {
-                        *self.items.get_mut(&item_type).unwrap() = *val;
-                        continue 'exchange;
-                    }
-                }
-                match change {
-                    Transaction::Change(amt) => {
-                        *self.items.get_mut(&item_type).unwrap() += *amt as f32;
-                        item_types.push(*item_type);
-                    }
-                }
-            }
-            self.completed.push((true, Some(item_types)));
-        }
-        self.transactions.clear();
-    }
-
-    fn is_possible (&self, item_type: &ID, transaction: &Transaction) -> bool {
-        if !self.items.contains_key(item_type) {
-            false
-        } else {
-            let value = self.items.get(item_type);
-            match transaction {
-                Transaction::Change(amt) => {
-                    if value.unwrap() + *amt as f32 > 0.0 {
-                        true
-                    } else { false }
-                }
-            }
-        }
-    }
-
-    fn get_value_by_itemtype(&self, item_type: &ID) -> f32 {
-        *self.items.get(item_type).unwrap()
-    }
-
-}
-
-#[derive(Clone, Copy)]
-enum Transaction {
-    Change(i8),
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum PoolID {
     Points(Player)
@@ -379,9 +47,9 @@ enum PoolID {
 
 struct Logics {
     control: WinitKeyboardControl<ActionID>,
-    physics: PongPhysics,
+    physics: PointPhysics,
     collision: AabbCollision<CollisionID>,
-    resources: PongResources<PoolID>,
+    resources: Resources<PoolID>,
 }
 
 impl Logics {
@@ -393,51 +61,62 @@ impl Logics {
                     InputMap {
                         inputs: vec![(KeyInput::Pair(VirtualKeyCode::Q, VirtualKeyCode::A),
                                     InputState::On),
+                                    (KeyInput::Single(VirtualKeyCode::W),
+                                     InputState::Pressed)
                         ],
                         actions: vec![Action {
                             id: ActionID::Move(Player::P1),
                             action_type: ActionType::Axis(-1.0, 1.0)
-                        }]
+                        },
+                        Action {
+                            id: ActionID::Serve(Player::P1),
+                            action_type: ActionType::Instant(1.0)
+                        }],
+                        is_valid: vec![false; 2],
                     }
                 );
                 control.mapping.push(
                     InputMap {
                         inputs: vec![(KeyInput::Pair(VirtualKeyCode::O, VirtualKeyCode::L),
-                                    InputState::On)
+                                    InputState::On),
+                                    (KeyInput::Single(VirtualKeyCode::I),
+                                     InputState::Pressed)
                         ],
                         actions: vec![Action {
                             id: ActionID::Move(Player::P2),
                             action_type: ActionType::Axis(-1.0, 1.0)
+                        }, 
+                        Action {
+                            id: ActionID::Serve(Player::P2),
+                            action_type: ActionType::Instant(1.0)
                         }],
+                        is_valid: vec![false; 2],
                     });
                 control
             },
-            physics: PongPhysics::new(),
+            physics: PointPhysics::new(),
             collision: {
                 let mut collision = AabbCollision::new();
-                collision.bodies.push(Aabb::new(
-                    Vec3::new(-1.0, 0.0, 0.0),
-                    Vec3::new(0.0, HEIGHT as f32, 0.0)));
-                collision.bodies.push(Aabb::new(
-                    Vec3::new(WIDTH as f32, 0.0, 0.0),
-                    Vec3::new(WIDTH as f32 + 1.0, HEIGHT as f32, 0.0)));
-                collision.bodies.push(Aabb::new(
-                    Vec3::new(0.0, -1.0, 0.0),
-                    Vec3::new(WIDTH as f32, 0.0, 0.0)));
-                collision.bodies.push(Aabb::new(
-                    Vec3::new(0.0, HEIGHT as f32, 0.0),
-                    Vec3::new(WIDTH as f32, HEIGHT as f32 + 1.0, 0.0)));
-                for _ in 1..4 {
-                    collision.velocities.push(Vec2::new(0.0, 0.0));
-                }
-                collision.metadata.push(CollisionData{ solid: true, fixed: true, id: CollisionID::SideWall(Player::P1) });
-                collision.metadata.push(CollisionData{ solid: true, fixed: true, id: CollisionID::SideWall(Player::P2) });
-                collision.metadata.push(CollisionData{ solid: true, fixed: true, id: CollisionID::TopWall });
-                collision.metadata.push(CollisionData{ solid: true, fixed: true, id: CollisionID::BottomWall });
+                collision.add_collision_entity(-1.0, 0.0,
+                    1.0, HEIGHT as f32,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::SideWall(Player::P1));
+                collision.add_collision_entity(WIDTH as f32, 0.0,
+                    1.0, HEIGHT as f32,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::SideWall(Player::P2));
+                collision.add_collision_entity(0.0, -1.0,
+                    WIDTH as f32, 1.0,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::TopWall);
+                collision.add_collision_entity(0.0, HEIGHT as f32,
+                    WIDTH as f32, 1.0,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::BottomWall);
                 collision
             },
             resources: {
-                let mut resources = PongResources::new();
+                let mut resources = Resources::new();
                 resources.items.insert( PoolID::Points(Player::P1), 0.0 );
                 resources.items.insert( PoolID::Points(Player::P2), 0.0 );
                 resources
@@ -500,7 +179,7 @@ fn main() -> Result<(), Error> {
         }
 
         // Handle input events
-        if input.update(event) {
+        if input.update(&event) {
             // Close events
             if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
                 *control_flow = ControlFlow::Exit;
@@ -609,30 +288,15 @@ impl World {
     }
 
     fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
-        for map in control.mapping.iter_mut() {
-            map.inputs.resize(2, (KeyInput::Single(VirtualKeyCode::H), InputState::On));
-            map.actions.resize_with(2, Action::default);
-        }
         if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
             match self.serving {
-                Some(Player::P1) => {
-                    control.mapping[0].inputs.push(
-                        (KeyInput::Single(VirtualKeyCode::W),
-                         InputState::Pressed));
-                    control.mapping[0].actions.push(
-                        Action { id: ActionID::Serve(Player::P1),
-                            action_type: ActionType::Instant });
-                }
-                Some(Player::P2) => {
-                    control.mapping[1].inputs.push(
-                        (KeyInput::Single(VirtualKeyCode::I),
-                         InputState::Released));
-                    control.mapping[1].actions.push(
-                        Action { id: ActionID::Serve(Player::P2),
-                            action_type: ActionType::Instant });
-                }
+                Some(Player::P1) => control.mapping[0].is_valid[1] = true,
+                Some(Player::P2) => control.mapping[1].is_valid[1] = true,
                 None => {}
             }
+        } else {
+            control.mapping[0].is_valid[1] = false;
+            control.mapping[1].is_valid[1] = false;
         }
     }
 
@@ -656,15 +320,17 @@ impl World {
         }
     }
 
-    fn project_physics(&self, physics: &mut PongPhysics) {
+    fn project_physics(&self, physics: &mut PointPhysics) {
         physics.positions.resize_with(1, Vec2::default);
         physics.velocities.resize_with(1, Vec2::default);
+        physics.accelerations.resize_with(1, Vec2::default);
         physics.positions[0].x = self.ball.0 as f32 + self.ball_err.x;
         physics.positions[0].y = self.ball.1 as f32 + self.ball_err.y;
         physics.velocities[0] = self.ball_vel;
+        physics.accelerations[0] = Vec2::new(0.0, 0.0);
     }
 
-    fn unproject_physics(&mut self, physics: &PongPhysics) {
+    fn unproject_physics(&mut self, physics: &PointPhysics) {
         self.ball.0 = physics.positions[0].x.trunc().max(0.0).min((WIDTH - BALL_SIZE) as f32) as u8;
         self.ball.1 = physics.positions[0].y.trunc().max(0.0).min((HEIGHT - BALL_SIZE) as f32) as u8;
         self.ball_err = physics.positions[0] - Vec2::new(self.ball.0 as f32, self.ball.1 as f32);
@@ -674,26 +340,23 @@ impl World {
     fn project_collision(&self, collision: &mut AabbCollision<CollisionID>, control: &WinitKeyboardControl<ActionID>) {
         collision.bodies.resize_with(4, Aabb::default);
         collision.velocities.resize_with(4, Default::default);
-        collision.metadata.resize_with(4, CollisionData::default);
-        collision.bodies.push(Aabb::new(
-                Vec3::new(self.ball.0 as f32, self.ball.1 as f32, 0.0),
-                Vec3::new(self.ball.0 as f32 + BALL_SIZE as f32, self.ball.1 as f32 + BALL_SIZE as f32, 0.0)));
-        collision.bodies.push(Aabb::new(
-                Vec3::new((PADDLE_OFF_X) as f32, self.paddles.0 as f32, 0.0),
-                Vec3::new((PADDLE_OFF_X + PADDLE_WIDTH) as f32, self.paddles.0 as f32 + PADDLE_HEIGHT as f32, 0.0)));
-        collision.bodies.push(Aabb::new(
-                Vec3::new((WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32, self.paddles.1 as f32, 0.0),
-                Vec3::new((WIDTH - PADDLE_OFF_X) as f32, self.paddles.1 as f32 + PADDLE_HEIGHT as f32, 0.0)));
+        collision.metadata.resize_with(4, Default::default);
+        collision.add_collision_entity(
+            self.ball.0 as f32, self.ball.1 as f32,
+            BALL_SIZE as f32, BALL_SIZE as f32,
+            self.ball_vel,
+            true, false, CollisionID::Ball);
+        collision.add_collision_entity(
+            PADDLE_OFF_X as f32, self.paddles.0 as f32,
+            PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
+            Vec2::new(0.0, control.values[0][0] + control.values[0][1]),
+            true, true, CollisionID::Paddle(Player::P1));
+        collision.add_collision_entity(
+            (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32, self.paddles.1 as f32,
+            PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
 
-        collision.velocities.push(self.ball_vel);
-        let p1_vel: f32 = control.values[0][0] + control.values[0][1];
-        let p2_vel: f32 = control.values[1][0] + control.values[1][1];
-        collision.velocities.push(Vec2::new(0.0, p1_vel));
-        collision.velocities.push(Vec2::new(0.0, p2_vel));
-
-        collision.metadata.push(CollisionData { solid: true, fixed: false, id: CollisionID::Ball });
-        collision.metadata.push(CollisionData { solid: true, fixed: true, id: CollisionID::Paddle(Player::P1) });
-        collision.metadata.push(CollisionData { solid: true, fixed: true, id: CollisionID::Paddle(Player::P2) });
+            Vec2::new(0.0, control.values[1][0] + control.values[1][1]),
+            true, true, CollisionID::Paddle(Player::P2));
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
@@ -720,7 +383,7 @@ impl World {
         }
     }
 
-    fn project_resources(&self, resources: &mut PongResources<PoolID>) {
+    fn project_resources(&self, resources: &mut Resources<PoolID>) {
         if !resources.items.contains_key(&PoolID::Points(Player::P1)) {
             resources.items.insert(PoolID::Points(Player::P1), 0.0);
         }
@@ -729,7 +392,7 @@ impl World {
         }
     }
 
-    fn unproject_resources(&mut self, resources: &PongResources<PoolID>) {
+    fn unproject_resources(&mut self, resources: &Resources<PoolID>) {
         for (completed, item_types) in resources.completed.iter() {
             if let Some(types) = item_types {
                 if *completed {

@@ -1,12 +1,12 @@
 use ultraviolet::Vec2;
 
-pub struct Physics {
+pub struct PointPhysics {
     pub positions: Vec<Vec2>,
     pub velocities: Vec<Vec2>,
     pub accelerations: Vec<Vec2>,
 }
 
-impl Physics {
+impl PointPhysics {
     pub fn new() -> Self {
         Self {
             positions: Vec::new(),

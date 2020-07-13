@@ -9,5 +9,6 @@ edition = "2018"
 [dependencies]
 pixels = "0.0.4"
 winit = "0.22.0"
-winit_input_helper = "0.6.0"
+winit_input_helper = "0.7.0"
 ultraviolet = "0.4.6"
+asterism = { path = "../../asterism" }

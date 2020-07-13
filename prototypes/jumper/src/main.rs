@@ -8,7 +8,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, geometry::Aabb};
-use asterism::{AabbCollision, control::*, EntityState, Physics};
+use asterism::{AabbCollision, control::*, FlatEntityState, PointPhysics};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -55,9 +55,9 @@ enum StateID {
 
 struct Logics {
     control: WinitKeyboardControl<ActionID>,
-    physics: Physics,
+    physics: PointPhysics,
     collision: AabbCollision<CollisionID>,
-    entity_state: EntityState<StateID>,
+    entity_state: FlatEntityState<StateID>,
 }
 
 impl Logics {
@@ -83,7 +83,7 @@ impl Logics {
                 );
                 control
             },
-            physics: Physics::new(),
+            physics: PointPhysics::new(),
             collision: {
                 let mut collision = AabbCollision::new();
                 collision.add_collision_entity(-1.0, 0.0,
@@ -105,12 +105,12 @@ impl Logics {
                 collision
             },
             entity_state: {
-                let mut entity_state = EntityState::new();
-                entity_state.add_map(0,
+                let mut entity_state = FlatEntityState::new();
+                entity_state.add_state_map(0,
                     vec![(StateID::PlatformLeft, vec![1]),
                     (StateID::PlatformRight, vec![0])
                     ]);
-                entity_state.add_map(3,
+                entity_state.add_state_map(3,
                     vec![(StateID::PlayerGrounded, vec![1, 2]),
                     (StateID::PlayerWalk, vec![0, 2]),
                     (StateID::PlayerJump, vec![3]),
@@ -149,7 +149,7 @@ fn main() -> Result<(), Error> {
     let window = {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
         WindowBuilder::new()
-            .with_title("paddles")
+            .with_title("jumper")
             .with_inner_size(size)
             .with_min_inner_size(size)
             .build(&event_loop)
@@ -231,7 +231,7 @@ impl World {
         self.unproject_entity_state(&logics.entity_state);
     }
 
-    fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>, entity_state: &EntityState<StateID>) {
+    fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>, entity_state: &FlatEntityState<StateID>) {
         control.mapping[0].is_valid[0] = true;
         control.mapping[0].is_valid[1] = match entity_state.get_id_for_entity(1) {
             StateID::PlayerGrounded | StateID::PlayerWalk => true,
@@ -239,7 +239,7 @@ impl World {
         }
     }
 
-    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>, entity_state: &EntityState<StateID>) {
+    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>, entity_state: &FlatEntityState<StateID>) {
         self.player.vel.x = control.values[0][0];
         match entity_state.get_id_for_entity(1) {
             StateID::PlayerGrounded | StateID::PlayerWalk => self.player.vel.y = control.values[0][1],
@@ -247,7 +247,7 @@ impl World {
         } 
     }
 
-    fn project_physics(&self, physics: &mut Physics) {
+    fn project_physics(&self, physics: &mut PointPhysics) {
         physics.accelerations.resize_with(2, Vec2::default);
         physics.positions.resize_with(2, Vec2::default);
         physics.velocities.resize_with(2, Vec2::default);
@@ -268,7 +268,7 @@ impl World {
             Vec2::new(0.0, 0.0));
     }
 
-    fn unproject_physics(&mut self, physics: &Physics) {
+    fn unproject_physics(&mut self, physics: &PointPhysics) {
         let update_game_state = |i: usize, x: &mut u8, y: &mut u8, err: &mut Vec2, vel: &mut Vec2, w: u8, h: u8| {
             *x = physics.positions[i].x.trunc().max(0.0).min((WIDTH - w) as f32) as u8;
             *y = physics.positions[i].y.trunc().max(0.0).min((HEIGHT - h) as f32) as u8;
@@ -305,7 +305,7 @@ impl World {
     }
 
 
-    fn project_entity_state(&self, entity_state: &mut EntityState<StateID>, collision: &AabbCollision<CollisionID>) {
+    fn project_entity_state(&self, entity_state: &mut FlatEntityState<StateID>, collision: &AabbCollision<CollisionID>) {
         // update condition table
         for state_conditions in entity_state.conditions.iter_mut() {
             state_conditions.clear();
@@ -339,7 +339,7 @@ impl World {
         }
     }
 
-    fn unproject_entity_state(&mut self, entity_state: &EntityState<StateID>) {
+    fn unproject_entity_state(&mut self, entity_state: &FlatEntityState<StateID>) {
         for (map, state) in entity_state.maps.iter().zip(entity_state.states.iter()) {
             match map.states[*state].id {
                 StateID::PlatformLeft => {

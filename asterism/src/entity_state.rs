@@ -1,10 +1,10 @@
-pub struct EntityState<ID: Copy + Eq> {
+pub struct FlatEntityState<ID: Copy + Eq> {
     pub maps: Vec<StateMap<ID>>,
     pub conditions: Vec<Vec<bool>>,
     pub states: Vec<usize>
 }
 
-impl<ID: Copy + Eq> EntityState<ID> {
+impl<ID: Copy + Eq> FlatEntityState<ID> {
     pub fn new() -> Self {
         Self {
             // one map per entity
@@ -29,7 +29,7 @@ impl<ID: Copy + Eq> EntityState<ID> {
         self.maps[ent].states[self.states[ent]].id
     }
 
-    pub fn add_map(&mut self, starting_state: usize, states: Vec<(ID, Vec<usize>)>) {
+    pub fn add_state_map(&mut self, starting_state: usize, states: Vec<(ID, Vec<usize>)>) {
         let mut state_map = StateMap { states: Vec::new() };
         for (id, edges) in states.iter() {
             state_map.states.push(State {
