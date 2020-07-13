@@ -103,6 +103,15 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
         }
     }
 
+    pub fn add_collision_entity(&mut self, x: f32, y: f32, w: f32, h: f32, vel: Vec2, solid: bool, fixed: bool, id: ID) {
+            self.bodies.push(
+                Aabb::new(
+                    Vec3::new(x, y, 0.0),
+                    Vec3::new(x + w, y + h, 0.0)));
+            self.velocities.push(vel);
+            self.metadata.push(CollisionData { solid: solid, fixed: fixed, id: id });
+    }
+
     fn get_displacement(min_i: f32, max_i: f32, min_j: f32, max_j: f32)
         -> f32 {
             if max_i - min_j < max_j - min_i {

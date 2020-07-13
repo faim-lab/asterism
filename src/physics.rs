@@ -1,12 +1,12 @@
 use ultraviolet::Vec2;
 
-pub struct JumperPhysics {
+pub struct Physics {
     pub positions: Vec<Vec2>,
     pub velocities: Vec<Vec2>,
     pub accelerations: Vec<Vec2>,
 }
 
-impl JumperPhysics {
+impl Physics {
     pub fn new() -> Self {
         Self {
             positions: Vec::new(),

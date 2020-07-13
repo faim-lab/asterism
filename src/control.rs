@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use winit::event::{VirtualKeyCode};
 use winit_input_helper::WinitInputHelper;
 

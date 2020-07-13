@@ -7,15 +7,11 @@ use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
-use ultraviolet::{Vec2, Vec3, geometry::Aabb};
+use ultraviolet::{Vec2, geometry::Aabb};
+use asterism::{AabbCollision, control::*, EntityState, Physics};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
-
-mod control;
-mod physics;
-mod entity_state;
-mod collision;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Player {
@@ -58,102 +54,68 @@ enum StateID {
 }
 
 struct Logics {
-    control: control::WinitKeyboardControl<ActionID>,
-    physics: physics::JumperPhysics,
-    collision: collision::AabbCollision<CollisionID>,
-    entity_state: entity_state::JumperEntityState<StateID>,
+    control: WinitKeyboardControl<ActionID>,
+    physics: Physics,
+    collision: AabbCollision<CollisionID>,
+    entity_state: EntityState<StateID>,
 }
 
 impl Logics {
     fn new() -> Self {
         Self {
             control: {
-                let mut control = control::WinitKeyboardControl::new();
+                let mut control = WinitKeyboardControl::new();
                 control.mapping.push(
-                    control::InputMap {
-                        inputs: vec![(control::KeyInput::Pair(VirtualKeyCode::Left, VirtualKeyCode::Right),
-                                    control::InputState::On),
-                                    (control::KeyInput::Single(VirtualKeyCode::Space), control::InputState::Pressed),
+                    InputMap {
+                        inputs: vec![(KeyInput::Pair(VirtualKeyCode::Left, VirtualKeyCode::Right),
+                                    InputState::On),
+                                    (KeyInput::Single(VirtualKeyCode::Space), InputState::Pressed),
                         ],
-                        actions: vec![control::Action {
+                        actions: vec![Action {
                             id: ActionID::Move(Player::P1),
-                            action_type: control::ActionType::Axis(-1.0, 1.0)
-                        }, control::Action {
+                            action_type: ActionType::Axis(-1.0, 1.0)
+                        }, Action {
                             id: ActionID::Jump(Player::P1),
-                            action_type: control::ActionType::Continuous(-1.0)
+                            action_type: ActionType::Continuous(-1.0)
                         }],
                         is_valid: vec![false; 2],
                     }
                 );
                 control
             },
-            physics: physics::JumperPhysics::new(),
+            physics: Physics::new(),
             collision: {
-                let mut collision = collision::AabbCollision::new();
-                let mut add_collision_entity = |x: f32, y: f32, w: f32, h: f32, vel: Vec2, solid: bool, fixed: bool, id: CollisionID| {
-                    collision.bodies.push(
-                        Aabb::new(
-                            Vec3::new(x, y, 0.0),
-                            Vec3::new(x + w, y + h, 0.0)
-                        )
-                    );
-                    collision.velocities.push(vel);
-                    collision.metadata.push(collision::CollisionData { solid: solid, fixed: fixed, id: id });
-                };
-
-                add_collision_entity(-1.0, 0.0,
+                let mut collision = AabbCollision::new();
+                collision.add_collision_entity(-1.0, 0.0,
                     1.0, HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::RightWall);
-                add_collision_entity(WIDTH as f32, 0.0,
+                collision.add_collision_entity(WIDTH as f32, 0.0,
                     1.0, HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::LeftWall);
-                add_collision_entity(0.0, -1.0,
+                collision.add_collision_entity(0.0, -1.0,
                     WIDTH as f32, 1.0,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::TopWall);
-                add_collision_entity(0.0, HEIGHT as f32,
+                collision.add_collision_entity(0.0, HEIGHT as f32,
                     WIDTH as f32, 1.0,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::BottomWall);
                 collision
             },
             entity_state: {
-                let mut entity_state = entity_state::JumperEntityState::new();
-                entity_state.maps.push(entity_state::StateMap {
-                    states: {
-                        let mut states = Vec::new();
-                        states.push(entity_state::State {
-                            id: StateID::PlatformLeft,
-                            edges: vec![1],
-                        });
-                        states.push(entity_state::State {
-                            id: StateID::PlatformRight,
-                            edges: vec![0],
-                        });
-                        states
-                    }
-                });
-                entity_state.maps.push(entity_state::StateMap {
-                    states: vec![entity_state::State {
-                            id: StateID::PlayerGrounded,
-                            edges: vec![1, 2],
-                        }, entity_state::State {
-                            id: StateID::PlayerWalk,
-                            edges: vec![0, 2],
-                        }, entity_state::State {
-                            id: StateID::PlayerJump,
-                            edges: vec![3],
-                        }, entity_state::State {
-                            id: StateID::PlayerFall,
-                            edges: vec![0, 1],
-                        }]
-                });
-                for map in &mut entity_state.maps {
-                    entity_state.conditions.push(vec![false; map.states.len()]);
-                }
-                entity_state.states = vec![0, 3];
+                let mut entity_state = EntityState::new();
+                entity_state.add_map(0,
+                    vec![(StateID::PlatformLeft, vec![1]),
+                    (StateID::PlatformRight, vec![0])
+                    ]);
+                entity_state.add_map(3,
+                    vec![(StateID::PlayerGrounded, vec![1, 2]),
+                    (StateID::PlayerWalk, vec![0, 2]),
+                    (StateID::PlayerJump, vec![3]),
+                    (StateID::PlayerFall, vec![0, 1])
+                    ]);
                 entity_state
             }
         }
@@ -269,7 +231,7 @@ impl World {
         self.unproject_entity_state(&logics.entity_state);
     }
 
-    fn project_control(&self, control: &mut control::WinitKeyboardControl<ActionID>, entity_state: &entity_state::JumperEntityState<StateID>) {
+    fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>, entity_state: &EntityState<StateID>) {
         control.mapping[0].is_valid[0] = true;
         control.mapping[0].is_valid[1] = match entity_state.get_id_for_entity(1) {
             StateID::PlayerGrounded | StateID::PlayerWalk => true,
@@ -277,7 +239,7 @@ impl World {
         }
     }
 
-    fn unproject_control(&mut self, control: &control::WinitKeyboardControl<ActionID>, entity_state: &entity_state::JumperEntityState<StateID>) {
+    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>, entity_state: &EntityState<StateID>) {
         self.player.vel.x = control.values[0][0];
         match entity_state.get_id_for_entity(1) {
             StateID::PlayerGrounded | StateID::PlayerWalk => self.player.vel.y = control.values[0][1],
@@ -285,7 +247,7 @@ impl World {
         } 
     }
 
-    fn project_physics(&self, physics: &mut physics::JumperPhysics) {
+    fn project_physics(&self, physics: &mut Physics) {
         physics.accelerations.resize_with(2, Vec2::default);
         physics.positions.resize_with(2, Vec2::default);
         physics.velocities.resize_with(2, Vec2::default);
@@ -306,7 +268,7 @@ impl World {
             Vec2::new(0.0, 0.0));
     }
 
-    fn unproject_physics(&mut self, physics: &physics::JumperPhysics) {
+    fn unproject_physics(&mut self, physics: &Physics) {
         let update_game_state = |i: usize, x: &mut u8, y: &mut u8, err: &mut Vec2, vel: &mut Vec2, w: u8, h: u8| {
             *x = physics.positions[i].x.trunc().max(0.0).min((WIDTH - w) as f32) as u8;
             *y = physics.positions[i].y.trunc().max(0.0).min((HEIGHT - h) as f32) as u8;
@@ -318,41 +280,32 @@ impl World {
         update_game_state(1, &mut self.platform.x, &mut self.platform.y, &mut self.platform.err, &mut self.platform.vel, self.platform.w, self.platform.h);
     }
 
-    fn project_collision(&self, collision: &mut collision::AabbCollision<CollisionID>) {
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>) {
         collision.bodies.resize_with(4, Aabb::default);
         collision.velocities.resize_with(4, Default::default);
-        collision.metadata.resize_with(4, collision::CollisionData::default);
+        collision.metadata.resize_with(4, Default::default);
 
-        let mut add_collision_entity = |x: f32, y: f32, w: f32, h: f32, vel: Vec2, solid: bool, fixed: bool, id: CollisionID| {
-            collision.bodies.push(
-                Aabb::new(
-                    Vec3::new(x, y, 0.0),
-                    Vec3::new(x + w, y + h, 0.0)));
-            collision.velocities.push(vel);
-            collision.metadata.push(collision::CollisionData { solid: solid, fixed: fixed, id: id });
-        };
-
-        add_collision_entity(self.player.x as f32, self.player.y as f32,
+        collision.add_collision_entity(self.player.x as f32, self.player.y as f32,
             self.player.w as f32, self.player.h as f32,
             self.player.vel,
             true, false, CollisionID::Player(Player::P1));
-        add_collision_entity(self.ground.x as f32, self.ground.y as f32,
+        collision.add_collision_entity(self.ground.x as f32, self.ground.y as f32,
             self.ground.w as f32, self.ground.h as f32,
             self.ground.vel,
             true, true, CollisionID::Ground);
-        add_collision_entity(self.platform.x as f32, self.platform.y as f32,
+        collision.add_collision_entity(self.platform.x as f32, self.platform.y as f32,
             self.platform.w as f32, self.platform.h as f32,
             self.platform.vel,
             true, true, CollisionID::MovingPlatform);
     }
 
-    fn unproject_collision(&mut self, collision: &collision::AabbCollision<CollisionID>) {
+    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
         self.player.x = collision.bodies[4].min.x.trunc() as u8;
         self.player.y = collision.bodies[4].min.y.trunc() as u8;
     }
 
 
-    fn project_entity_state(&self, entity_state: &mut entity_state::JumperEntityState<StateID>, collision: &collision::AabbCollision<CollisionID>) {
+    fn project_entity_state(&self, entity_state: &mut EntityState<StateID>, collision: &AabbCollision<CollisionID>) {
         // update condition table
         for state_conditions in entity_state.conditions.iter_mut() {
             state_conditions.clear();
@@ -386,7 +339,7 @@ impl World {
         }
     }
 
-    fn unproject_entity_state(&mut self, entity_state: &entity_state::JumperEntityState<StateID>) {
+    fn unproject_entity_state(&mut self, entity_state: &EntityState<StateID>) {
         for (map, state) in entity_state.maps.iter().zip(entity_state.states.iter()) {
             match map.states[*state].id {
                 StateID::PlatformLeft => {
