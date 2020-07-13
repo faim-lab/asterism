@@ -234,16 +234,31 @@ impl AabbCollision<CollisionID> {
                         self.displacements[*i_swap] = Some(displace);
                     },
                     _ => {
-                        if displace.x.abs() > self.displacements[*i_swap].unwrap().x.abs() {
+                        let Vec3 { x: self_x, y: self_y, ..} = self.displacements[*i_swap].unwrap();
+                        if {displace.x.abs() > 0.0 && displace.y.abs() == 0.0 } || {displace.y.abs() > 0.0 && displace.x.abs() == 0.0 } {
                             let mut new_displace = self.displacements[*i_swap].unwrap().clone();
-                            new_displace.x = displace.x;
-                            self.displacements[*i_swap] = Some(new_displace);
+                            if displace.y.abs() == 0.0 {
+                                new_displace.y = displace.y;
+                                self.displacements[*i_swap] = Some(new_displace);
+                            } else {
+                                new_displace.x = displace.x;
+                                self.displacements[*i_swap] = Some(new_displace);
+                            }
+                        } else {
+                            if !{ self_x == 0.0 && self_y.abs() > 0.0 } && !{ self_y == 0.0 && self_x.abs() > 0.0 } {
+                                if displace.x.abs() > self.displacements[*i_swap].unwrap().x.abs() {
+                                    let mut new_displace = self.displacements[*i_swap].unwrap().clone();
+                                    new_displace.x = displace.x;
+                                    self.displacements[*i_swap] = Some(new_displace);
+                                }
+                                if displace.y.abs() > self.displacements[*i_swap].unwrap().y.abs() {
+                                    let mut new_displace = self.displacements[*i_swap].unwrap().clone();
+                                    new_displace.y = displace.y;
+                                    self.displacements[*i_swap] = Some(new_displace);
+                                }
+                            }
                         }
-                        if displace.y.abs() > self.displacements[*i_swap].unwrap().y.abs() {
-                            let mut new_displace = self.displacements[*i_swap].unwrap().clone();
-                            new_displace.y = displace.y;
-                            self.displacements[*i_swap].unwrap().y = displace.y;
-                        }
+                        
                     }
                 }
             }
