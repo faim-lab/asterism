@@ -1,21 +1,21 @@
 label start
 welcome to yarn, a test of linking logics which was meant to be like twine but turned out to be formatted more like ren'py
 we hope you enjoy your stay
-link twine
-link renpy
+link twine learn more about twine
+link renpy learn more about renpy
 
 label twine
 twine is a text-based game engine that slaps. i like it a lot and that's why i spend most of my time using it trying to make it do things that it was not meant to do
-link start
-link dirt
+link start go back to start
+link dirt i love dirt
 
 label renpy
 i dont like renpy because most of its documentation is ~5years out of date
-link start
+link start go back to start
 
 label dirt
 And so, Aliph ate dirt.
 Aliph: Golly, I love to eat dirt. If given the chance and necessary income, I would eat dirt every single day.
 A Signpost: You know, Aliph, you should not eat so much dirt.
 How offensive!
-link start
+link start reset

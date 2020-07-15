@@ -1,12 +1,3 @@
-/// * Linking Logics
-/// ** Required concepts 
-/// - Things to be linked together
-/// - Types of links and attributes of those links
-///
-/// ** Provided concepts
-/// - Networks of linked objects
-/// - Current "positions" in those networks
-
 pub struct Linking {
     pub maps: Vec<NodeMap>,
     pub conditions: Vec<Vec<bool>>,
