@@ -307,11 +307,6 @@ impl World {
 
     fn project_entity_state(&self, entity_state: &mut FlatEntityState<StateID>, collision: &AabbCollision<CollisionID>) {
         // update condition table
-        for state_conditions in entity_state.conditions.iter_mut() {
-            state_conditions.clear();
-        }
-        entity_state.conditions[0].resize(2, false);
-        entity_state.conditions[1].resize(4, false);
         if self.platform.x < 30 {
             entity_state.conditions[0][1] = true;
         }

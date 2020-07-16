@@ -23,6 +23,11 @@ impl<ID: Copy + Eq> FlatEntityState<ID> {
                 }
             }
         }
+        for map_conditions in self.conditions.iter_mut() {
+            for val in map_conditions.iter_mut() {
+                *val = false;
+            }
+        }
     }
 
     pub fn get_id_for_entity(&self, ent: usize) -> ID {

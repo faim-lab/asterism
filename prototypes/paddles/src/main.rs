@@ -235,10 +235,15 @@ impl World {
                     self.ball_vel = Vec2::new(0.0, 0.0);
                     self.ball = (WIDTH / 2 - BALL_SIZE / 2,
                         HEIGHT / 2 - BALL_SIZE / 2);
-                    self.serving = Some(player);
                     match player {
-                        Player::P1 => logics.resources.transactions.push(vec![(PoolID::Points(Player::P2), Transaction::Change(1))]),
-                        Player::P2 => logics.resources.transactions.push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]),
+                        Player::P1 => {
+                            logics.resources.transactions.push(vec![(PoolID::Points(Player::P2), Transaction::Change(1))]);
+                            self.serving = Some(Player::P2);
+                        }
+                        Player::P2 => {
+                            logics.resources.transactions.push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]);
+                            self.serving = Some(Player::P1);
+                        }
                     }
                 }
                 (CollisionID::TopWall, CollisionID::Ball) |
