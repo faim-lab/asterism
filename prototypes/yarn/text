@@ -1,21 +1,76 @@
 label start
-welcome to yarn, a test of linking logics which was meant to be like twine but turned out to be formatted more like ren'py
-we hope you enjoy your stay
-link twine learn more about twine
-link renpy learn more about renpy
+link sick ~sick day blues~
+a twine game port :)
 
-label twine
-twine is a text-based game engine that slaps. i like it a lot and that's why i spend most of my time using it trying to make it do things that it was not meant to do
-link start go back to start
-link dirt i love dirt
+label sick
+you have a headache and you're super tired and way too warm. you try to get up but you're dizzy and also your hands are shaking kinda?
 
-label renpy
-i dont like renpy because most of its documentation is ~5years out of date
-link start go back to start
+you cough and your throat hurts
 
-label dirt
-And so, Aliph ate dirt.
-Aliph: Golly, I love to eat dirt. If given the chance and necessary income, I would eat dirt every single day.
-A Signpost: You know, Aliph, you should not eat so much dirt.
-How offensive!
-link start reset
+link ohno oh no
+
+label ohno
+you're sick
+
+link sleepvalid sleep
+link post post about your impending demise
+link watch watch netflix
+link soupok make soup
+secretlink sleepinvalid
+secretlink soupnotok
+
+energy: 
+
+label crash
+you've crashed!
+
+congrats
+play again?
+link start yes
+link done no
+
+label recover
+you win! you made it out of ur miserable illness alive
+
+congrats
+play again?
+link start yes
+link done no
+
+label sleepvalid
+you doze off for a few hours and wake up feeling better. your headache is less of a headache. your mouth tastes gross
+link ohno sleep is good for you
+secretlink recover
+
+label sleepinvalid
+you've slept too much now you're bored do something else please
+
+link ohno ugh i can't believe i cant just keep sleeping
+
+label post
+posting makes you feel better emotionally but the screen gives you a headache
+your friend saw your post and sent you a get well soon message
+
+link ohno nice
+secretlink crash
+
+label watch
+you watched 22 episodes of avatar: the last airbender. the last episode you watched was okay? now you feel :)
+
+link ohno that was fun
+secretlink crash
+secretlink recover
+
+label soupok
+nearly died making the food but hey it tastes good and now you're energized because of the SPICES
+
+link ohno yay
+secretlink recover
+
+label soupnotok
+soup is hard to make when you can't stand and also you got hungry while making it and had to sit down on the kitchen floor so you're miserable and sad
+
+link ohno :(
+secretlink crash
+
+label done

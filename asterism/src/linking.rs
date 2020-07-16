@@ -22,6 +22,11 @@ impl Linking {
                 }
             }
         }
+        for map_conditions in self.conditions.iter_mut() {
+            for val in map_conditions.iter_mut() {
+                *val = false;
+            }
+        }
     }
 
     pub fn add_link_map(&mut self, starting_pos: usize, nodes: Vec<Vec<usize>>) {

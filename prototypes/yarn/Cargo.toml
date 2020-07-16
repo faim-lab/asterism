@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 asterism = { path = "../../asterism" }
+rand = "0.7"
