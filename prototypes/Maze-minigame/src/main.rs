@@ -125,6 +125,9 @@ impl AabbCollision<CollisionID> {
 
     fn update(&mut self) {
         self.contacts.clear();
+        self.displacements.clear();
+        self.displacements.resize_with(self.bodies.len(), Default::default);
+
         for (i, body) in self.bodies.iter().enumerate() {
             for (j, body2) in self.bodies[i + 1..].iter().enumerate() {
                 if body.intersects(body2) {
@@ -185,43 +188,41 @@ impl AabbCollision<CollisionID> {
                 let i_center = Self::find_center(self.bodies[*i_swap]);
                 let j_center = Self::find_center(self.bodies[*j_swap]);
 
-                let i_player: usize = self.velocities.len() - 1;
-                
                 let overlapped_before_x = {
-                    let old_x_center = i_center.x - self.velocities[i_player].x;
+                    let old_x_center = i_center.x - self.velocities[*i_swap].x;
                     (old_x_center - j_center.x).abs() < half_isize_x + half_jsize_x
                 };
 
                 let overlapped_before_y = {
-                    let old_y_center = i_center.y - self.velocities[i_player].y;
+                    let old_y_center = i_center.y - self.velocities[*i_swap].y;
                     (old_y_center - j_center.y).abs() < half_isize_y + half_jsize_y
                 };
 
                 let displace = {
                     if !overlapped_before_x && overlapped_before_y {
-                        if self.velocities[i_player].x < 0.0 {
+                        if self.velocities[*i_swap].x < 0.0 {
                             Vec3::new(max_j_x - min_i_x, 0.0, 0.0)
-                        } else if self.velocities[i_player].x > 0.0 {
+                        } else if self.velocities[*i_swap].x > 0.0 {
                             Vec3::new(min_j_x - max_i_x, 0.0, 0.0)
                         } else {
                             Vec3::new(0.0, 0.0, 0.0)
                         }
                     } else if overlapped_before_x && !overlapped_before_y {
-                        if self.velocities[i_player].y < 0.0 {
+                        if self.velocities[*i_swap].y < 0.0 {
                             Vec3::new(0.0, max_j_y - min_i_y, 0.0)
-                        } else if self.velocities[i_player].y > 0.0 {
+                        } else if self.velocities[*i_swap].y > 0.0 {
                             Vec3::new(0.0, min_j_y - max_i_y, 0.0)
                         } else {
                             Vec3::new(0.0, 0.0, 0.0)
                         }
                     } else {
-                        if self.velocities[i_player].x < 0.0 && self.velocities[i_player].y < 0.0 {
+                        if self.velocities[*i_swap].x < 0.0 && self.velocities[*i_swap].y < 0.0 {
                             Vec3::new(max_j_x - min_i_x, max_j_y - min_i_y, 0.0)
-                        } else if self.velocities[i_player].x < 0.0 && self.velocities[i_player].y > 0.0 {
+                        } else if self.velocities[*i_swap].x < 0.0 && self.velocities[*i_swap].y > 0.0 {
                             Vec3::new(max_j_x - min_i_x, min_j_y - max_i_y, 0.0)
-                        } else if self.velocities[i_player].x > 0.0 && self.velocities[i_player].y < 0.0 {
+                        } else if self.velocities[*i_swap].x > 0.0 && self.velocities[*i_swap].y < 0.0 {
                             Vec3::new(min_j_x - max_i_x, max_j_y - min_i_y, 0.0) 
-                        } else if self.velocities[i_player].x > 0.0 && self.velocities[i_player].y > 0.0 {
+                        } else if self.velocities[*i_swap].x > 0.0 && self.velocities[*i_swap].y > 0.0 {
                             Vec3::new(min_j_x - max_i_x, min_j_y - max_i_y, 0.0)
                         } else {
                             Vec3::new(0.0, 0.0, 0.0)
@@ -229,6 +230,8 @@ impl AabbCollision<CollisionID> {
                     }
                 };
 
+
+                // if let Some(new_displace) = &mut self.displacements[*i_swap] { } else { }
                 match self.displacements[*i_swap] {
                     None => {
                         self.displacements[*i_swap] = Some(displace);
@@ -311,12 +314,14 @@ impl MazeResources {
         }
     }
 
-    fn update(&mut self, all_items: &mut Vec<Collectible>) {
-        // todo: switch out self.touched_item and use Aabbcollision... somehow
+    fn update(&mut self, all_items: &mut Vec<Collectible>, walls: &Vec<Wall>) {
         self.score += self.score_change;
         if self.touched_item != None {
-            all_items.remove(self.touched_item.unwrap());
+            all_items.remove(self.touched_item.unwrap() - walls.len());
         };
+        // reset
+        self.score_change = 0;
+        self.touched_item = None;
     }
 }
 
@@ -517,12 +522,23 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        self.project_resources(&mut logics.resources);
-        logics.resources.update(&mut self.items);
-        self.unproject_resources(&logics.resources);
-        if logics.resources.score_change != 0 {
-            println!("score: {}", self.score);
+        for contact in logics.collision.contacts.iter() {
+            match (logics.collision.metadata[contact.0].id,
+                logics.collision.metadata[contact.1].id) {
+                (CollisionID::Item, CollisionID::Player) => {
+                    logics.resources.score_change = ITEM_VAL;
+                    logics.resources.touched_item = Some(contact.0);
+                    // not sure if there's a better way to place the print statement
+                    println!("score: {}", self.score + ITEM_VAL);
+                },
+                _ => {}
+            }
         }
+        
+        self.project_resources(&mut logics.resources);
+        logics.resources.update(&mut self.items, &self.walls);
+        self.unproject_resources(&logics.resources);
+
 
     }
 
@@ -542,8 +558,7 @@ impl World {
         collision.bodies.resize_with(self.walls.len(), Aabb::default);
         collision.velocities.resize_with(self.walls.len(), Default::default);
         collision.metadata.resize_with(self.walls.len(), CollisionData::default);
-        collision.displacements.resize_with(self.walls.len(), Default::default);
-
+        
         // create collider for each item
         for item in &self.items {
             collision.bodies.push(Aabb::new(
@@ -556,7 +571,6 @@ impl World {
                 fixed: true, 
                 id: CollisionID::Item,
             });
-            collision.displacements.push(None);
         }
         // create collider for player
         collision.bodies.push(Aabb::new(
@@ -570,7 +584,6 @@ impl World {
             fixed: false,
             id: CollisionID::Player,
         });
-        collision.displacements.push(None);
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
@@ -580,17 +593,6 @@ impl World {
 
     fn project_resources(&self, resources:&mut MazeResources) {
         resources.score = self.score;
-        let i = self.touch_pickup();
-        match i {
-            None => {
-                resources.score_change = 0;
-                resources.touched_item = None;
-            },
-            _ => {
-                resources.score_change = ITEM_VAL;
-                resources.touched_item = i;
-            }
-        }
     }
 
     fn unproject_resources(&mut self, resources: &MazeResources) {
