@@ -92,6 +92,8 @@ struct AabbCollision<ID: Copy + Eq> {
     metadata: Vec<CollisionData<ID>>,
     contacts: Vec<(usize, usize)>,
     displacements: Vec<Option<Vec3>>,
+    // in the form of [top, bottom, left, right, some corner], where true means it collides there
+    sides_touched: Vec<[bool; 5]>,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -112,6 +114,8 @@ impl Default for CollisionID {
     fn default() -> Self { Self::Player }
 }
 
+
+
 impl AabbCollision<CollisionID> {
     fn new() -> Self {
         Self {
@@ -120,13 +124,21 @@ impl AabbCollision<CollisionID> {
             metadata: Vec::new(),
             contacts: Vec::new(),
             displacements: Vec::new(),
+            sides_touched: Vec::new(),
         }
     }
 
     fn update(&mut self) {
         self.contacts.clear();
         self.displacements.clear();
+        self.sides_touched.clear();
         self.displacements.resize_with(self.bodies.len(), Default::default);
+        self.sides_touched.resize_with(self.bodies.len(), Default::default);
+        println!("{:?}", self.displacements);
+        println!("{:?}", self.sides_touched);
+
+
+
 
         for (i, body) in self.bodies.iter().enumerate() {
             for (j, body2) in self.bodies[i + 1..].iter().enumerate() {
@@ -198,61 +210,115 @@ impl AabbCollision<CollisionID> {
                     (old_y_center - j_center.y).abs() < half_isize_y + half_jsize_y
                 };
 
-                let displace = {
-                    if !overlapped_before_x && overlapped_before_y {
-                        if self.velocities[*i_swap].x < 0.0 {
-                            Vec3::new(max_j_x - min_i_x, 0.0, 0.0)
-                        } else if self.velocities[*i_swap].x > 0.0 {
-                            Vec3::new(min_j_x - max_i_x, 0.0, 0.0)
-                        } else {
-                            Vec3::new(0.0, 0.0, 0.0)
-                        }
-                    } else if overlapped_before_x && !overlapped_before_y {
-                        if self.velocities[*i_swap].y < 0.0 {
-                            Vec3::new(0.0, max_j_y - min_i_y, 0.0)
-                        } else if self.velocities[*i_swap].y > 0.0 {
-                            Vec3::new(0.0, min_j_y - max_i_y, 0.0)
-                        } else {
-                            Vec3::new(0.0, 0.0, 0.0)
-                        }
+                if overlapped_before_x && !overlapped_before_y && self.velocities[*i_swap].y != 0.0 {
+                    if self.velocities[*i_swap].y < 0.0 {
+                        self.sides_touched[*i_swap][0] = true;  // top side touched
                     } else {
-                        if self.velocities[*i_swap].x < 0.0 && self.velocities[*i_swap].y < 0.0 {
-                            Vec3::new(max_j_x - min_i_x, max_j_y - min_i_y, 0.0)
-                        } else if self.velocities[*i_swap].x < 0.0 && self.velocities[*i_swap].y > 0.0 {
-                            Vec3::new(max_j_x - min_i_x, min_j_y - max_i_y, 0.0)
-                        } else if self.velocities[*i_swap].x > 0.0 && self.velocities[*i_swap].y < 0.0 {
-                            Vec3::new(min_j_x - max_i_x, max_j_y - min_i_y, 0.0) 
-                        } else if self.velocities[*i_swap].x > 0.0 && self.velocities[*i_swap].y > 0.0 {
-                            Vec3::new(min_j_x - max_i_x, min_j_y - max_i_y, 0.0)
+                        self.sides_touched[*i_swap][1] = true;  // bottom side touched
+                    }
+                }
+
+                if !overlapped_before_x && overlapped_before_y && self.velocities[*i_swap].x != 0.0 {
+                    if self.velocities[*i_swap].x < 0.0 {
+                        self.sides_touched[*i_swap][2] = true;  // left side touched
+                    } else {
+                        self.sides_touched[*i_swap][3] = true;  // right side touched
+                    }
+                }
+
+                if !overlapped_before_x && !overlapped_before_y 
+                && self.velocities[*i_swap].x != 0.0 && self.velocities[*i_swap].y != 0.0 {
+                    self.sides_touched[*i_swap][4] = true; // corner touched
+                }
+
+                let displace = {
+                    // overlapped vertically
+                    if self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1] {
+                        if self.sides_touched[*i_swap][0] {
+                            Vec3::new(0.0, max_j_y - min_i_y, 0.0)
                         } else {
-                            Vec3::new(0.0, 0.0, 0.0)
+                            Vec3::new(0.0, min_j_y - max_i_y, 0.0)
                         }
+                    } else if self.sides_touched[*i_swap][2] || self.sides_touched[*i_swap][3] {
+                        if self.sides_touched[*i_swap][2] {
+                            Vec3::new(max_j_x - min_i_x, 0.0, 0.0)
+                        } else {
+                            Vec3::new(min_j_x - max_i_x, 0.0, 0.0)
+                        }
+                    } else {  // if self.sides_touched[*i_swap][4] 
+                        let new_x = {
+                            if self.velocities[*i_swap].x < 0.0 {
+                                max_j_x - min_i_x
+                            } else if self.velocities[*i_swap].x > 0.0 {
+                                min_j_x - max_i_x
+                            } else {
+                                0.0
+                            }
+                        };
+                        let new_y = {
+                            if self.velocities[*i_swap].y < 0.0 {
+                                max_j_y - min_i_y
+                            } else if self.velocities[*i_swap].x > 0.0 {
+                                min_j_x - max_i_x
+                            } else {
+                                0.0
+                            }
+                        };
+                        Vec3::new(new_x, new_y, 0.0)
                     }
                 };
 
+                println!("displace: {:?}", displace);
+                println!("sides_touched: {:?}", self.sides_touched[*i_swap]);
+                
                 if let Some(new_displace) = &mut self.displacements[*i_swap] {
-                    if { displace.x != 0.0 && displace.y == 0.0 } || { displace.y != 0.0 && displace.x == 0.0 } {
-                        if displace.y == 0.0 {
-                            new_displace.y = 0.0;
+                    // already touching one side
+                    if self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1]
+                    || self.sides_touched[*i_swap][2] || self.sides_touched[*i_swap][3] {
+                        // touching at two sides
+                        if {self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1]}
+                        && {self.sides_touched[*i_swap][2] || self.sides_touched[*i_swap][3]} {
+                            if new_displace.x == 0.0 {
+                                new_displace.x = displace.x;
+                            } else {  // hopefully means `if new_displace.y == 0`
+                                new_displace.y = displace.y;
+                            }
+                        // touching from same side (I think)
                         } else {
-                            new_displace.x = displace.x;
+                            // touching at either top or bottom
+                            if self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1] {
+                                if displace.y.abs() > new_displace.y.abs() {
+                                    new_displace.y = displace.y;
+                                }
+                            // touching at either left or right
+                            } else {
+                                if displace.x.abs() > new_displace.x.abs() {
+                                    new_displace.x = displace.x;
+                                }
+                            }
                         }
-                        if displace.x == 0.0 {
+                    // already touching a corner
+                    } else {
+                        if self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1] {
+                            new_displace.y = displace.y;
                             new_displace.x = 0.0;
-                        } else {
-                            new_displace.y = displace.y;
-                        }
-                    } else if { new_displace.x != 0.0 && new_displace.y == 0.0 } || { new_displace.y != 0.0 && new_displace.x == 0.0 } {
-                        if displace.x.abs() > new_displace.x.abs() {
+                        } else if self.sides_touched[*i_swap][2] || self.sides_touched[*i_swap][3] {
                             new_displace.x = displace.x;
-                        }
-                        if displace.y.abs() > new_displace.y.abs() {
-                            new_displace.y = displace.y;
+                            new_displace.y = 0.0;
+                        } else {  // touching corners of two walls or something
+                            if displace.x.abs() > new_displace.x.abs() {
+                                new_displace.x = displace.x;
+                            }
+                            if displace.y.abs() > new_displace.y.abs() {
+                                new_displace.y = displace.y;
+                            }
                         }
                     }
                 } else {
                     self.displacements[*i_swap] = Some(displace);
                 }
+                println!("final_displacement: {:?}", self.displacements);
+                println!("");
             }
         }
         
