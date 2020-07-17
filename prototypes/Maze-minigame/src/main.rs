@@ -134,11 +134,6 @@ impl AabbCollision<CollisionID> {
         self.sides_touched.clear();
         self.displacements.resize_with(self.bodies.len(), Default::default);
         self.sides_touched.resize_with(self.bodies.len(), Default::default);
-        println!("{:?}", self.displacements);
-        println!("{:?}", self.sides_touched);
-
-
-
 
         for (i, body) in self.bodies.iter().enumerate() {
             for (j, body2) in self.bodies[i + 1..].iter().enumerate() {
@@ -210,43 +205,47 @@ impl AabbCollision<CollisionID> {
                     (old_y_center - j_center.y).abs() < half_isize_y + half_jsize_y
                 };
 
+                let mut new_sides:[bool; 5] = [false; 5];  // sides touched this iteration
+
                 if overlapped_before_x && !overlapped_before_y && self.velocities[*i_swap].y != 0.0 {
                     if self.velocities[*i_swap].y < 0.0 {
-                        self.sides_touched[*i_swap][0] = true;  // top side touched
+                        new_sides[0] = true;  // top side touched
                     } else {
-                        self.sides_touched[*i_swap][1] = true;  // bottom side touched
+                        new_sides[1] = true;  // bottom side touched
                     }
                 }
 
                 if !overlapped_before_x && overlapped_before_y && self.velocities[*i_swap].x != 0.0 {
                     if self.velocities[*i_swap].x < 0.0 {
-                        self.sides_touched[*i_swap][2] = true;  // left side touched
+                        new_sides[2] = true;  // left side touched
                     } else {
-                        self.sides_touched[*i_swap][3] = true;  // right side touched
+                        new_sides[3] = true;  // right side touched
                     }
                 }
 
                 if !overlapped_before_x && !overlapped_before_y 
                 && self.velocities[*i_swap].x != 0.0 && self.velocities[*i_swap].y != 0.0 {
-                    self.sides_touched[*i_swap][4] = true; // corner touched
+                    new_sides[4] = true; // touched diagonally :^) not necessarily at corner
                 }
 
                 let displace = {
                     // overlapped vertically
-                    if self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1] {
-                        if self.sides_touched[*i_swap][0] {
+                    if new_sides[0] || new_sides[1] {
+                        if new_sides[0] {
                             Vec3::new(0.0, max_j_y - min_i_y, 0.0)
                         } else {
                             Vec3::new(0.0, min_j_y - max_i_y, 0.0)
                         }
-                    } else if self.sides_touched[*i_swap][2] || self.sides_touched[*i_swap][3] {
-                        if self.sides_touched[*i_swap][2] {
+                    // overlapped horizontally
+                    } else if new_sides[2] || new_sides[3] {
+                        if new_sides[2] {
                             Vec3::new(max_j_x - min_i_x, 0.0, 0.0)
                         } else {
                             Vec3::new(min_j_x - max_i_x, 0.0, 0.0)
                         }
-                    } else {  // if self.sides_touched[*i_swap][4] 
-                        let new_x = {
+                    // overlapped diagonally
+                    } else if new_sides[4] {  // if new_sides[4] 
+                        let mut new_x = {
                             if self.velocities[*i_swap].x < 0.0 {
                                 max_j_x - min_i_x
                             } else if self.velocities[*i_swap].x > 0.0 {
@@ -255,29 +254,45 @@ impl AabbCollision<CollisionID> {
                                 0.0
                             }
                         };
-                        let new_y = {
+                        let mut new_y = {
                             if self.velocities[*i_swap].y < 0.0 {
                                 max_j_y - min_i_y
-                            } else if self.velocities[*i_swap].x > 0.0 {
+                            } else if self.velocities[*i_swap].y > 0.0 {
                                 min_j_x - max_i_x
                             } else {
                                 0.0
                             }
                         };
+                        if new_x.abs() < new_y.abs() {
+                            new_y = new_x;
+                        } else if new_x.abs() >= new_y.abs() {
+                            new_x = new_y;
+                        } 
                         Vec3::new(new_x, new_y, 0.0)
+                        
+                    } else {  // if everything is false because vx and vy == 0 :')
+                        Vec3::new(0.0, 0.0, 0.0)
                     }
                 };
 
-                println!("displace: {:?}", displace);
-                println!("sides_touched: {:?}", self.sides_touched[*i_swap]);
+                // update self.sides_touched
+                /* if new_sides[0] { self.sides_touched[*i_swap][0] = true; }
+                else if new_sides[1] { self.sides_touched[*i_swap][1] = true; }
+                else if new_sides[2] { self.sides_touched[*i_swap][2] = true; }
+                else if new_sides[3] { self.sides_touched[*i_swap][3] = true; }
+                else if new_sides[4] { self.sides_touched[*i_swap][4] = true; }
+                else {} */
+                // println!("displace: {:?}", displace);
+                // println!("sides_touched: {:?}", self.sides_touched[*i_swap]);
                 
                 if let Some(new_displace) = &mut self.displacements[*i_swap] {
                     // already touching one side
-                    if self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1]
-                    || self.sides_touched[*i_swap][2] || self.sides_touched[*i_swap][3] {
+                    if {self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1]
+                    || self.sides_touched[*i_swap][2] || self.sides_touched[*i_swap][3]}
+                    && !self.sides_touched[*i_swap][4] {
                         // touching at two sides
-                        if {self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1]}
-                        && {self.sides_touched[*i_swap][2] || self.sides_touched[*i_swap][3]} {
+                        
+                        if self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1] {
                             if new_displace.x == 0.0 {
                                 new_displace.x = displace.x;
                             } else {  // hopefully means `if new_displace.y == 0`
@@ -300,25 +315,31 @@ impl AabbCollision<CollisionID> {
                     // already touching a corner
                     } else {
                         if self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1] {
+                            println!("touching corner + top or bottom!");
                             new_displace.y = displace.y;
                             new_displace.x = 0.0;
+                            println!("new displace: {:?}", new_displace);
                         } else if self.sides_touched[*i_swap][2] || self.sides_touched[*i_swap][3] {
+                            println!("touching corner + left or right!");
                             new_displace.x = displace.x;
                             new_displace.y = 0.0;
+                            println!("new displace: {:?}", new_displace);
                         } else {  // touching corners of two walls or something
+                            /*
                             if displace.x.abs() > new_displace.x.abs() {
                                 new_displace.x = displace.x;
                             }
                             if displace.y.abs() > new_displace.y.abs() {
                                 new_displace.y = displace.y;
                             }
+                            println!("touching two corners?? displace: {:?}", new_displace);
+                            */
                         }
                     }
                 } else {
                     self.displacements[*i_swap] = Some(displace);
                 }
-                println!("final_displacement: {:?}", self.displacements);
-                println!("");
+
             }
         }
         
@@ -352,6 +373,7 @@ impl AabbCollision<CollisionID> {
     }
 
 }
+
 
 struct MazeResources {
     score: u8,
