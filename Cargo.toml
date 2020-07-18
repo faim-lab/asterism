@@ -1,8 +1,5 @@
 [workspace]
 
 members = [
-    "prototypes/paddles",
-    "prototypes/jumper",
-    "prototypes/quest",
-    "prototypes/Maze-minigame"
+    "prototypes/*"
 ]

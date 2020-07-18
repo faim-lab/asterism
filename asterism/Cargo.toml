@@ -1,0 +1,13 @@
+[package]
+name = "asterism"
+description = "operationalizing operational logics one constellation at a time"
+version = "0.1.0"
+authors = ["Abigail Garner", "Carl Bell", "Julie Ye", "Cynthia Li", "Joe Osborn"]
+edition = "2018"
+
+[dependencies]
+ultraviolet = "0.4.6"
+winit = "0.22.0"
+winit_input_helper = "0.7.0"
+
+

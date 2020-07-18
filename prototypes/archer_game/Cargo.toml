@@ -1,0 +1,19 @@
+[package]
+name = "archer_game"
+version = "0.1.0"
+authors = ["Abigail Garner <argb2018@mymail.pomona.edu>, Carl Bell <cdba02019@mymail.pomona.edu>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+env_logger = "0.7.1"
+log = { version = "0.4.8", features = [ "release_max_level_warn" ] }
+winit_input_helper = "0.6.0"
+image = "0.22"
+winit = "0.20"
+wgpu = "0.5.0"
+futures = "0.3.4"
+shaderc = "0.6"
+bytemuck = "1.2.0"
+anyhow = "1.0"
+libmath = "0.2.1"
