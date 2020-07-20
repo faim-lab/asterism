@@ -8,7 +8,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, geometry::Aabb};
-use asterism::{Resources, resources::Transaction, AabbCollision, PointPhysics, control::*};
+use asterism::{Resources, resources::Transaction, AabbCollision, PointPhysics, WinitKeyboardControl};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -17,17 +17,18 @@ const PADDLE_HEIGHT: u8 = 48;
 const PADDLE_WIDTH: u8 = 8;
 const BALL_SIZE: u8 = 8;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum ActionID {
-    Move(Player),
+    MoveUp(Player),
+    MoveDown(Player),
     Serve(Player),
 }
 
 impl Default for ActionID {
-    fn default() -> Self { Self::Move(Player::P1) }
+    fn default() -> Self { Self::MoveDown(Player::P1) }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum CollisionID {
     Paddle(Player),
     Ball,
@@ -57,41 +58,30 @@ impl Logics {
         Self {
             control: {
                 let mut control = WinitKeyboardControl::new();
-                control.mapping.push(
-                    InputMap {
-                        inputs: vec![(KeyInput::Pair(VirtualKeyCode::Q, VirtualKeyCode::A),
-                                    InputState::On),
-                                    (KeyInput::Single(VirtualKeyCode::W),
-                                     InputState::Pressed)
-                        ],
-                        actions: vec![Action {
-                            id: ActionID::Move(Player::P1),
-                            action_type: ActionType::Axis(-1.0, 1.0)
-                        },
-                        Action {
-                            id: ActionID::Serve(Player::P1),
-                            action_type: ActionType::Instant(1.0)
-                        }],
-                        is_valid: vec![false; 2],
-                    }
+                control.add_key_map(0,
+                    VirtualKeyCode::Q,
+                    ActionID::MoveUp(Player::P1),
                 );
-                control.mapping.push(
-                    InputMap {
-                        inputs: vec![(KeyInput::Pair(VirtualKeyCode::O, VirtualKeyCode::L),
-                                    InputState::On),
-                                    (KeyInput::Single(VirtualKeyCode::I),
-                                     InputState::Pressed)
-                        ],
-                        actions: vec![Action {
-                            id: ActionID::Move(Player::P2),
-                            action_type: ActionType::Axis(-1.0, 1.0)
-                        }, 
-                        Action {
-                            id: ActionID::Serve(Player::P2),
-                            action_type: ActionType::Instant(1.0)
-                        }],
-                        is_valid: vec![false; 2],
-                    });
+                control.add_key_map(0,
+                    VirtualKeyCode::A,
+                    ActionID::MoveDown(Player::P1),
+                );
+                control.add_key_map(0,
+                    VirtualKeyCode::W,
+                    ActionID::Serve(Player::P1),
+                );
+                control.add_key_map(1,
+                    VirtualKeyCode::O,
+                    ActionID::MoveUp(Player::P2),
+                );
+                control.add_key_map(1,
+                    VirtualKeyCode::L,
+                    ActionID::MoveDown(Player::P2),
+                );
+                control.add_key_map(1,
+                    VirtualKeyCode::I,
+                    ActionID::Serve(Player::P2),
+                );
                 control
             },
             physics: PointPhysics::new(),
@@ -274,17 +264,15 @@ impl World {
         self.unproject_resources(&logics.resources);
 
         for (completed, item_types) in logics.resources.completed.iter() {
-            if let Some(types) = item_types {
-                if *completed {
-                    for item_type in types {
-                        match item_type {
-                            PoolID::Points(player) => {
-                                match player {
-                                    Player::P1 => print!("p1"),
-                                    Player::P2 => print!("p2")
-                                }
-                                println!(" scores! p1: {}, p2: {}", self.score.0, self.score.1);
+            if *completed {
+                for item_type in item_types {
+                    match item_type {
+                        PoolID::Points(player) => {
+                            match player {
+                                Player::P1 => print!("p1"),
+                                Player::P2 => print!("p2")
                             }
+                            println!(" scores! p1: {}, p2: {}", self.score.0, self.score.1);
                         }
                     }
                 }
@@ -293,31 +281,64 @@ impl World {
     }
 
     fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
+        if let Some(action) = control.mapping[0].get_mut(&ActionID::MoveUp(Player::P1)) {
+            action.is_valid = true;
+        }
+        if let Some(action) = control.mapping[0].get_mut(&ActionID::MoveDown(Player::P1)) {
+            action.is_valid = true;
+        }
+        if let Some(action) = control.mapping[1].get_mut(&ActionID::MoveUp(Player::P2)) {
+            action.is_valid = true;
+        }
+        if let Some(action) = control.mapping[1].get_mut(&ActionID::MoveDown(Player::P2)) {
+            action.is_valid = true;
+        }
+ 
         if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
             match self.serving {
-                Some(Player::P1) => control.mapping[0].is_valid[1] = true,
-                Some(Player::P2) => control.mapping[1].is_valid[1] = true,
+                Some(Player::P1) =>
+                    if let Some(action) = control.mapping[0].get_mut(&ActionID::Serve(Player::P1)) {
+                        action.is_valid = true;
+                    }
+                Some(Player::P2) =>
+                    if let Some(action) = control.mapping[1].get_mut(&ActionID::Serve(Player::P2)) {
+                        action.is_valid = true;
+                    }
                 None => {}
             }
         } else {
-            control.mapping[0].is_valid[1] = false;
-            control.mapping[1].is_valid[1] = false;
+            if let Some(action) = control.mapping[0].get_mut(&ActionID::Serve(Player::P1)) {
+                action.is_valid = false;
+            }
+            if let Some(action) = control.mapping[0].get_mut(&ActionID::Serve(Player::P1)) {
+                action.is_valid = false;
+            }
         }
     }
 
     fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
-        self.paddles.0 = ((self.paddles.0 as i16 + control.get_action(ActionID::Move(Player::P1)).unwrap() as i16).max(0) as u8).min(255 - PADDLE_HEIGHT);
-        self.paddles.1 = ((self.paddles.1 as i16 + control.get_action(ActionID::Move(Player::P2)).unwrap() as i16).max(0) as u8).min(255 - PADDLE_HEIGHT);
+        self.paddles.0 = ((self.paddles.0 as i16 -
+                control.get_action(ActionID::MoveUp(Player::P1)).unwrap().0 as i16 +
+                control.get_action(ActionID::MoveDown(Player::P1)).unwrap().0 as i16)
+            .max(0) as u8).min(255 - PADDLE_HEIGHT);
+        self.paddles.1 = ((self.paddles.1 as i16 -
+                control.get_action(ActionID::MoveUp(Player::P2)).unwrap().0 as i16 +
+                control.get_action(ActionID::MoveDown(Player::P2)).unwrap().0 as i16)
+            .max(0) as u8).min(255 - PADDLE_HEIGHT);
         if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
             match self.serving {
                 Some(Player::P1) => {
-                    if control.get_action(ActionID::Serve(Player::P1)).unwrap() == 1.0 {
-                        self.ball_vel = Vec2::new(1.0, 1.0);
+                    if let Some(action) = control.get_action(ActionID::Serve(Player::P1)) {
+                        if action.0 == 1.0 && action.1 != 0.0 {
+                            self.ball_vel = Vec2::new(1.0, 1.0);
+                        }
                     }
                 }
                 Some(Player::P2) => {
-                    if control.get_action(ActionID::Serve(Player::P2)).unwrap() == 1.0 {
-                        self.ball_vel = Vec2::new(-1.0, -1.0);
+                    if let Some(action) = control.get_action(ActionID::Serve(Player::P2)) {
+                        if action.0 == 1.0 && action.1 != 0.0 {
+                            self.ball_vel = Vec2::new(-1.0, -1.0);
+                        }
                     }
                 }
                 None => {}
@@ -354,13 +375,12 @@ impl World {
         collision.add_collision_entity(
             PADDLE_OFF_X as f32, self.paddles.0 as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
-            Vec2::new(0.0, control.values[0][0] + control.values[0][1]),
+            Vec2::new(0.0, control.get_action(ActionID::MoveUp(Player::P1)).unwrap().0 + control.get_action(ActionID::MoveDown(Player::P1)).unwrap().0),
             true, true, CollisionID::Paddle(Player::P1));
         collision.add_collision_entity(
             (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32, self.paddles.1 as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
-
-            Vec2::new(0.0, control.values[1][0] + control.values[1][1]),
+            Vec2::new(0.0, control.get_action(ActionID::MoveUp(Player::P2)).unwrap().0 + control.get_action(ActionID::MoveDown(Player::P2)).unwrap().0),
             true, true, CollisionID::Paddle(Player::P2));
     }
 
@@ -399,16 +419,14 @@ impl World {
 
     fn unproject_resources(&mut self, resources: &Resources<PoolID>) {
         for (completed, item_types) in resources.completed.iter() {
-            if let Some(types) = item_types {
-                if *completed {
-                    for item_type in types {
-                        let value = resources.get_value_by_itemtype(item_type).min(255.0) as u8;
-                        match item_type {
-                            PoolID::Points(player) =>  {
-                                match player {
-                                    Player::P1 => self.score.0 = value,
-                                    Player::P2 => self.score.1 = value,
-                                }
+            if *completed {
+                for item_type in item_types {
+                    let value = resources.get_value_by_itemtype(item_type).min(255.0) as u8;
+                    match item_type {
+                        PoolID::Points(player) =>  {
+                            match player {
+                                Player::P1 => self.score.0 = value,
+                                Player::P2 => self.score.1 = value,
                             }
                         }
                     }
