@@ -36,6 +36,7 @@ struct World {
     score: u8,
     walls: Vec<Wall>,
     items: Vec<Collectible>,
+    // todo: portals: Vec<Portal>,
 }
 
 /// Walls of the maze
@@ -63,6 +64,8 @@ impl Collectible {
         Self {x: x, y: y}
     }
 }
+
+// todo: add struct for portal
 
 struct MazePhysics {
     pos: Vec2,
@@ -108,6 +111,7 @@ enum CollisionID {
     Player,
     Wall,
     Item,
+    Portal,
 }
 
 impl Default for CollisionID {
@@ -269,21 +273,19 @@ impl AabbCollision<CollisionID> {
                             new_x =  {
                                 if self.velocities[*i_swap].x > 0.0 { -1.0 * new_y.abs() } else { new_y.abs() }
                             };
-                        } else {}
+                        }
                         Vec3::new(new_x, new_y, 0.0)
                         
-                    } else {  // if everything is false because vx and vy == 0 :')
+                    } else {  // if everything is false because vx and vy == 0 but still overlapping...
                         Vec3::new(0.0, 0.0, 0.0)
                     }
                 };
 
-                // update self.sides_touched
                 if new_sides[0] { self.sides_touched[*i_swap][0] = true; }
                 else if new_sides[1] { self.sides_touched[*i_swap][1] = true; }
                 else if new_sides[2] { self.sides_touched[*i_swap][2] = true; }
                 else if new_sides[3] { self.sides_touched[*i_swap][3] = true; }
                 else if new_sides[4] { self.sides_touched[*i_swap][4] = true; }
-                else {}
                 
                 if let Some(new_displace) = &mut self.displacements[*i_swap] {
                     // already touching at least one side and no corners
@@ -299,14 +301,12 @@ impl AabbCollision<CollisionID> {
                             if displace.y.abs() > new_displace.y.abs() {
                                 new_displace.y = displace.y;
                             }
-                        // touching one side (I think)
+                        // touching one side
                         } else {
-                            // touching at either top or bottom
                             if self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1] {
                                 if displace.y.abs() > new_displace.y.abs() {
                                     new_displace.y = displace.y;
                                 }
-                            // touching at either left or right
                             } else {
                                 if displace.x.abs() > new_displace.x.abs() {
                                     new_displace.x = displace.x;
