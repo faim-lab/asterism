@@ -8,7 +8,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, geometry::Aabb};
-use asterism::{Resources, resources::Transaction, AabbCollision, PointPhysics, WinitKeyboardControl};
+use asterism::{QueuedResources, resources::Transaction, AabbCollision, PointPhysics, WinitKeyboardControl};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -50,7 +50,7 @@ struct Logics {
     control: WinitKeyboardControl<ActionID>,
     physics: PointPhysics,
     collision: AabbCollision<CollisionID>,
-    resources: Resources<PoolID>,
+    resources: QueuedResources<PoolID>,
 }
 
 impl Logics {
@@ -106,7 +106,7 @@ impl Logics {
                 collision
             },
             resources: {
-                let mut resources = Resources::new();
+                let mut resources = QueuedResources::new();
                 resources.items.insert( PoolID::Points(Player::P1), 0.0 );
                 resources.items.insert( PoolID::Points(Player::P2), 0.0 );
                 resources
@@ -408,7 +408,7 @@ impl World {
         }
     }
 
-    fn project_resources(&self, resources: &mut Resources<PoolID>) {
+    fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
         if !resources.items.contains_key(&PoolID::Points(Player::P1)) {
             resources.items.insert(PoolID::Points(Player::P1), 0.0);
         }
@@ -417,7 +417,7 @@ impl World {
         }
     }
 
-    fn unproject_resources(&mut self, resources: &Resources<PoolID>) {
+    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
         for (completed, item_types) in resources.completed.iter() {
             if *completed {
                 for item_type in item_types {

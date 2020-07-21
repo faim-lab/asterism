@@ -1,4 +1,4 @@
-use asterism::{Resources, resources::Transaction, Linking};
+use asterism::{QueuedResources, resources::Transaction, Linking};
 use std::io::{self, prelude::*, BufReader, Error, ErrorKind};
 use std::fs::File;
 use rand::prelude::*;
@@ -20,7 +20,7 @@ struct World {
 
 
 struct Logics {
-    resources: Resources<PoolID>,
+    resources: QueuedResources<PoolID>,
     linking: Linking,
 }
 
@@ -28,7 +28,7 @@ impl Logics {
     fn new() -> Self {
         Self {
             resources: {
-                let mut resources = Resources::new();
+                let mut resources = QueuedResources::new();
                 resources.items.insert( PoolID::Energy, 49.0 );
                 resources.items.insert( PoolID::NumSleep, 0.0 );
                 resources
@@ -153,7 +153,7 @@ impl World {
         }
     }
 
-    fn project_resources(&self, resources: &mut Resources<PoolID>) {
+    fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
         if !resources.items.contains_key(&PoolID::NumSleep) {
             resources.items.insert(PoolID::NumSleep, 0.0);
         }
@@ -162,7 +162,7 @@ impl World {
         }
     }
 
-    fn unproject_resources(&mut self, resources: &Resources<PoolID>) {
+    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
         for (completed, item_types) in resources.completed.iter() {
             if *completed {
                 for item_type in item_types {
@@ -186,7 +186,7 @@ impl World {
         self.energy = 49;
         self.numsleep = 0;
         logics.resources = {
-            let mut resources = Resources::new();
+            let mut resources = QueuedResources::new();
             resources.items.insert( PoolID::Energy, 49.0 );
             resources.items.insert( PoolID::NumSleep, 0.0 );
             resources

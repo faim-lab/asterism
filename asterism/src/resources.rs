@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
-pub struct Resources<ID: Copy + Ord> {
+pub struct QueuedResources<ID: Copy + Ord> {
     pub items: BTreeMap<ID, f32>,
     pub transactions: Vec<Vec<(ID, Transaction)>>,
     pub completed: Vec<(bool, Vec<ID>)>
 }
 
-impl<ID: Copy + Ord> Resources<ID> {
+impl<ID: Copy + Ord> QueuedResources<ID> {
     pub fn new() -> Self {
         Self {
             items: BTreeMap::new(),
