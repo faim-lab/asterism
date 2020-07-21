@@ -3,6 +3,8 @@ mod vector;
 use vector::Vector;
 mod make_square;
 use make_square::render_thing;
+use ultraviolet::{Vec2, geometry::Aabb};
+use asterism::{Resources, resources::Transaction, AabbCollision, PointPhysics, control::*};
 
 mod level1;
 
@@ -15,6 +17,118 @@ use winit::{
 // NOTE: much of the code below is from Carl; he gave me permission to use it.
 // I've been spending a lot of time trying to completely understand how it works,
 // what I need to do to make the game I have in mind and how I could possibly improve on it.
+
+struct World {
+    archer: (u8, u8), //(x, y)
+    arrow: (u8, u8, u8, bool), //(x, y, arrow number, if it's "live")
+    goblin: (u8, u8, u8), //(x, y, goblin number)
+    //I don't really know how I'm going to get the game to recognize
+    //these or their collisionIDs as their respective parts
+}
+
+enum ActionID {
+    MoveUp,
+    MoveDown,
+    MoveLeft,
+    MoveRight,
+    Fire(Arrow),
+}
+
+impl Default for ActionID {
+    fn default() -> Self { Self::MoveX(Archer)}
+}
+
+enum CollisionID {
+    Archer,
+    Arrow(ArrowNum),
+    Goblin(GoblinNum),
+    TopWall,
+    BottomWall,
+    LeftWall,
+    RightWall,
+}
+
+enum ArrowNum {
+    A1,
+    A2,
+    A3,
+    A4,
+    A5,
+}
+
+//do I need a default arrow?
+
+enum GoblinNum {
+    G1,
+    //who knows how many goblins there will be? I certainly don't
+}
+
+impl Default for CollisionID {
+    fn default() -> Self { Self::Archer }
+}
+
+struct Logics {
+    control: WinitKeyboardControl<ActionID>,
+    physics: PointPhysics,
+    collision: AabbCollision<CollisionID>,
+}
+
+impl Logics {
+    fn new() -> Self {
+        Self {
+            control: {
+                let mut control = WinitKeyboardControl::new();
+                control.add_key_map(0,
+                    VirtualKeyCode::W,
+                    ActionID::MoveUp,
+                );
+                control.add_key_map(0,
+                    VirtualKeyCode::S,
+                    ActionID::MoveDown,
+                );
+                control.add_key_map(0,
+                    VirtualKeyCode::A,
+                    ActionID::MoveLeft,
+                );
+                control.add_key_map(0,
+                    VirtualKeyCode::D,
+                    ActionID::MoveRight,
+                );
+                control.add_key_map(0,
+                    VirtualKeyCode::Space,
+                    // this probably needs some work, but I have the basic concept here
+                    for i in ArrowNum {
+                        if self.arrow.3 == false{
+                            ActionID::Fire(i)
+                        }
+                    }
+                );
+                control
+            },
+            physics: PointPhysics::new(),
+            collision: {
+                let mut collision = AabbCollision::new();
+                collision.add_collision_entity(-1.0, 0.0,
+                    1.o, height as f32,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::LeftWall);
+                collision.add_collision_entity(WIDTH as f32, 0.0,
+                    1.0, height as f32,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::RightWall);
+                collision.add_collision_entity(0.0, -1.0,
+                    WIDTH as f32, 1.0,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::TopWall);
+                collision.add_collision_entity(0.0, HEIGHT as f32,
+                    WIDTH as f32, 1.0,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::BottomWall);
+                collision 
+            },
+        }
+    }
+}
 
 pub struct Game {
     view_area: ViewArea,
@@ -45,7 +159,6 @@ impl Game {
             };
             game.add_things(level1::make_level_1());
             game
-            // println!("{:?}", game.renderable_components);
     }
     pub fn add_things(&mut self, new_things_list: Vec<((f32, f32), (Vector, f32, u32))>) {
             for thing in new_things_list.into_iter() {
@@ -89,12 +202,100 @@ impl Game {
     }
 }
 
+impl World {
+    fn new() -> Self {
+        // what do I put here?
+    }
+    fn update (&mut self, logivs: &mut Logics, input: &WinitInputHelper) {
+        self.project_control(&mut logics.control);
+        logics.control.update(input);
+        self.unproject_contrp;(&logics.control);
+
+        self.project_physics(&mut logics.physics);
+        logics.physics.update();
+        self.unproject_physics(&logics.physics);
+
+        self.project_collision(&mut logics.collision, &logics.control);
+        logics.collision.update();
+        self.unproject_collision(&logics.collision);
+
+        //INCOMPLETE
+        for contact in logics.collision.contacts.iter() {
+            match (logics.collision.metadata[contact.0].id,
+                logics.collision.metadata[contact.1].id) {
+                    (CollisionID::LeftWall, CollisionID::Archer) => {
+                        //
+                    }
+                    (CollisionID::RightWall, CollisionID::Archer) => {
+                        //
+                    }
+                    (CollisionID::TopWall, CollisionID::Archer) => {
+                        //
+                    }
+                    (CollisionID::BottomWall, CollisionID::Archer) => {
+                        //
+                    }
+                }
+        }
+    }
+    fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
+        //control.mapping[].is_valid[] = true?
+    }
+
+    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
+        //is this where the controls go?
+        self.archer.0 = (self.archer.0 as i16 + control.get_action(ActionID::MoveLeft).unwrap() as i16);
+        self.archer.0 = (self.archer.0 as i16 + control.get_action(ActionID::MoveRight).unwrap() as i16);
+        self.archer.1 = (self.archer.1 as i16 + control.get_action(ActionID::MoveUp).unwrap() as i16);
+        self.archer.1 = (self.archer.1 as i16 + control.get_action(ActionID::MoveDown).unwrap() as i16);
+    }
+
+    //the million dollar question is: does archer game really need physics?
+
+    fn project_physics(&self, physics: &mut PointPhysics) {
+        physics.positions.resize_with(1, Vec2::default);
+        physics.velocities.resize_with(1, Vec2::default);
+        physics.accelerations.resize_with(1, Vec2::default);
+        physics.positions[0].x = self.archer.0 as f32 // + self.ball_err.x;
+        physics.positions[0].y = self.archer.1 as f32 // + self.ball_err.y;
+        // physics.velocities[0] = self.ball_vel;
+        physics.accelerations[0] = Vec2::new(0.0, 0.0);
+    }
+
+    fn unproject_physics(&mut self, physics: &PointPhysics) {
+        self.archer.0 = physics.positions[0].x.trunc().max(0.0).min((WIDTH - BALL_SIZE) as f32) as u8;
+        self.archer.1 = physics.positions[0].y.trunc().max(0.0).min((HEIGHT - BALL_SIZE) as f32) as u8;
+        // self.ball_err = physics.positions[0] - Vec2::new(self.ball.0 as f32, self.ball.1 as f32);
+        // self.ball_vel = physics.velocities[0];
+    }
+
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>, control: &WinitKeyboardControl<ActionID>) {
+        collision.bodies.resize_with(4, Aabb::default);
+        collision.velocities.resize_with(4, Default::default);
+        collision.metadata.resize_with(4, Default::default);
+        collision.add_collision_entity(
+            //add archer collision entity once I figure out how to move the collision entity itself
+        )
+        collision.add_collision_entity(
+            //add collision entities for each of the arrows
+        )
+        collision.add_collision_entity(
+            //add goblin collision entities when goblins become a part of the game    
+        );
+    }
+
+    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
+        self.archer.0 = collision.bodies[4].min.x.trunc() as u8;
+        self.archer.1 = collision.bodies[4].min.y.trunc() as u8;
+        //what does this do?
+    }
+}
+
 
 
 //---------- view area ----------
 
 struct ViewArea {
-    // location of the center of the view
     position: Vector,
 }
 
@@ -376,6 +577,8 @@ impl RenderableComponentVec {
             for i in 0..self.parts.len() {
                     self.parts[i].update_coordinates(new_coords[i])
             }
+            let new_coords = projectile_component_vec.get_render_positions(view_area);
+            self.parts[257].update_coordinates(new_coords[257])
     }
     fn render_all(&self) -> (Vec<Vertex>, Vec<u16>) {
             let mut indices_vec: Vec<u16> = Vec::new();
@@ -765,6 +968,9 @@ fn main() {
     use futures::executor::block_on;
 
     let mut state = block_on(State::new(&window));
+
+    let mut world = World::new();
+    let mut logics = Logics::new();
 
     event_loop.run(move |event, _, control_flow| {
         match event {
