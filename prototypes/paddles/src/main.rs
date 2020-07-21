@@ -281,64 +281,44 @@ impl World {
     }
 
     fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
-        if let Some(action) = control.mapping[0].get_mut(&ActionID::MoveUp(Player::P1)) {
-            action.is_valid = true;
-        }
-        if let Some(action) = control.mapping[0].get_mut(&ActionID::MoveDown(Player::P1)) {
-            action.is_valid = true;
-        }
-        if let Some(action) = control.mapping[1].get_mut(&ActionID::MoveUp(Player::P2)) {
-            action.is_valid = true;
-        }
-        if let Some(action) = control.mapping[1].get_mut(&ActionID::MoveDown(Player::P2)) {
-            action.is_valid = true;
-        }
- 
+        control.mapping[0][0].is_valid = true;
+        control.mapping[0][1].is_valid = true;
+        control.mapping[1][0].is_valid = true;
+        control.mapping[1][1].is_valid = true;
+
         if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
             match self.serving {
-                Some(Player::P1) =>
-                    if let Some(action) = control.mapping[0].get_mut(&ActionID::Serve(Player::P1)) {
-                        action.is_valid = true;
-                    }
-                Some(Player::P2) =>
-                    if let Some(action) = control.mapping[1].get_mut(&ActionID::Serve(Player::P2)) {
-                        action.is_valid = true;
-                    }
+                Some(Player::P1) => control.mapping[0][2].is_valid = true,
+                Some(Player::P2) => control.mapping[1][2].is_valid = true,
                 None => {}
             }
         } else {
-            if let Some(action) = control.mapping[0].get_mut(&ActionID::Serve(Player::P1)) {
-                action.is_valid = false;
-            }
-            if let Some(action) = control.mapping[0].get_mut(&ActionID::Serve(Player::P1)) {
-                action.is_valid = false;
-            }
+            control.mapping[0][2].is_valid = false;
+            control.mapping[1][2].is_valid = false;
         }
     }
 
     fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
         self.paddles.0 = ((self.paddles.0 as i16 -
-                control.get_action(ActionID::MoveUp(Player::P1)).unwrap().0 as i16 +
-                control.get_action(ActionID::MoveDown(Player::P1)).unwrap().0 as i16)
+                control.values[0][0].value as i16 +
+                control.values[0][1].value as i16)
             .max(0) as u8).min(255 - PADDLE_HEIGHT);
         self.paddles.1 = ((self.paddles.1 as i16 -
-                control.get_action(ActionID::MoveUp(Player::P2)).unwrap().0 as i16 +
-                control.get_action(ActionID::MoveDown(Player::P2)).unwrap().0 as i16)
+                control.values[1][0].value as i16 +
+                control.values[1][1].value as i16)
             .max(0) as u8).min(255 - PADDLE_HEIGHT);
         if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
             match self.serving {
                 Some(Player::P1) => {
-                    if let Some(action) = control.get_action(ActionID::Serve(Player::P1)) {
-                        if action.0 == 1.0 && action.1 != 0.0 {
-                            self.ball_vel = Vec2::new(1.0, 1.0);
-                        }
+                    let values = &control.values[0][2];
+                    if values.changed_by == 1.0 && values.value != 0.0 {
+                        self.ball_vel = Vec2::new(1.0, 1.0);
                     }
                 }
                 Some(Player::P2) => {
-                    if let Some(action) = control.get_action(ActionID::Serve(Player::P2)) {
-                        if action.0 == 1.0 && action.1 != 0.0 {
-                            self.ball_vel = Vec2::new(-1.0, -1.0);
-                        }
+                    let values = &control.values[1][2];
+                    if values.changed_by == 1.0 && values.value != 0.0 {
+                        self.ball_vel = Vec2::new(-1.0, -1.0);
                     }
                 }
                 None => {}
@@ -375,12 +355,12 @@ impl World {
         collision.add_collision_entity(
             PADDLE_OFF_X as f32, self.paddles.0 as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
-            Vec2::new(0.0, control.get_action(ActionID::MoveUp(Player::P1)).unwrap().0 + control.get_action(ActionID::MoveDown(Player::P1)).unwrap().0),
-            true, true, CollisionID::Paddle(Player::P1));
+            Vec2::new(0.0, -control.values[0][0].value + control.values[0][1].value),
+                true, true, CollisionID::Paddle(Player::P1));
         collision.add_collision_entity(
             (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32, self.paddles.1 as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
-            Vec2::new(0.0, control.get_action(ActionID::MoveUp(Player::P2)).unwrap().0 + control.get_action(ActionID::MoveDown(Player::P2)).unwrap().0),
+            Vec2::new(0.0, -control.values[1][0].value + control.values[1][1].value),
             true, true, CollisionID::Paddle(Player::P2));
     }
 

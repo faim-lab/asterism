@@ -220,32 +220,21 @@ impl World {
     }
 
     fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>, entity_state: &FlatEntityState<StateID>) {
-        if let Some(action) = control.mapping[0].get_mut(&ActionID::MoveLeft(Player::P1)) {
-            action.is_valid = true;
-        }
-        if let Some(action) = control.mapping[0].get_mut(&ActionID::MoveRight(Player::P1)) {
-            action.is_valid = true;
-        }
-        if let Some(action) = control.mapping[0].get_mut(&ActionID::Jump(Player::P1)) {
-            action.is_valid = match entity_state.get_id_for_entity(1) {
-                StateID::PlayerGrounded | StateID::PlayerWalk => true,
-                _ => false,
-            }
+        control.mapping[0][0].is_valid = true;
+        control.mapping[0][1].is_valid = true;
+        control.mapping[0][2].is_valid = match entity_state.get_id_for_entity(1) {
+            StateID::PlayerGrounded | StateID::PlayerWalk => true,
+            _ => false,
         }
     }
 
     fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>, entity_state: &FlatEntityState<StateID>) {
-        if let Some(left) = control.get_action(ActionID::MoveLeft(Player::P1)) {
-            if let Some(right) = control.get_action(ActionID::MoveRight(Player::P1)) {
-                self.player.vel.x = right.0 - left.0;
-            }
-        }
+        self.player.vel.x = -control.values[0][0].value + control.values[0][1].value;
         match entity_state.get_id_for_entity(1) {
             StateID::PlayerGrounded | StateID::PlayerWalk => {
-                if let Some(jump) = control.get_action(ActionID::Jump(Player::P1)) {
-                    if jump.1 > 0.0 {
-                        self.player.vel.y = -jump.0;
-                    }
+                let values = &control.values[0][2];
+                if values.changed_by > 0.0 {
+                    self.player.vel.y = -values.value;
                 }
             }
             _ => {}
