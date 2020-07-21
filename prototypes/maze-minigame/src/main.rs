@@ -14,9 +14,11 @@ const WIDTH: u32 = 320;
 const HEIGHT: u32 = 240;
 const BOX_SIZE: i16 = 20;
 
-/// Size and point worth of items
+// Size and point worth of items
 const ITEM_SIZE: i8 = 10;
 const ITEM_VAL: u8 = 1;
+// Size of portals
+const PORTAL_SIZE: i8 = 14;
 
 #[derive(PartialEq)]
 enum Direction {
@@ -36,7 +38,7 @@ struct World {
     score: u8,
     walls: Vec<Wall>,
     items: Vec<Collectible>,
-    // todo: portals: Vec<Portal>,
+    portals: Vec<Portal>,
 }
 
 /// Walls of the maze
@@ -65,7 +67,17 @@ impl Collectible {
     }
 }
 
-// todo: add struct for portal
+struct Portal {
+    x: i16,
+    y: i16,
+    // todo: would like to add color
+}
+
+impl Portal {
+    fn new(x:i16, y:i16) -> Self {
+        Self {x: x, y: y}
+    }
+}
 
 struct MazePhysics {
     pos: Vec2,
@@ -522,8 +534,8 @@ impl World {
     /// Create a new `World` instance that can draw walls, items, and player
     fn new() -> Self {
         Self {
-            x: 270,  // 58
-            y: 188,  // 8
+            x: 58,
+            y: 8,
             vx: 16,
             vy: 16,
             score: 0,
@@ -563,6 +575,11 @@ impl World {
                     Collectible::new(195, 198),
                     Collectible::new(195, 29),
                     Collectible::new(281, 198),
+                ]
+            },
+            portals: {
+                vec![
+                    Portal::new(153, 27),
                 ]
             }
         }
@@ -641,6 +658,19 @@ impl World {
                 id: CollisionID::Item,
             });
         }
+        // create collider for portals
+        for portal in &self.portals {
+            collision.bodies.push(Aabb::new(
+                Vec3::new(portal.x as f32, portal.y as f32, 0.0),
+                Vec3::new((portal.x + PORTAL_SIZE as i16) as f32, (portal.y + PORTAL_SIZE as i16) as f32, 0.0)
+            ));
+            collision.velocities.push(Vec2::new(0.0, 0.0));
+            collision.metadata.push(CollisionData {
+                solid: false,
+                fixed: true,
+                id: CollisionID::Portal,
+            })
+        }
         // create collider for player
         collision.bodies.push(Aabb::new(
             Vec3::new(self.x as f32, self.y as f32, 0.0),
@@ -666,21 +696,6 @@ impl World {
 
     fn unproject_resources(&mut self, resources: &MazeResources) {
         self.score = resources.score;
-    }
-
-    /// Check if box is touching or overlapping a pickup - only can check for one at a time, not multiple
-    fn touch_pickup(&self) -> Option<usize> {
-        for i in 0..self.items.len() {
-            if self.x < self.items[i].x + ITEM_SIZE as i16
-            && self.x + BOX_SIZE >= self.items[i].x
-            && self.y < self.items[i].y + ITEM_SIZE as i16
-            && self.y + BOX_SIZE >= self.items[i].y {
-                if i < self.items.len() {
-                    return Some(i);
-                }
-            }
-        }
-        None
     }
 
     /// Draw the `World` state to the frame buffer.
@@ -722,6 +737,18 @@ impl World {
             return false;
         }
 
+        let is_portal = |x, y| -> bool {
+            for a_portal in self.portals.iter() {
+                if x >= a_portal.x
+                && x < a_portal.x + PORTAL_SIZE as i16
+                && y >= a_portal.y
+                && y < a_portal.y + PORTAL_SIZE as i16 {
+                    return true;
+                }
+            }
+            return false;
+        };
+
         // draw background first
         for pixel in frame.chunks_exact_mut(4) {
             pixel.copy_from_slice(&[0x48, 0xb2, 0xe8, 0xff]);
@@ -737,6 +764,8 @@ impl World {
                 [0x5e, 0x48, 0xe8, 0xff]
             } else if is_item(x, y, items) {
                 [0x95, 0xed, 0xc1, 0xff]
+            } else if is_portal(x, y) {
+                [0xfc, 0x8c, 0x03, 0xff]
             } else {
                 continue;
             };
