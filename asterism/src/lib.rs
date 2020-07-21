@@ -10,5 +10,5 @@ pub use control::WinitKeyboardControl;
 pub use entity_state::FlatEntityState;
 pub use linking::Linking;
 pub use physics::PointPhysics;
-pub use resources::Resources;
+pub use resources::QueuedResources;
 

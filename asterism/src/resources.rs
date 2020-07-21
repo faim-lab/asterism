@@ -51,7 +51,7 @@ impl<ID: Copy + Ord> QueuedResources<ID> {
             let value = self.items.get(item_type);
             match transaction {
                 Transaction::Change(amt) => {
-                    if value.unwrap() + *amt as f32 > 0.0 {
+                    if value.unwrap() + *amt as f32 >= 0.0 {
                         true
                     } else { false }
                 }
