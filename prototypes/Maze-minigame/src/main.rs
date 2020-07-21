@@ -1,35 +1,22 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
+#![allow(dead_code)]
 
-use log::error;
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
+use ultraviolet::{Vec2, Vec3, geometry::Aabb};
 
 const WIDTH: u32 = 320;
 const HEIGHT: u32 = 240;
 const BOX_SIZE: i16 = 20;
 
-
-
-/// Representation of the application state. In this example, a box will bounce around the screen.
-struct World {
-    box_x: i16,
-    box_y: i16,
-    velocity_x: i16,
-    velocity_y: i16,
-}
-
-/// Walls of the maze
-struct Wall {
-    wall_x: i16,
-    wall_y: i16,
-    wall_width: i16,
-    wall_height: i16,
-}
+/// Size and point worth of items
+const ITEM_SIZE: i8 = 10;
+const ITEM_VAL: u8 = 1;
 
 #[derive(PartialEq)]
 enum Direction {
@@ -40,83 +27,439 @@ enum Direction {
     Still,
 }
 
+/// Representation of the application state
+struct World {
+    x: i16,
+    y: i16,
+    vx: i16,
+    vy: i16,
+    score: u8,
+    walls: Vec<Wall>,
+    items: Vec<Collectible>,
+    // todo: portals: Vec<Portal>,
+}
+
+/// Walls of the maze
+struct Wall {
+    x: i16,
+    y: i16,
+    w: i16,
+    h: i16,
+}
+
 impl Wall {
-    fn new(wall_x: i16, wall_y: i16, wall_width: i16, wall_height: i16) -> Wall {
-        Wall {wall_x: wall_x, wall_y: wall_y, wall_width: wall_width, wall_height: wall_height}
+    fn new(x: i16, y: i16, w: i16, h: i16) -> Wall {
+        Wall {x: x, y: y, w: w, h: h}
+    }
+}
+
+/// Items that can be obtained and added to score
+struct Collectible {
+    x: i16,
+    y: i16,
+}
+
+impl Collectible {
+    fn new(x:i16, y:i16) -> Self {
+        Self {x: x, y: y}
+    }
+}
+
+// todo: add struct for portal
+
+struct MazePhysics {
+    pos: Vec2,
+    vel: Vec2,
+}
+
+impl MazePhysics {
+    fn new() -> Self {
+        Self {
+            pos: Vec2::new(0.0, 0.0),
+            vel: Vec2::new(0.0, 0.0), 
+        }
     }
 
-    fn draw(&self, frame: &mut [u8]) {
-        for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-            let x = (i % WIDTH as usize) as i16;
-            let y = (i / WIDTH as usize) as i16;
+    // possibly add keyboard input as a parameter
+    fn update(&mut self) {
+        for i in 0..2 {
+            self.pos[i] += self.vel[i];
+        }
+    }
+}
 
-            if x >= self.wall_x
-                && x < self.wall_x + self.wall_width
-                && y >= self.wall_y
-                && y < self.wall_y + self.wall_height {
-                    pixel.copy_from_slice(&[0xff, 0xff, 0xff, 0xff]);
+// thanks paddles
+struct AabbCollision<ID: Copy + Eq> {
+    bodies: Vec<Aabb>,
+    velocities: Vec<Vec2>,
+    metadata: Vec<CollisionData<ID>>,
+    contacts: Vec<(usize, usize)>,
+    displacements: Vec<Option<Vec3>>,
+    // in the form of [top, bottom, left, right, some corner], where true means it collides there
+    sides_touched: Vec<[bool; 5]>,
+}
+
+#[derive(Default, Clone, Copy)]
+struct CollisionData<ID: Copy + Eq> {
+    solid: bool, // true = participates in restitution, false = no
+    fixed: bool, // collision system cannot move it
+    id: ID,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CollisionID {
+    Player,
+    Wall,
+    Item,
+    Portal,
+}
+
+impl Default for CollisionID {
+    fn default() -> Self { Self::Player }
+}
+
+impl AabbCollision<CollisionID> {
+    fn new() -> Self {
+        Self {
+            bodies: Vec::new(),
+            velocities: Vec::new(),
+            metadata: Vec::new(),
+            contacts: Vec::new(),
+            displacements: Vec::new(),
+            sides_touched: Vec::new(),
+        }
+    }
+
+    fn update(&mut self) {
+        self.contacts.clear();
+        self.displacements.clear();
+        self.sides_touched.clear();
+        self.displacements.resize_with(self.bodies.len(), Default::default);
+        self.sides_touched.resize_with(self.bodies.len(), Default::default);
+
+        for (i, body) in self.bodies.iter().enumerate() {
+            for (j, body2) in self.bodies[i + 1..].iter().enumerate() {
+                if body.intersects(body2) {
+                    self.contacts.push((i, j + i + 1));
                 }
+            }
+        }
+
+        for (i, j) in self.contacts.iter() {
+            let CollisionData { solid: i_solid, fixed: i_fixed, .. } =
+                self.metadata[*i];
+            let CollisionData { solid: j_solid, fixed: j_fixed, .. } =
+                self.metadata[*j];
+
+            if !(i_solid && j_solid) || i_fixed && j_fixed {
+                continue;
+            }
+
+            if !i_fixed && !j_fixed {
+                let Vec2 { x: vel_i_x, y: vel_i_y } = self.velocities[*i];
+                let Vec2 { x: vel_j_x, y: vel_j_y } = self.velocities[*j];
+                let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
+                    max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i];
+                let Aabb { min: Vec3 { x: min_j_x, y: min_j_y, .. },
+                    max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[*j];
+
+                let ( i_displace, j_displace ) = {
+                    let vel_i_x = vel_i_x / (vel_i_x.abs() + vel_j_x.abs());
+                    let vel_i_y = vel_i_y / (vel_i_y.abs() + vel_j_y.abs());
+                    let vel_j_x = vel_j_x / (vel_i_x.abs() + vel_j_x.abs());
+                    let vel_j_y = vel_j_y / (vel_i_y.abs() + vel_j_y.abs());
+
+                    let displacement_x = Self::get_displacement(min_i_x, max_i_x, min_j_x, max_j_x);
+                    let displacement_y = Self::get_displacement(min_i_y, max_i_y, min_j_y, max_j_y);
+
+                    ( Vec3::new(displacement_x * vel_i_x, displacement_y * vel_i_y, 0.0),
+                        Vec3::new(displacement_x * vel_j_x, displacement_y * vel_j_y, 0.0) )
+                };
+
+                self.bodies[*i].min += i_displace;
+                self.bodies[*i].max += i_displace;
+                self.bodies[*j].min += j_displace;
+                self.bodies[*j].max += j_displace;
+            } else {
+                let i_swap = if !j_fixed {j} else {i};
+                let j_swap = if !j_fixed {i} else {j};
+
+                let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
+                max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[*i_swap];
+                let Aabb { min: Vec3 { x: min_j_x, y: min_j_y, .. },
+                max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[*j_swap];
+
+                let half_isize_x = (max_i_x - min_i_x) / 2.0;
+                let half_isize_y = (max_i_y - min_i_y) / 2.0;
+                let half_jsize_x = (max_j_x - min_j_x) / 2.0;
+                let half_jsize_y = (max_j_y - min_j_y) / 2.0;
+
+                let i_center = Self::find_center(self.bodies[*i_swap]);
+                let j_center = Self::find_center(self.bodies[*j_swap]);
+
+                let overlapped_before_x = {
+                    let old_x_center = i_center.x - self.velocities[*i_swap].x;
+                    (old_x_center - j_center.x).abs() < half_isize_x + half_jsize_x
+                };
+
+                let overlapped_before_y = {
+                    let old_y_center = i_center.y - self.velocities[*i_swap].y;
+                    (old_y_center - j_center.y).abs() < half_isize_y + half_jsize_y
+                };
+
+                let mut new_sides:[bool; 5] = [false; 5];  // sides touched this iteration
+
+                if overlapped_before_x && !overlapped_before_y && self.velocities[*i_swap].y != 0.0 {
+                    if self.velocities[*i_swap].y < 0.0 {
+                        new_sides[0] = true;  // top side touched
+                    } else {
+                        new_sides[1] = true;  // bottom side touched
+                    }
+                }
+
+                if !overlapped_before_x && overlapped_before_y && self.velocities[*i_swap].x != 0.0 {
+                    if self.velocities[*i_swap].x < 0.0 {
+                        new_sides[2] = true;  // left side touched
+                    } else {
+                        new_sides[3] = true;  // right side touched
+                    }
+                }
+
+                if !overlapped_before_x && !overlapped_before_y 
+                && self.velocities[*i_swap].x != 0.0 && self.velocities[*i_swap].y != 0.0 {
+                    new_sides[4] = true; // touched diagonally :^) not necessarily at corner
+                }
+            
+                let displace = {
+                    // overlapped vertically
+                    if new_sides[0] || new_sides[1] {
+                        if new_sides[0] {
+                            Vec3::new(0.0, max_j_y - min_i_y, 0.0)
+                        } else {
+                            Vec3::new(0.0, min_j_y - max_i_y, 0.0)
+                        }
+                    // overlapped horizontally
+                    } else if new_sides[2] || new_sides[3] {
+                        if new_sides[2] {
+                            Vec3::new(max_j_x - min_i_x, 0.0, 0.0)
+                        } else {
+                            Vec3::new(min_j_x - max_i_x, 0.0, 0.0)
+                        }
+                    // overlapped diagonally
+                    } else if new_sides[4] {  // if new_sides[4] 
+                        let mut new_x = {
+                            if self.velocities[*i_swap].x < 0.0 {
+                                max_j_x - min_i_x
+                            } else if self.velocities[*i_swap].x > 0.0 {
+                                min_j_x - max_i_x
+                            } else {
+                                0.0
+                            }
+                        };
+                        let mut new_y = {
+                            if self.velocities[*i_swap].y < 0.0 {
+                                max_j_y - min_i_y
+                            } else if self.velocities[*i_swap].y > 0.0 {
+                                min_j_y - max_i_y
+                            } else {
+                                0.0
+                            }
+                        };
+                        if new_x.abs() > new_y.abs() {
+                            new_y =  {
+                                if self.velocities[*i_swap].y > 0.0 { -1.0 * new_x.abs() } else { new_x.abs() }
+                            };
+                        } else if new_y.abs() > new_x.abs() {
+                            new_x =  {
+                                if self.velocities[*i_swap].x > 0.0 { -1.0 * new_y.abs() } else { new_y.abs() }
+                            };
+                        }
+                        Vec3::new(new_x, new_y, 0.0)
+                        
+                    } else {  // if everything is false because vx and vy == 0 but still overlapping...
+                        Vec3::new(0.0, 0.0, 0.0)
+                    }
+                };
+
+                if new_sides[0] { self.sides_touched[*i_swap][0] = true; }
+                else if new_sides[1] { self.sides_touched[*i_swap][1] = true; }
+                else if new_sides[2] { self.sides_touched[*i_swap][2] = true; }
+                else if new_sides[3] { self.sides_touched[*i_swap][3] = true; }
+                else if new_sides[4] { self.sides_touched[*i_swap][4] = true; }
+                
+                if let Some(new_displace) = &mut self.displacements[*i_swap] {
+                    // already touching at least one side and no corners
+                    if {self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1]
+                    || self.sides_touched[*i_swap][2] || self.sides_touched[*i_swap][3]}
+                    && !self.sides_touched[*i_swap][4] {
+                        // touching at two different sides
+                        if {self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1]}
+                        && {self.sides_touched[*i_swap][2] || self.sides_touched[*i_swap][3]} {
+                            if displace.x.abs() > new_displace.x.abs() {
+                                new_displace.x = displace.x;
+                            } 
+                            if displace.y.abs() > new_displace.y.abs() {
+                                new_displace.y = displace.y;
+                            }
+                        // touching one side
+                        } else {
+                            if self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1] {
+                                if displace.y.abs() > new_displace.y.abs() {
+                                    new_displace.y = displace.y;
+                                }
+                            } else {
+                                if displace.x.abs() > new_displace.x.abs() {
+                                    new_displace.x = displace.x;
+                                }
+                            }
+                        }
+                    // already touching a corner
+                    } else if self.sides_touched[*i_swap][4] {
+                        if self.sides_touched[*i_swap][0] || self.sides_touched[*i_swap][1] {
+                            if displace.y.abs() > new_displace.y.abs() {
+                                new_displace.y = displace.y;
+                            }
+                            new_displace.x = 0.0;
+                        } else if self.sides_touched[*i_swap][2] || self.sides_touched[*i_swap][3] {
+                            if displace.x.abs() > new_displace.x.abs() {
+                                new_displace.x = displace.x;
+                            }
+                            new_displace.y = 0.0;
+                        } else {  // touching corner(s) only or something
+                            if displace.x.abs() > new_displace.x.abs() {
+                                new_displace.x = displace.x;
+                            }
+                            if displace.y.abs() > new_displace.y.abs() {
+                                new_displace.y = displace.y;
+                            }
+                        }
+                    }
+                } else {
+                    self.displacements[*i_swap] = Some(displace);
+                }
+            }
+        }
+        
+        for i in 0..self.displacements.len() {
+            match self.displacements[i] {
+                None => {
+                    continue;
+                }
+                _ => {
+                    self.bodies[i].min += self.displacements[i].unwrap();
+                    self.bodies[i].max += self.displacements[i].unwrap();
+                }
+            }
+        }
+    }
+
+    fn find_center(body_data: Aabb) -> Vec2 {
+        Vec2::new(
+            (body_data.min.x + body_data.max.x) / 2.0,
+            (body_data.min.y + body_data.max.y) / 2.0
+        )
+    }
+
+    fn get_displacement(min_i: f32, max_i: f32, min_j: f32, max_j: f32)
+        -> f32 {
+            if max_i - min_j < max_j - min_i {
+                max_i - min_j
+            } else {
+                max_j - min_i
+            }
+    }
+
+}
+
+struct MazeResources {
+    score: u8,
+    score_change: u8,
+    touched_item: Option<usize>,
+    // can add other things later like keys, food
+}
+
+impl MazeResources {
+    fn new() -> Self {
+        Self {
+            score: 0,
+            score_change: 0,
+            touched_item: None,
+        }
+    }
+
+    fn update(&mut self, all_items: &mut Vec<Collectible>, walls: &Vec<Wall>) {
+        self.score += self.score_change;
+        if self.touched_item != None {
+            all_items.remove(self.touched_item.unwrap() - walls.len());
+        };
+        // reset
+        self.score_change = 0;
+        self.touched_item = None;
+    }
+}
+
+struct Logics {
+    physics: MazePhysics,
+    collision: AabbCollision<CollisionID>,
+    resources: MazeResources,
+}
+
+impl Logics {
+    fn new(walls: &Vec<Wall>) -> Self {
+        Self {
+            physics: MazePhysics::new(),
+            collision: {
+                let mut collision = AabbCollision::new();
+                for wall in walls {
+                    collision.bodies.push(Aabb::new(
+                        Vec3::new(wall.x as f32, wall.y as f32, 0.0),
+                        Vec3::new((wall.x + wall.w) as f32, (wall.y + wall.h) as f32, 0.0)
+                    ));
+                    collision.velocities.push(Vec2::new(0.0, 0.0));
+                    collision.metadata.push(CollisionData {
+                        solid: true, 
+                        fixed: true, 
+                        id: CollisionID::Wall,
+                    });
+                    collision.displacements.push(None);
+                }
+                collision
+            },
+            resources: MazeResources::new(),
         }
     }
 }
 
 fn main() -> Result<(), Error> {
-    env_logger::init();
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
     let window = {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
         WindowBuilder::new()
-            .with_title("Pixels Game")
+            .with_title("maze")
             .with_inner_size(size)
             .with_min_inner_size(size)
             .build(&event_loop)
             .unwrap()
     };
     let mut hidpi_factor = window.scale_factor();
-
-    // draw horizontal walls
-    let wall_1 = Wall::new(8, 11, 43, 3);
-    let wall_2 = Wall::new(94, 11, 218, 3);
-    let wall_3 = Wall::new(94, 54, 46, 3);
-    let wall_4 = Wall::new(180, 54, 86, 3);
-    let wall_5 = Wall::new(223, 97, 43, 3);
-    let wall_6 = Wall::new(8, 140, 46, 3);
-    let wall_7 = Wall::new(266, 140, 46, 3);
-    let wall_8 = Wall::new(51, 183, 132, 3);
-    let wall_9 = Wall::new(223, 183, 43, 3);
-    let wall_10 = Wall::new(8, 226, 218, 3);
-    let wall_11 = Wall::new(266, 226, 46, 3);
-    // draw vertical walls
-    let wall_12 = Wall::new(8, 11, 3, 218);
-    let wall_13 = Wall::new(51, 54, 3, 89);
-    let wall_14 = Wall::new(94, 54, 3, 132);
-    let wall_15 = Wall::new(137, 54, 3, 89);
-    let wall_16 = Wall::new(180, 11, 3, 175);
-    let wall_17 = Wall::new(223, 97, 3, 132);
-    let wall_18 = Wall::new(309, 11, 3, 218);
-
-    let all_walls = vec![wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7, wall_8, wall_9, wall_10, wall_11, wall_12, wall_13, wall_14, wall_15, wall_16, wall_17, wall_18];
-
+    
     let mut pixels = {
         let surface = Surface::create(&window);
         let surface_texture = SurfaceTexture::new(WIDTH, HEIGHT, surface);
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
 
-    for a_wall in &all_walls {
-        a_wall.draw(pixels.get_frame());
-    }
-    
     let mut world = World::new();
+    let mut logics = Logics::new(&world.walls);
 
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            world.draw(pixels.get_frame(), &all_walls);
+            world.draw(pixels.get_frame(), &world.walls, &world.items);
             if pixels
                 .render()
-                .map_err(|e| error!("pixels.render() failed: {}", e))
+                .map_err(|e| panic!("pixels.render() failed: {}", e))
                 .is_err()
             {
                 *control_flow = ControlFlow::Exit;
@@ -169,312 +512,236 @@ fn main() -> Result<(), Error> {
             });
             
             // Update internal state and request a redraw
-            world.update(movement, &all_walls);
+            world.update(&mut logics, movement);
             window.request_redraw();
         }     
     });
 }
 
 impl World {
-    /// Create a new `World` instance that can draw a moving box
+    /// Create a new `World` instance that can draw walls, items, and player
     fn new() -> Self {
         Self {
-            box_x: 58,
-            box_y: 8,
-            velocity_x: 16,
-            velocity_y: 16,
+            x: 270,  // 58
+            y: 188,  // 8
+            vx: 16,
+            vy: 16,
+            score: 0,
+            walls: {
+                vec![
+                    // create horizontal walls
+                    Wall::new(8, 11, 43, 3),
+                    Wall::new(94, 11, 218, 3),
+                    Wall::new(94, 54, 46, 3),
+                    Wall::new(180, 54, 86, 3),
+                    Wall::new(223, 97, 43, 3),
+                    Wall::new(8, 140, 46, 3),
+                    Wall::new(266, 140, 46, 3),
+                    Wall::new(51, 183, 132, 3),
+                    Wall::new(223, 183, 43, 3),
+                    Wall::new(8, 226, 218, 3),
+                    Wall::new(266, 226, 46, 3),
+                    // create vertical walls
+                    Wall::new(8, 11, 3, 218),
+                    Wall::new(51, 54, 3, 89),
+                    Wall::new(94, 54, 3, 132),
+                    Wall::new(137, 54, 3, 89),
+                    Wall::new(180, 11, 3, 175),
+                    Wall::new(223, 97, 3, 132),
+                    Wall::new(309, 11, 3, 218),
+                    // borders
+                    Wall::new(-1, -1, 322, 1),
+                    Wall::new(-1, 240, 322, 1),
+                    Wall::new(-1, -1, 1, 242),
+                    Wall::new(320, -1, 1, 242),
+                ]
+            },
+            items: {
+                vec![
+                    Collectible::new(112, 72),
+                    Collectible::new(26, 198),
+                    Collectible::new(195, 198),
+                    Collectible::new(195, 29),
+                    Collectible::new(281, 198),
+                ]
+            }
         }
     }
 
     /// Update the `World` internal state 
-    fn update(&mut self, movement: ( Direction, Direction ), walls: &Vec<Wall>) {
-        // let box = &mut self.World;
-        self.move_box(&movement, walls);
-    }
+    fn update(&mut self, logics: &mut Logics, movement: ( Direction, Direction )) {
+        // eventually get rid of this
+        // won't tackle control logics for now so probably have to pass `movement` into the physics OL
 
-    /// Move box according to arrow keys
-    fn move_box(&mut self, movement: &(Direction, Direction), walls: &Vec<Wall>) {
+        // temporary mapping of keyboard controls to velocities
         match movement.0 {
-            Direction::Up => self.velocity_y = -16,
-            Direction::Down => self.velocity_y = 16,
-            _ => self.velocity_y = 0,
+            Direction::Up => self.vy = -10,
+            Direction::Down => self.vy = 10,
+            _ => self.vy = 0,
         }
         match movement.1 {
-            Direction::Left => self.velocity_x = -16,
-            Direction::Right => self.velocity_x = 16,
-            _ => self.velocity_x = 0,
+            Direction::Left => self.vx = -10,
+            Direction::Right => self.vx = 10,
+            _ => self.vx = 0,
         }
 
-        World::better_collision(self, &movement, walls);
+        self.project_physics(&mut logics.physics);
+        logics.physics.update();
+        self.unproject_physics(&logics.physics);
 
-        // Check collision with window boundaries
-        if self.box_y + self.velocity_y <= 0 || self.box_y + BOX_SIZE + self.velocity_y > HEIGHT as i16 {
-            if self.box_y + self.velocity_y <= 0 {
-                self.velocity_y = -self.box_y;
-            } else {
-                self.velocity_y = HEIGHT as i16 - self.box_y - BOX_SIZE;
+        self.project_collision(&mut logics.collision, &logics.physics);
+        logics.collision.update();
+        self.unproject_collision(&logics.collision);
+
+        for contact in logics.collision.contacts.iter() {
+            match (logics.collision.metadata[contact.0].id,
+                logics.collision.metadata[contact.1].id) {
+                (CollisionID::Item, CollisionID::Player) => {
+                    logics.resources.score_change = ITEM_VAL;
+                    logics.resources.touched_item = Some(contact.0);
+                    // not sure if there's a better way to place the print statement
+                    println!("score: {}", self.score + ITEM_VAL);
+                },
+                _ => {}
             }
         }
-        if self.box_x + self.velocity_x <= 0 || self.box_x + BOX_SIZE + self.velocity_x > WIDTH as i16 {
-            if self.box_x + self.velocity_x <= 0 {
-                self.velocity_x = -self.box_x;
-            } else {
-                self.velocity_x = WIDTH as i16 - self.box_x - BOX_SIZE;
-            }
-        }
-
-        self.box_y += self.velocity_y;
-        self.box_x += self.velocity_x;
-    }   
-
-    /// Check if box is already touching from above
-    fn touching_hz_above(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.wall_x + a_wall.wall_width > self.box_x
-            && a_wall.wall_x < self.box_x + BOX_SIZE {
-                if a_wall.wall_y + a_wall.wall_height == self.box_y {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    /// Check if box is already touching from below
-    fn touching_hz_below(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.wall_x + a_wall.wall_width > self.box_x
-            && a_wall.wall_x < self.box_x + BOX_SIZE {
-                if a_wall.wall_y == self.box_y + BOX_SIZE {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
         
-    /// Check if box is already touching from the left
-    fn touching_vt_left(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.wall_y < self.box_y + BOX_SIZE
-            && a_wall.wall_y + a_wall.wall_height > self.box_y {
-                if a_wall.wall_x + a_wall.wall_width == self.box_x {
-                    return true;
-                }
-            }
-        }
-        return false;
+        self.project_resources(&mut logics.resources);
+        logics.resources.update(&mut self.items, &self.walls);
+        self.unproject_resources(&logics.resources);
     }
 
-    /// Check if box is already touching from the right
-    fn touching_vt_right(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.wall_y < self.box_y + BOX_SIZE
-            && a_wall.wall_y + a_wall.wall_height > self.box_y {
-                if a_wall.wall_x == self.box_x + BOX_SIZE {
-                    return true;
-                }
-            }
-        }
-        return false;
+    fn project_physics(&self, physics: &mut MazePhysics) {
+        physics.pos.x = self.x as f32;
+        physics.pos.y = self.y as f32;
+        physics.vel.x = self.vx as f32;
+        physics.vel.y = self.vy as f32;
     }
 
-    fn corner_above_check(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.wall_x + a_wall.wall_width >= self.box_x
-            && a_wall.wall_x <= self.box_x + BOX_SIZE {
-                if a_wall.wall_y + a_wall.wall_height == self.box_y {
-                    return true;
-                }
-            }
-        }
-        return false;
+    fn unproject_physics(&mut self, physics: &MazePhysics) { 
+        self.x = physics.pos[0].trunc() as i16;
+        self.y = physics.pos[1].trunc() as i16;
     }
 
-    fn corner_below_check(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.wall_x + a_wall.wall_width >= self.box_x
-            && a_wall.wall_x <= self.box_x + BOX_SIZE {
-                if a_wall.wall_y == self.box_y + BOX_SIZE {
-                    return true;
-                }
-            }
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>, physics: &MazePhysics) {
+        collision.bodies.resize_with(self.walls.len(), Aabb::default);
+        collision.velocities.resize_with(self.walls.len(), Default::default);
+        collision.metadata.resize_with(self.walls.len(), CollisionData::default);
+        
+        // create collider for each item
+        for item in &self.items {
+            collision.bodies.push(Aabb::new(
+                Vec3::new(item.x as f32, item.y as f32, 0.0),
+                Vec3::new((item.x + ITEM_SIZE as i16) as f32, (item.y + ITEM_SIZE as i16) as f32, 0.0)
+            ));
+            collision.velocities.push(Vec2::new(0.0, 0.0));
+            collision.metadata.push(CollisionData {
+                solid: false, 
+                fixed: true, 
+                id: CollisionID::Item,
+            });
         }
-        return false;
+        // create collider for player
+        collision.bodies.push(Aabb::new(
+            Vec3::new(self.x as f32, self.y as f32, 0.0),
+            Vec3::new((self.x + BOX_SIZE) as f32, (self.y + BOX_SIZE) as f32, 0.0)
+        ));
+        // project into physics logic to get position and velocity? 
+        collision.velocities.push(physics.vel);
+        collision.metadata.push(CollisionData {
+            solid: true,
+            fixed: false,
+            id: CollisionID::Player,
+        });
     }
 
-    fn corner_left_check(&self, walls: &Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.wall_y <= self.box_y + BOX_SIZE
-            && a_wall.wall_y + a_wall.wall_height >= self.box_y {
-                if a_wall.wall_x + a_wall.wall_width == self.box_x {
-                    return true;
-                }
-            }
-        }
-        return false;
+    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
+        self.x = collision.bodies[collision.bodies.len() - 1].min.x.trunc() as i16;
+        self.y = collision.bodies[collision.bodies.len() - 1].min.y.trunc() as i16;
     }
 
-    fn corner_right_check(&self, walls:&Vec<Wall>) -> bool {
-        for a_wall in walls {
-            if a_wall.wall_y <= self.box_y + BOX_SIZE
-            && a_wall.wall_y + a_wall.wall_height >= self.box_y {
-                if a_wall.wall_x == self.box_x + BOX_SIZE {
-                    return true;
-                }
-            }
-        }
-        return false;
+    fn project_resources(&self, resources:&mut MazeResources) {
+        resources.score = self.score;
     }
 
-    /// Detect collision
-    fn better_collision(&mut self, movement: &(Direction, Direction), walls: &Vec<Wall>) {
-        let mut temp_velocity_y: i16 = self.velocity_y;
-        let mut temp_velocity_x: i16 = self.velocity_x;
+    fn unproject_resources(&mut self, resources: &MazeResources) {
+        self.score = resources.score;
+    }
 
-        let touching_above: bool = self.touching_hz_above(walls);
-        let touching_below: bool = self.touching_hz_below(walls);
-        let touching_left: bool = self.touching_vt_left(walls);
-        let touching_right: bool = self.touching_vt_right(walls);
-
-        if {touching_above && movement.0 == Direction::Up} || {touching_below && movement.0 == Direction::Down} {
-            temp_velocity_y = 0;
-        }
-        if {touching_left && movement.1 == Direction::Left} || {touching_right && movement.1 == Direction::Right} {
-            temp_velocity_x = 0;
-        }
-
-        // Don't move if two arrow keys are pressed in the direction of a corner that the box is perfectly touching
-        if movement.0 != Direction::Still && movement.1 != Direction::Still 
-        && touching_above == false && touching_below == false 
-        && touching_left == false && touching_right == false {
-            let touch_vt: bool;
-            let touch_hz: bool;
-
-            if movement.0 == Direction::Up {
-                touch_vt = self.corner_above_check(walls);
-            } else {
-                touch_vt = self.corner_below_check(walls);
-            }
-            if movement.1 == Direction::Left {
-                touch_hz = self.corner_left_check(walls);
-            } else {
-                touch_hz = self.corner_right_check(walls);
-            }
-
-            if touch_vt == true && touch_hz == true {
-                temp_velocity_y = 0;
-                temp_velocity_x = 0;
-            }
-        }
-
-        let mut temp_y: i16 = self.box_y + temp_velocity_y;
-        let mut temp_x: i16 = self.box_x + temp_velocity_x;
-
-        // Check for collision with window boundaries
-        if temp_y <= 0 || temp_y + BOX_SIZE > HEIGHT as i16 {
-            if temp_y <= 0 {
-                temp_velocity_y = -self.box_y;
-            } else {
-                temp_velocity_y = HEIGHT as i16 - self.box_y - BOX_SIZE;
-            }
-            temp_y = self.box_y + temp_velocity_y;
-        }
-        if temp_x <= 0 || temp_x + BOX_SIZE > WIDTH as i16 {
-            if temp_x <= 0 {
-                temp_velocity_x = -self.box_x;
-            } else {
-                temp_velocity_x = WIDTH as i16 - self.box_x - BOX_SIZE;
-            }
-            temp_x = self.box_x + temp_velocity_x;
-        }
-
-        if movement.0 != Direction::Still && temp_velocity_y != 0 {
-            for a_wall in walls {
-                if movement.0 == Direction::Up {
-                    if a_wall.wall_y + a_wall.wall_height < self.box_y
-                    && a_wall.wall_y + a_wall.wall_height > temp_y
-                    && a_wall.wall_x + a_wall.wall_width > temp_x
-                    && a_wall.wall_x < temp_x + BOX_SIZE {
-                        if i16::abs(a_wall.wall_y + a_wall.wall_height - self.box_y) < i16::abs(temp_velocity_y) {
-                            temp_velocity_y = a_wall.wall_y + a_wall.wall_height - self.box_y;
-                        }
-                    }
-                } else {
-                    if a_wall.wall_y > self.box_y + BOX_SIZE
-                    && a_wall.wall_y < temp_y + BOX_SIZE 
-                    && a_wall.wall_x < temp_x + BOX_SIZE
-                    && a_wall.wall_x + a_wall.wall_width > temp_x {
-                        if a_wall.wall_y - self.box_y - BOX_SIZE < temp_velocity_y {
-                            temp_velocity_y = a_wall.wall_y - self.box_y - BOX_SIZE;
-                        }
-                    }
+    /// Check if box is touching or overlapping a pickup - only can check for one at a time, not multiple
+    fn touch_pickup(&self) -> Option<usize> {
+        for i in 0..self.items.len() {
+            if self.x < self.items[i].x + ITEM_SIZE as i16
+            && self.x + BOX_SIZE >= self.items[i].x
+            && self.y < self.items[i].y + ITEM_SIZE as i16
+            && self.y + BOX_SIZE >= self.items[i].y {
+                if i < self.items.len() {
+                    return Some(i);
                 }
             }
         }
-        if movement.1 != Direction::Still && temp_velocity_x != 0 {
-            for a_wall in walls {
-                if movement.1 == Direction::Left {
-                    if a_wall.wall_x + a_wall.wall_width < self.box_x
-                    && a_wall.wall_x + a_wall.wall_width > temp_x
-                    && a_wall.wall_y < temp_y + BOX_SIZE
-                    && a_wall.wall_y + a_wall.wall_height > temp_y {
-                        if i16::abs(a_wall.wall_x + a_wall.wall_width - self.box_x) < i16::abs(temp_velocity_x) {
-                            temp_velocity_x = a_wall.wall_x + a_wall.wall_width - self.box_x;
-                        }
-                    }
-                } else {
-                    if a_wall.wall_x >= self.box_x + BOX_SIZE
-                    && a_wall.wall_x < temp_x + BOX_SIZE
-                    && a_wall.wall_y < temp_y + BOX_SIZE
-                    && a_wall.wall_y + a_wall.wall_height > temp_y {
-                        if a_wall.wall_x - self.box_x - BOX_SIZE < temp_velocity_x {
-                            temp_velocity_x = a_wall.wall_x - self.box_x - BOX_SIZE;
-                        }
-                    } 
-                }
-            }
-        }
-
-        self.velocity_x = temp_velocity_x;
-        self.velocity_y = temp_velocity_y;
+        None
     }
 
     /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
-    fn draw(&self, frame: &mut [u8], walls: &Vec<Wall>) {
+    fn draw(&self, frame: &mut [u8], walls: &Vec<Wall>, items: &Vec<Collectible>) {
         fn inside_all_walls(x:i16, y:i16, walls: &Vec<Wall>) -> bool {
             for a_wall in walls {
-                if x >= a_wall.wall_x
-                && x < a_wall.wall_x + a_wall.wall_width
-                && y >= a_wall.wall_y
-                && y < a_wall.wall_y + a_wall.wall_height {
+                if x >= a_wall.x
+                && x < a_wall.x + a_wall.w
+                && y >= a_wall.y
+                && y < a_wall.y + a_wall.h {
                     return true;
                 }
             } 
             return false;
         }
-        
-        // Only redraw pixels that are not in the maze walls... theoretically
+
+        let is_box = |x, y| -> bool {
+            if x >= self.x
+            && x < self.x + BOX_SIZE
+            && y >= self.y
+            && y < self.y + BOX_SIZE {
+                return true;
+            } else {
+                return false;
+            }
+        };
+
+        fn is_item(x:i16, y:i16, items: &Vec<Collectible>) -> bool {
+            for an_item in items.iter() {
+                if x >= an_item.x
+                && x < an_item.x + ITEM_SIZE as i16
+                && y >= an_item.y
+                && y < an_item.y + ITEM_SIZE as i16 {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // draw background first
+        for pixel in frame.chunks_exact_mut(4) {
+            pixel.copy_from_slice(&[0x48, 0xb2, 0xe8, 0xff]);
+        }
+
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
             let x = (i % WIDTH as usize) as i16;
             let y = (i / WIDTH as usize) as i16;
 
-            if !inside_all_walls(x, y, walls) {
-                let inside_the_box = x >= self.box_x
-                && x < self.box_x + BOX_SIZE
-                && y >= self.box_y
-                && y < self.box_y + BOX_SIZE;
+            let rgba = if inside_all_walls(x, y, walls) {
+                [0xff, 0xff, 0xff, 0xff]
+            } else if is_box(x, y) {
+                [0x5e, 0x48, 0xe8, 0xff]
+            } else if is_item(x, y, items) {
+                [0x95, 0xed, 0xc1, 0xff]
+            } else {
+                continue;
+            };
 
-                let rgba = if inside_the_box {
-                    [0x5e, 0x48, 0xe8, 0xff]
-                } else {
-                    [0x48, 0xb2, 0xe8, 0xff]
-                };
-        
-                pixel.copy_from_slice(&rgba);
-            }
+            pixel.copy_from_slice(&rgba);
         }
     }
 }

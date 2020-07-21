@@ -8,8 +8,8 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-env_logger = "0.7.1"
-log = { version = "0.4.8", features = [ "release_max_level_warn" ] }
 pixels = "0.0.4"
 winit = "0.22.0"
 winit_input_helper = "0.6.0"
+ultraviolet = "0.4.6"
+[workspace]
