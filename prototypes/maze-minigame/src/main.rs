@@ -8,7 +8,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, geometry::Aabb};
-use asterism::{AabbCollision, QueuedResources, WinitKeyboardControl, PointPhysics};
+use asterism::{AabbCollision, QueuedResources, resources::Transaction, WinitKeyboardControl, PointPhysics};
 
 const WIDTH: u32 = 320;
 const HEIGHT: u32 = 240;
@@ -16,7 +16,7 @@ const BOX_SIZE: i16 = 20;
 
 // Size and point worth of items
 const ITEM_SIZE: i8 = 10;
-const ITEM_VAL: u8 = 1;
+
 // Size of portals
 const PORTAL_SIZE: i8 = 14;
 
@@ -35,6 +35,11 @@ enum CollisionID {
     Wall,
     Item,
     Portal,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+enum PoolID {
+    Points,
 }
 
 impl Default for CollisionID {
@@ -113,38 +118,10 @@ impl MazePhysics {
     }
 }
 
-// thanks paddles
-struct MazeResources {
-    score: u8,
-    score_change: u8,
-    touched_item: Option<usize>,
-    // can add other things later like keys, food
-}
-
-impl MazeResources {
-    fn new() -> Self {
-        Self {
-            score: 0,
-            score_change: 0,
-            touched_item: None,
-        }
-    }
-
-    fn update(&mut self, all_items: &mut Vec<Collectible>, walls: &Vec<Wall>) {
-        self.score += self.score_change;
-        if self.touched_item != None {
-            all_items.remove(self.touched_item.unwrap() - walls.len());
-        };
-        // reset
-        self.score_change = 0;
-        self.touched_item = None;
-    }
-}
-
 struct Logics {
     physics: MazePhysics,
     collision: AabbCollision<CollisionID>,
-    resources: MazeResources,
+    resources: QueuedResources<PoolID>,
 }
 
 impl Logics {
@@ -162,7 +139,11 @@ impl Logics {
                 }
                 collision
             },
-            resources: MazeResources::new(),
+            resources: {
+                let mut resources = QueuedResources::new();
+                resources.items.insert( PoolID::Points, 0.0 );
+                resources
+            },
         }
     }
 }
@@ -339,18 +320,28 @@ impl World {
             match (logics.collision.metadata[contact.0].id,
                 logics.collision.metadata[contact.1].id) {
                 (CollisionID::Item, CollisionID::Player) => {
-                    logics.resources.score_change = ITEM_VAL;
-                    logics.resources.touched_item = Some(contact.0);
-                    // not sure if there's a better way to place the print statement
-                    println!("score: {}", self.score + ITEM_VAL);
-                },
+                    logics.resources.transactions.push(vec![(PoolID::Points, Transaction::Change(1))]);
+                    self.items.remove(contact.0 - self.walls.len());
+                }
                 _ => {}
             }
         }
         
         self.project_resources(&mut logics.resources);
-        logics.resources.update(&mut self.items, &self.walls);
+        logics.resources.update();
         self.unproject_resources(&logics.resources);
+
+        for (completed, item_types) in logics.resources.completed.iter() {
+            if *completed {
+                for item_type in item_types {
+                    match item_type {
+                        PoolID::Points => {
+                            println!("You scored! Current points: {}", self.score);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fn project_physics(&self, physics: &mut MazePhysics) {
@@ -396,12 +387,23 @@ impl World {
         self.y = collision.bodies[collision.bodies.len() - 1].min.y.trunc() as i16;
     }
 
-    fn project_resources(&self, resources:&mut MazeResources) {
-        resources.score = self.score;
+    fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
+        if !resources.items.contains_key(&PoolID::Points) {
+            resources.items.insert(PoolID::Points, 0.0);
+        }
     }
 
-    fn unproject_resources(&mut self, resources: &MazeResources) {
-        self.score = resources.score;
+    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
+        for (completed, item_types) in resources.completed.iter() {
+            if *completed {
+                for item_type in item_types {
+                    let value = resources.get_value_by_itemtype(item_type).min(255.0) as u8;
+                    match item_type {
+                        PoolID::Points => self.score = value,
+                    }
+                }
+            }
+        }
     }
 
     /// Draw the `World` state to the frame buffer.
