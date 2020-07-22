@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
-pub struct Resources<ID: Copy + Ord> {
+pub struct QueuedResources<ID: Copy + Ord> {
     pub items: BTreeMap<ID, f32>,
     pub transactions: Vec<Vec<(ID, Transaction)>>,
-    pub completed: Vec<(bool, Option<Vec<ID>>)>
+    pub completed: Vec<(bool, Vec<ID>)>
 }
 
-impl<ID: Copy + Ord> Resources<ID> {
+impl<ID: Copy + Ord> QueuedResources<ID> {
     pub fn new() -> Self {
         Self {
             items: BTreeMap::new(),
@@ -25,7 +25,8 @@ impl<ID: Copy + Ord> Resources<ID> {
             let mut item_types = vec![];
             for (item_type, change) in exchange.iter() {
                 if !self.is_possible(item_type, change) {
-                    self.completed.push((false, None));
+                    item_types.push(*item_type);
+                    self.completed.push((false, item_types.clone()));
                     for (item_type, val) in snapshot.iter() {
                         *self.items.get_mut(&item_type).unwrap() = *val;
                         continue 'exchange;
@@ -38,7 +39,7 @@ impl<ID: Copy + Ord> Resources<ID> {
                     }
                 }
             }
-            self.completed.push((true, Some(item_types)));
+            self.completed.push((true, item_types));
         }
         self.transactions.clear();
     }
@@ -50,7 +51,7 @@ impl<ID: Copy + Ord> Resources<ID> {
             let value = self.items.get(item_type);
             match transaction {
                 Transaction::Change(amt) => {
-                    if value.unwrap() + *amt as f32 > 0.0 {
+                    if value.unwrap() + *amt as f32 >= 0.0 {
                         true
                     } else { false }
                 }

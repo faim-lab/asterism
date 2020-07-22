@@ -8,24 +8,25 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, geometry::Aabb};
-use asterism::{AabbCollision, control::*, FlatEntityState, PointPhysics};
+use asterism::{AabbCollision, WinitKeyboardControl, FlatEntityState, PointPhysics};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum Player {
     P1
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum ActionID {
-    Move(Player),
+    MoveLeft(Player),
+    MoveRight(Player),
     Jump(Player),
 }
 
 impl Default for ActionID {
-    fn default() -> Self { Self::Move(Player::P1) }
+    fn default() -> Self { Self::MoveLeft(Player::P1) }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -65,22 +66,9 @@ impl Logics {
         Self {
             control: {
                 let mut control = WinitKeyboardControl::new();
-                control.mapping.push(
-                    InputMap {
-                        inputs: vec![(KeyInput::Pair(VirtualKeyCode::Left, VirtualKeyCode::Right),
-                                    InputState::On),
-                                    (KeyInput::Single(VirtualKeyCode::Space), InputState::Pressed),
-                        ],
-                        actions: vec![Action {
-                            id: ActionID::Move(Player::P1),
-                            action_type: ActionType::Axis(-1.0, 1.0)
-                        }, Action {
-                            id: ActionID::Jump(Player::P1),
-                            action_type: ActionType::Continuous(-1.0)
-                        }],
-                        is_valid: vec![false; 2],
-                    }
-                );
+                control.add_key_map(0, VirtualKeyCode::Left, ActionID::MoveLeft(Player::P1));
+                control.add_key_map(0, VirtualKeyCode::Right, ActionID::MoveRight(Player::P1));
+                control.add_key_map(0, VirtualKeyCode::Space, ActionID::Jump(Player::P1));
                 control
             },
             physics: PointPhysics::new(),
@@ -232,17 +220,23 @@ impl World {
     }
 
     fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>, entity_state: &FlatEntityState<StateID>) {
-        control.mapping[0].is_valid[0] = true;
-        control.mapping[0].is_valid[1] = match entity_state.get_id_for_entity(1) {
+        control.mapping[0][0].is_valid = true;
+        control.mapping[0][1].is_valid = true;
+        control.mapping[0][2].is_valid = match entity_state.get_id_for_entity(1) {
             StateID::PlayerGrounded | StateID::PlayerWalk => true,
             _ => false,
         }
     }
 
     fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>, entity_state: &FlatEntityState<StateID>) {
-        self.player.vel.x = control.values[0][0];
+        self.player.vel.x = -control.values[0][0].value + control.values[0][1].value;
         match entity_state.get_id_for_entity(1) {
-            StateID::PlayerGrounded | StateID::PlayerWalk => self.player.vel.y = control.values[0][1],
+            StateID::PlayerGrounded | StateID::PlayerWalk => {
+                let values = &control.values[0][2];
+                if values.changed_by > 0.0 {
+                    self.player.vel.y = -values.value;
+                }
+            }
             _ => {}
         } 
     }
