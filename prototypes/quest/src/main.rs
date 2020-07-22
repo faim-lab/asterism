@@ -83,6 +83,8 @@ impl Game {
 				
 				self.renderable_components
 						.update_all_coords(self.position_components.get_render_positions(&self.view_area));
+				self.renderable_components
+						.update_textures(self.selection_components.highlight_under_mouse(self.renderable_components.get_nearest_to_coords(self.user_inputs.mouse_coords)));
 		}
 }
 
@@ -205,8 +207,7 @@ struct UserInputs {
 		pub va_down: bool,
 	  pub va_left: bool,
 		pub va_right: bool,
-		pub mouse_x: Option<f32>,
-		pub mouse_y: Option<f32>,
+		pub mouse_coords: Option<Vector>,
 }
 
 impl UserInputs {
@@ -216,8 +217,7 @@ impl UserInputs {
 						va_down: false,
 						va_left: false,
 						va_right: false,
-						mouse_x: None,
-						mouse_y: None,
+						mouse_coords: None,
 				}
 		}
 }
@@ -227,7 +227,6 @@ use rendering_logics::TextureActions;
 pub struct SelectionComponentVec {
 		parts: Vec<SelectionComponent>,
 		previously_highlighted: Option<usize>,
-		mouse_coords: Option<Vector>,
 }
 
 impl SelectionComponentVec {
@@ -251,7 +250,6 @@ impl SelectionComponentVec {
 				SelectionComponentVec {
 						parts: parts_constructor,
 						previously_highlighted: None,
-						mouse_coords: None,
 				}
 		}
 		fn add(&mut self, initial_state: Option<bool>) {
@@ -259,28 +257,27 @@ impl SelectionComponentVec {
 						is_highlighted: initial_state,
 				});
 		}
-		fn highlight_under_mouse(&mut self) -> Vec<TextureActions> {
+		fn highlight_under_mouse(&mut self, nearest_mouse_index: Option<u32>) -> Vec<TextureActions> {
 				let mut texture_changes: Vec<TextureActions> = Vec::new();
 				
-				let unhighlight_bool: bool = match self.previously_highlighted {
-						Some(index) => self.parts[index].unhighlight(),
-						None => false,
-				};
-				
-				let hightlight_bool: bool = self.parts[0].highlight();
-				
-				if unhighlight_bool {
-						if !(self.previously_highlighted.unwrap() == 0) {
-								texture_changes.push(TextureActions::RevertToBase(self.previously_highlighted.unwrap() as u32));
-								if hightlight_bool {
-										texture_changes.push(TextureActions::Highlight(0));
+				match self.previously_highlighted {
+						Some(index) => {
+								if self.parts[index].unhighlight() {
+										texture_changes.push(TextureActions::RevertToBase(self.previously_highlighted.unwrap() as u32));
 								}
-						}
-				} else {
-						if hightlight_bool {
-								texture_changes.push(TextureActions::Highlight(0));
-						}
-				}
+						},
+						None => (),
+				};
+
+				match nearest_mouse_index {
+						Some(index) => {
+								if self.parts[index as usize].highlight() {
+										texture_changes.push(TextureActions::Highlight(index));
+										self.previously_highlighted = Some(index as usize);
+								}
+						},
+						None => (),
+				};
 				
 				texture_changes
 		}
@@ -294,9 +291,13 @@ pub struct SelectionComponent {
 impl SelectionComponent {
 		fn highlight(&mut self) -> bool {
 				match self.is_highlighted {
-						Some(_) => {
-								self.is_highlighted = Some(true);
-								true
+						Some(state) => {
+								if state {
+										false
+								} else {
+										self.is_highlighted = Some(true);
+										true
+								}
 						},
 						None => false,
 				}
@@ -304,9 +305,13 @@ impl SelectionComponent {
 
 		fn unhighlight(&mut self) -> bool {
 				match self.is_highlighted {
-						Some(_) => {
-								self.is_highlighted = Some(false);
-								true
+						Some(state) => {
+								if state {
+										self.is_highlighted = Some(false);
+										true
+								} else {
+										false
+								}
 						},
 						None => false,
 				}
@@ -588,10 +593,12 @@ impl State {
 								position,
 								..
 						} => {
-								self.game.user_inputs.mouse_x =
-										Some(((position.x as f32 * 2_f32) - self.size.width as f32) / self.size.width as f32);
-								self.game.user_inputs.mouse_y =
-										Some(-((position.y as f32 * 2_f32) - self.size.height as f32) / self.size.height as f32);
+								self.game.user_inputs.mouse_coords =
+										Some(
+												Vector::new(
+														((position.x as f32 * 2_f32) - self.size.width as f32) / self.size.width as f32,
+														-((position.y as f32 * 2_f32) - self.size.height as f32) / self.size.height as f32)
+										);
 								true
 						},
 						_ => false,

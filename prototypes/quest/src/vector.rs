@@ -22,6 +22,10 @@ impl Vector {
 				Vector::new(self.x * number, self.y * number)
 		}
 
+		pub fn distance_from(&self, other: &Vector) -> f32 {
+				((self.x - other.x).powi(2) + (self.y - other.y).powi(2)).sqrt()
+		}
+		
 		pub fn length(&self) -> f32 {
 				self.x.hypot(self.y)
 		}

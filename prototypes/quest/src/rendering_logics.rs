@@ -23,6 +23,7 @@ impl TextureThing {
 						highlight_texture,
 				}
 		}
+		
 		pub fn get_texture(&self) -> u32 {
 				self.current_texture
 		}
@@ -102,6 +103,14 @@ impl RenderableComponentVec {
 						self.parts[i].update_coordinates(new_coords[i])
 				}
 		}
+		pub fn update_textures(&mut self, texture_actions: Vec<TextureActions>) {
+				for action in texture_actions {
+						match action {
+								TextureActions::Highlight(index) => self.parts[index as usize].texture.highlight(),
+								TextureActions::RevertToBase(index) => self.parts[index as usize].texture.return_to_base_texture(),
+						}
+				}
+		}
 		pub fn render_all(&self) -> (Vec<Vertex>, Vec<u16>) {
 				let mut indices_vec: Vec<u16> = Vec::new();
 				let mut vertices_vec: Vec<Vertex> = Vec::new();
@@ -129,6 +138,7 @@ impl RenderableComponentVec {
 								None => (),
 						}
 				}
+		
 				(vertices_vec, indices_vec)
 		}
 		pub fn get_selection_info(&self) -> Vec<Option<u32>> {
@@ -137,5 +147,46 @@ impl RenderableComponentVec {
 						selection_info_vec.push(part.texture.highlight_texture)
 				}
 				selection_info_vec
+		}
+		pub fn get_nearest_to_coords(&self, potential_target_coords: Option<Vector>/*, indices_list: Vec<u32>*/) -> Option<u32> {
+				match potential_target_coords {
+						Some(coords) => {
+								let mut indices_list: Vec<u32> = Vec::new();
+								for i in 0..64 {
+										indices_list.push(i);
+								}
+								let target_coords: Vector = coords;
+								let mut nearest: Option<(u32, f32)> = None;
+								for index in indices_list {
+										match self.parts[index as usize].position {
+												Some(coords) => {
+														match nearest {
+																Some((_, prev_closest)) => {
+																		let new_distance: f32 = coords.distance_from(&target_coords);
+																		if new_distance < prev_closest {
+																				nearest = Some((
+																						index,
+																						new_distance
+																				));
+																		}
+																},
+																None => {
+																		nearest = Some((
+																				index,
+																				coords.distance_from(&target_coords)
+																		));
+																},
+														}
+												},
+												None => (),
+										}
+								}
+								match nearest {
+										Some((index, _)) => Some(index),
+										None => None,
+								}
+						},
+						None => None,
+				}
 		}
 }
