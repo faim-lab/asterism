@@ -330,10 +330,12 @@ impl World {
         physics.positions.resize_with(1, Vec2::default);
         physics.velocities.resize_with(1, Vec2::default);
         physics.accelerations.resize_with(1, Vec2::default);
-        physics.positions[0].x = self.ball.0 as f32 + self.ball_err.x;
-        physics.positions[0].y = self.ball.1 as f32 + self.ball_err.y;
-        physics.velocities[0] = self.ball_vel;
-        physics.accelerations[0] = Vec2::new(0.0, 0.0);
+        physics.add_physics_entity(0,
+            Vec2::new(
+                self.ball.0 as f32 + self.ball_err.x,
+                self.ball.1 as f32 + self.ball_err.y),
+            self.ball_vel,
+            Vec2::new(0.0, 0.0));
     }
 
     fn unproject_physics(&mut self, physics: &PointPhysics) {

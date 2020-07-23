@@ -21,6 +21,13 @@ impl PointPhysics {
             *pos += *vel;
         }
     }
+
+    pub fn add_physics_entity(&mut self, i: usize, pos: Vec2, vel: Vec2, acc: Vec2) {
+        self.positions[i] = pos;
+        self.velocities[i] = vel;
+        self.accelerations[i] = acc;
+    }
+
 }
 
 

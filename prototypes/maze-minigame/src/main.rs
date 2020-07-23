@@ -8,7 +8,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, geometry::Aabb};
-use asterism::{AabbCollision, QueuedResources, WinitKeyboardControl, PointPhysics};
+use asterism::AabbCollision;// , QueuedResources, WinitKeyboardControl, PointPhysics};
 
 const WIDTH: u32 = 320;
 const HEIGHT: u32 = 240;
@@ -260,7 +260,7 @@ impl World {
     fn new() -> Self {
         Self {
             x: 58,
-            y: 8,
+            y: 208,
             vx: 16,
             vy: 16,
             score: 0,
@@ -344,6 +344,11 @@ impl World {
                     // not sure if there's a better way to place the print statement
                     println!("score: {}", self.score + ITEM_VAL);
                 },
+                (CollisionID::Wall, CollisionID::Player) => {
+                    let sides = &logics.collision.sides_touched[contact.1];
+                    println!("{} {} {} {} {}",
+                        sides.top, sides.bottom, sides.left, sides.right, sides.corner);
+                }
                 _ => {}
             }
         }
