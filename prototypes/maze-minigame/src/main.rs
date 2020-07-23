@@ -8,16 +8,12 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, geometry::Aabb};
-use asterism::{AabbCollision, QueuedResources, resources::Transaction, WinitKeyboardControl, PointPhysics};
+use asterism::{AabbCollision, QueuedResources, resources::Transaction, Linking, WinitKeyboardControl, PointPhysics};
 
 const WIDTH: u32 = 320;
 const HEIGHT: u32 = 240;
 const BOX_SIZE: i16 = 20;
-
-// Size and point worth of items
 const ITEM_SIZE: i8 = 10;
-
-// Size of portals
 const PORTAL_SIZE: i8 = 14;
 
 #[derive(PartialEq)]
@@ -46,7 +42,6 @@ impl Default for CollisionID {
     fn default() -> Self { Self::Player }
 }
 
-
 /// Representation of the application state
 struct World {
     x: i16,
@@ -57,6 +52,7 @@ struct World {
     walls: Vec<Wall>,
     items: Vec<Collectible>,
     portals: Vec<Portal>,
+    teleport: Vec<u8>,
 }
 
 /// Walls of the maze
@@ -88,12 +84,12 @@ impl Collectible {
 struct Portal {
     x: i16,
     y: i16,
-    // todo: would like to add color
+    color: [u8; 4],
 }
 
 impl Portal {
-    fn new(x:i16, y:i16) -> Self {
-        Self {x: x, y: y}
+    fn new(x:i16, y:i16, color:[u8; 4]) -> Self {
+        Self {x: x, y: y, color: color}
     }
 }
 
@@ -121,6 +117,7 @@ impl MazePhysics {
 struct Logics {
     physics: MazePhysics,
     collision: AabbCollision<CollisionID>,
+    linking: Linking,
     resources: QueuedResources<PoolID>,
 }
 
@@ -137,8 +134,15 @@ impl Logics {
                         Vec2::new(0.0, 0.0),
                         true, true, CollisionID::Wall);
                 }
+                for portal in &self.portals {
+                    collision.add_collision_entity(portal.x as f32, portal.y as f32,
+                        PORTAL_SIZE as f32, PORTAL_SIZE as f32,
+                        Vec2::new(0.0, 0.0),
+                        false, true, CollisionID::Portal);
+                }
                 collision
             },
+            linking: Linking::new(),
             resources: {
                 let mut resources = QueuedResources::new();
                 resources.items.insert( PoolID::Points, 0.0 );
@@ -285,9 +289,11 @@ impl World {
             },
             portals: {
                 vec![
-                    Portal::new(153, 27),
+                    Portal::new(153, 27, [0x4f, 0xe5, 0xff, 0xff]), // blue portal 1
+                    Portal::new(280, 27, [0xfc, 0x8c, 0x03, 0xff]), // orange portal 2
                 ]
-            }
+            },
+            teleport: Vec::new(),
         }
     }
 
@@ -321,12 +327,17 @@ impl World {
                 logics.collision.metadata[contact.1].id) {
                 (CollisionID::Item, CollisionID::Player) => {
                     logics.resources.transactions.push(vec![(PoolID::Points, Transaction::Change(1))]);
-                    self.items.remove(contact.0 - self.walls.len());
+                    self.items.remove(contact.0 - self.walls.len() - self.portals.len());
                 }
                 _ => {}
             }
         }
         
+        // todo: linking
+        /* self.project_linking(&mut logics.linking);
+        logics.linking.update();
+        self.unproject_linking(&logics.linking); */
+
         self.project_resources(&mut logics.resources);
         logics.resources.update();
         self.unproject_resources(&logics.resources);
@@ -357,23 +368,15 @@ impl World {
     }
 
     fn project_collision(&self, collision: &mut AabbCollision<CollisionID>, physics: &MazePhysics) {
-        collision.bodies.resize_with(self.walls.len(), Aabb::default);
-        collision.velocities.resize_with(self.walls.len(), Default::default);
-        collision.metadata.resize_with(self.walls.len(), Default::default);
-        
-        // create collider for each item
+        collision.bodies.resize_with(self.walls.len() + self.portals.len(), Aabb::default);
+        collision.velocities.resize_with(self.walls.len() + self.portals.len(), Default::default);
+        collision.metadata.resize_with(self.walls.len() + self.portals.len(), Default::default);
+        // create collider for items
         for item in &self.items {
             collision.add_collision_entity(item.x as f32, item.y as f32,
                 ITEM_SIZE as f32, ITEM_SIZE as f32,
                 Vec2::new(0.0, 0.0),
                 false, true, CollisionID::Item);
-        }
-        // create collider for portals
-        for portal in &self.portals {
-            collision.add_collision_entity(portal.x as f32, portal.y as f32,
-                PORTAL_SIZE as f32, PORTAL_SIZE as f32,
-                Vec2::new(0.0, 0.0),
-                false, true, CollisionID::Portal);
         }
         // create collider for player
         collision.add_collision_entity(self.x as f32, self.y as f32,
@@ -385,6 +388,33 @@ impl World {
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
         self.x = collision.bodies[collision.bodies.len() - 1].min.x.trunc() as i16;
         self.y = collision.bodies[collision.bodies.len() - 1].min.y.trunc() as i16;
+    }
+
+    fn project_linking(&self, linking: &mut Linking) {
+        for contact in logics.collision.contacts.iter() {
+            match (logics.collision.metadata[contact.0].id,
+                logics.collision.metadata[contact.1].id) {
+                (CollisionID::Portal, CollisionID:: Player) => {
+                    // todo: linking????
+                }
+                _ => {}
+            }
+        }
+        
+        if let Some(teleport) = self.teleport {
+            match teleport {
+                1 => {
+                    // todo?
+                }
+                2 => {
+                    // todo?
+                }
+            }
+        }
+    }
+    
+    fn unproject_linking(&mut self, linking: &Linking) {
+        // todo
     }
 
     fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
@@ -445,16 +475,26 @@ impl World {
             return false;
         }
 
-        let is_portal = |x, y| -> bool {
-            for a_portal in self.portals.iter() {
-                if x >= a_portal.x
-                && x < a_portal.x + PORTAL_SIZE as i16
-                && y >= a_portal.y
-                && y < a_portal.y + PORTAL_SIZE as i16 {
-                    return true;
-                }
+        let is_portal_1 = |x, y| -> bool {
+            if x >= self.portals[0].x
+            && x < self.portals[0].x + PORTAL_SIZE as i16
+            && y >= self.portals[0].y
+            && y < self.portals[0].y + PORTAL_SIZE as i16 {
+                return true;
+            } else {
+                return false;
             }
-            return false;
+        };
+
+        let is_portal_2 = |x, y| -> bool {
+            if x >= self.portals[1].x
+            && x < self.portals[1].x + PORTAL_SIZE as i16
+            && y >= self.portals[1].y
+            && y < self.portals[1].y + PORTAL_SIZE as i16 {
+                return true;
+            } else {
+                return false;
+            }
         };
 
         // draw background first
@@ -472,8 +512,10 @@ impl World {
                 [0x5e, 0x48, 0xe8, 0xff]
             } else if is_item(x, y, items) {
                 [0x95, 0xed, 0xc1, 0xff]
-            } else if is_portal(x, y) {
-                [0xfc, 0x8c, 0x03, 0xff]
+            } else if is_portal_1(x, y) {
+                self.portals[0].color
+            } else if is_portal_2(x, y) {
+                self.portals[1].color
             } else {
                 continue;
             };
