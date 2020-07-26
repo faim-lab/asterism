@@ -12,9 +12,14 @@ mod make_square;
 mod rendering_logics;
 use rendering_logics::{RenderableComponent, RenderableComponentVec};
 
+mod story;
+use story::{StoryPhase, StoryManager};
+
 mod example;
 
 pub struct Game {
+		story: StoryManager,
+		
 		view_area: ViewArea,
 		
 		renderable_components: RenderableComponentVec,
@@ -25,11 +30,13 @@ pub struct Game {
 }
 impl Game {
 		pub fn new() -> Game {
+				let story: StoryManager = StoryManager::new();
 				let position_component_vec = PositionComponentVec::new();
 				let renderable_component_vec = RenderableComponentVec::new();
 				let selection_component_vec = SelectionComponentVec::new(renderable_component_vec.get_selection_info());
 				let user_inputs = UserInputs::new();
 				let mut game: Game = Game {
+						story: story,
 						view_area: ViewArea::new(),
 						position_components: position_component_vec,
 						renderable_components: renderable_component_vec,
@@ -79,12 +86,23 @@ impl Game {
 				self.renderable_components.render_all()
 		}
 		fn update(&mut self) {
-				self.view_area.update_using_input(&self.user_inputs);
-				
-				self.renderable_components
-						.update_all_coords(self.position_components.get_render_positions(&self.view_area));
-				self.renderable_components
-						.update_textures(self.selection_components.highlight_under_mouse(self.renderable_components.get_nearest_to_coords(self.user_inputs.mouse_coords)));
+				match self.story.get_current_phase() {
+						StoryPhase::Menu => {
+								if self.user_inputs.click {
+										self.story.advance_phase();
+								}
+						},
+						StoryPhase::PlayerMove => {
+								self.view_area.update_using_input(&self.user_inputs);
+								
+								self.renderable_components
+										.update_all_coords(self.position_components.get_render_positions(&self.view_area));
+								self.renderable_components
+										.update_textures(self.selection_components.highlight_under_mouse(self.renderable_components.get_nearest_to_coords(self.user_inputs.mouse_coords)));
+						},
+						_ => (),
+				}
+				self.user_inputs.click = false;
 		}
 }
 
@@ -208,6 +226,7 @@ struct UserInputs {
 	  pub va_left: bool,
 		pub va_right: bool,
 		pub mouse_coords: Option<Vector>,
+		pub click: bool,
 }
 
 impl UserInputs {
@@ -218,6 +237,7 @@ impl UserInputs {
 						va_left: false,
 						va_right: false,
 						mouse_coords: None,
+						click: false,
 				}
 		}
 }
@@ -285,7 +305,6 @@ impl SelectionComponentVec {
 
 pub struct SelectionComponent {
 		is_highlighted: Option<bool>,
-		
 }
 
 impl SelectionComponent {
@@ -600,6 +619,19 @@ impl State {
 														-((position.y as f32 * 2_f32) - self.size.height as f32) / self.size.height as f32)
 										);
 								true
+						},
+						WindowEvent::MouseInput {
+								device_id,
+								state,
+								button,
+								..
+						} => {
+								if button == &MouseButton::Left && state == &ElementState::Released {
+										self.game.user_inputs.click = true;
+										true
+								} else {
+										false
+								}
 						},
 						_ => false,
 				}

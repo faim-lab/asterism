@@ -151,10 +151,7 @@ impl RenderableComponentVec {
 		pub fn get_nearest_to_coords(&self, potential_target_coords: Option<Vector>/*, indices_list: Vec<u32>*/) -> Option<u32> {
 				match potential_target_coords {
 						Some(coords) => {
-								let mut indices_list: Vec<u32> = Vec::new();
-								for i in 0..64 {
-										indices_list.push(i);
-								}
+								let indices_list: Vec<u32> = vec![38, 46];
 								let target_coords: Vector = coords;
 								let mut nearest: Option<(u32, f32)> = None;
 								for index in indices_list {
