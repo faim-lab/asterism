@@ -67,6 +67,9 @@ impl RenderableComponent {
 						texture: TextureThing::new(texture.0, texture.1),
 				}
 		}
+		fn hide(&mut self) {
+				self.size = 0_f32;
+		}
 		fn update_coordinates(&mut self, new_coords: Vector) {
 				self.position = if (new_coords.x.abs() - (self.size / 2_f32)) < 1_f32
 						|| (new_coords.y.abs() - (self.size / 2_f32)) < 1_f32 {
@@ -97,6 +100,9 @@ impl RenderableComponentVec {
 		}
 		pub fn add(&mut self, new_component: RenderableComponent) {
 				self.parts.push(new_component);
+		}
+		pub fn hide(&mut self, thing_to_be_hidden_id: u32) {
+				self.parts[thing_to_be_hidden_id as usize].hide();
 		}
 		pub fn update_all_coords(&mut self, new_coords: Vec<Vector>) {
 				for i in 0..self.parts.len() {

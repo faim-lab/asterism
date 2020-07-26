@@ -6,6 +6,7 @@ pub fn make_example_1() -> Vec<((f32, f32), (Vector, f32, (u32, Option<u32>)))> 
 				= Vec::new();
 		make_board(&mut elements);
 		make_player(&mut elements);
+		make_menu(&mut elements);
 		elements
 }
 fn make_board(current_elements: &mut Vec<((f32, f32), (Vector, f32, (u32, Option<u32>)))>) {
@@ -27,6 +28,12 @@ fn make_board(current_elements: &mut Vec<((f32, f32), (Vector, f32, (u32, Option
 
 fn make_player(current_elements: &mut Vec<((f32, f32), (Vector, f32, (u32, Option<u32>)))>) {
 		current_elements.push(
-				((50_f32, 50_f32), (Vector::new(1_f32, 0_f32), 0.25, (4_u32, None)))
+				((81.25, 81_f32), (Vector::new(1_f32, 0_f32), 0.25, (4_u32, None)))
+		);
+}
+
+fn make_menu(current_elements: &mut Vec<((f32, f32), (Vector, f32, (u32, Option<u32>)))>) {
+		current_elements.push(
+				((50_f32, 50_f32), (Vector::new(1_f32, 0_f32), 2.1, (11_u32, None)))
 		);
 }

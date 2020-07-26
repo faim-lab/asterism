@@ -90,6 +90,7 @@ impl Game {
 						StoryPhase::Menu => {
 								if self.user_inputs.click {
 										self.story.advance_phase();
+										self.renderable_components.hide(65);
 								}
 						},
 						StoryPhase::PlayerMove => {
@@ -100,7 +101,6 @@ impl Game {
 								self.renderable_components
 										.update_textures(self.selection_components.highlight_under_mouse(self.renderable_components.get_nearest_to_coords(self.user_inputs.mouse_coords)));
 						},
-						_ => (),
 				}
 				self.user_inputs.click = false;
 		}
