@@ -305,13 +305,13 @@ impl World {
     fn update(&mut self, logics: &mut Logics, movement: ( Direction, Direction )) {
         // mapping of keyboard controls to velocities
         match movement.0 {
-            Direction::Up => self.vy = -10,
-            Direction::Down => self.vy = 10,
+            Direction::Up => self.vy = -4,
+            Direction::Down => self.vy = 4,
             _ => self.vy = 0,
         }
         match movement.1 {
-            Direction::Left => self.vx = -10,
-            Direction::Right => self.vx = 10,
+            Direction::Left => self.vx = -4,
+            Direction::Right => self.vx = 4,
             _ => self.vx = 0,
         }
 
@@ -325,9 +325,6 @@ impl World {
         self.project_collision(&mut logics.collision, &logics.physics);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
-
-        // update collision logic twice to avoid unwanted teleporting
-        logics.collision.update();
 
         for contact in logics.collision.contacts.iter() {
             match (logics.collision.metadata[contact.0].id,
