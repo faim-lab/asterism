@@ -8,7 +8,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, geometry::Aabb};
-use asterism::{AabbCollision, QueuedResources, resources::Transaction, Linking, WinitKeyboardControl, PointPhysics};
+use asterism::{AabbCollision, QueuedResources, resources::Transaction, Linking};
 
 const WIDTH: u32 = 320;
 const HEIGHT: u32 = 240;
@@ -52,7 +52,8 @@ struct World {
     walls: Vec<Wall>,
     items: Vec<Collectible>,
     portals: Vec<Portal>,
-    teleport: Vec<u8>,
+    touching_portal: bool,  // checks if player has always been touching portal since teleporting
+    just_teleported: bool,
 }
 
 /// Walls of the maze
@@ -106,7 +107,6 @@ impl MazePhysics {
         }
     }
 
-    // possibly add keyboard input as a parameter
     fn update(&mut self) {
         for i in 0..2 {
             self.pos[i] += self.vel[i];
@@ -122,7 +122,7 @@ struct Logics {
 }
 
 impl Logics {
-    fn new(walls: &Vec<Wall>) -> Self {
+    fn new(walls: &Vec<Wall>, portals: &Vec<Portal>) -> Self {
         Self {
             physics: MazePhysics::new(),
             collision: {
@@ -134,7 +134,7 @@ impl Logics {
                         Vec2::new(0.0, 0.0),
                         true, true, CollisionID::Wall);
                 }
-                for portal in &self.portals {
+                for portal in portals {
                     collision.add_collision_entity(portal.x as f32, portal.y as f32,
                         PORTAL_SIZE as f32, PORTAL_SIZE as f32,
                         Vec2::new(0.0, 0.0),
@@ -142,7 +142,11 @@ impl Logics {
                 }
                 collision
             },
-            linking: Linking::new(),
+            linking: {
+                let mut linking = Linking::new();
+                linking.add_link_map(2, vec![vec![1, 2], vec![0, 2], vec![0, 1]]);
+                linking
+            },
             resources: {
                 let mut resources = QueuedResources::new();
                 resources.items.insert( PoolID::Points, 0.0 );
@@ -173,7 +177,7 @@ fn main() -> Result<(), Error> {
     };
 
     let mut world = World::new();
-    let mut logics = Logics::new(&world.walls);
+    let mut logics = Logics::new(&world.walls, &world.portals);
 
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
@@ -241,7 +245,7 @@ fn main() -> Result<(), Error> {
 }
 
 impl World {
-    /// Create a new `World` instance that can draw walls, items, and player
+    /// Create a new `World` instance that can draw walls, portals, items, and player
     fn new() -> Self {
         Self {
             x: 58,
@@ -280,29 +284,26 @@ impl World {
             },
             items: {
                 vec![
-                    Collectible::new(112, 72),
+                    Collectible::new(154, 29),
                     Collectible::new(26, 198),
                     Collectible::new(195, 198),
-                    Collectible::new(195, 29),
                     Collectible::new(281, 198),
                 ]
             },
             portals: {
                 vec![
-                    Portal::new(153, 27, [0x4f, 0xe5, 0xff, 0xff]), // blue portal 1
-                    Portal::new(280, 27, [0xfc, 0x8c, 0x03, 0xff]), // orange portal 2
+                    Portal::new(110, 70, [0x4f, 0xe5, 0xff, 0xff]), // blue portal 0
+                    Portal::new(280, 27, [0xfc, 0x8c, 0x03, 0xff]), // orange portal 1
                 ]
             },
-            teleport: Vec::new(),
+            touching_portal: false,
+            just_teleported: false,
         }
     }
 
     /// Update the `World` internal state 
     fn update(&mut self, logics: &mut Logics, movement: ( Direction, Direction )) {
-        // eventually get rid of this
-        // won't tackle control logics for now so probably have to pass `movement` into the physics OL
-
-        // temporary mapping of keyboard controls to velocities
+        // mapping of keyboard controls to velocities
         match movement.0 {
             Direction::Up => self.vy = -10,
             Direction::Down => self.vy = 10,
@@ -318,14 +319,26 @@ impl World {
         logics.physics.update();
         self.unproject_physics(&logics.physics);
 
+        // check if player is still touching portal after teleporting (and possibly moving a bit)
+        self.touching_portal = false;
+
         self.project_collision(&mut logics.collision, &logics.physics);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
+        // update collision logic twice to avoid unwanted teleporting
+        logics.collision.update();
+
         for contact in logics.collision.contacts.iter() {
             match (logics.collision.metadata[contact.0].id,
                 logics.collision.metadata[contact.1].id) {
-                (CollisionID::Item, CollisionID::Player) => {
+                    (CollisionID::Portal, CollisionID::Player) => {
+                        if self.just_teleported {
+                            self.touching_portal = true;
+                        }
+                    }
+                    (CollisionID::Item, CollisionID::Player) => {
+                    // add to score and remove touched item from game state
                     logics.resources.transactions.push(vec![(PoolID::Points, Transaction::Change(1))]);
                     self.items.remove(contact.0 - self.walls.len() - self.portals.len());
                 }
@@ -333,10 +346,13 @@ impl World {
             }
         }
         
-        // todo: linking
-        /* self.project_linking(&mut logics.linking);
+        if !self.touching_portal {
+            self.just_teleported = false;
+        }
+
+        self.project_linking(&mut logics.linking, &logics.collision);
         logics.linking.update();
-        self.unproject_linking(&logics.linking); */
+        self.unproject_linking(&logics.linking);
 
         self.project_resources(&mut logics.resources);
         logics.resources.update();
@@ -390,31 +406,52 @@ impl World {
         self.y = collision.bodies[collision.bodies.len() - 1].min.y.trunc() as i16;
     }
 
-    fn project_linking(&self, linking: &mut Linking) {
-        for contact in logics.collision.contacts.iter() {
-            match (logics.collision.metadata[contact.0].id,
-                logics.collision.metadata[contact.1].id) {
-                (CollisionID::Portal, CollisionID:: Player) => {
-                    // todo: linking????
+    // node 0: teleport to orange; node 1: teleport to blue; node 2: no teleporting
+    fn project_linking(&self, linking: &mut Linking, collision: &AabbCollision<CollisionID>) {
+        let mut teleport:Option<usize> = None;
+        for contact in collision.contacts.iter() {
+            match (collision.metadata[contact.0].id,
+                collision.metadata[contact.1].id) {
+                (CollisionID::Portal, CollisionID::Player) => {
+                    if !self.just_teleported && !self.touching_portal {
+                        teleport = Some(contact.0 - self.walls.len());
+                    } else {
+                        teleport = Some(2);
+                    }
                 }
                 _ => {}
             }
         }
         
-        if let Some(teleport) = self.teleport {
-            match teleport {
-                1 => {
-                    // todo?
-                }
-                2 => {
-                    // todo?
-                }
-            }
+        if let Some(choice) = teleport {
+            let next_pos = choice;
+            linking.conditions[0][next_pos] = true;
         }
     }
     
     fn unproject_linking(&mut self, linking: &Linking) {
-        // todo
+        let mut updated:Option<usize> = None;
+        for (.., pos) in linking.maps.iter().zip(linking.positions.iter()) {
+            updated = Some(*pos);
+        }
+
+        if let Some(new_pos) = updated {
+            match new_pos {
+                0 => {
+                    // teleport to orange portal
+                    self.x = 277;
+                    self.y = 24;
+                    self.just_teleported = true;
+                }
+                1 => {
+                    // teleport to blue portal
+                    self.x = 107;
+                    self.y = 67;
+                    self.just_teleported = true;
+                }
+                _ => {}
+            }
+        }
     }
 
     fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
@@ -497,7 +534,6 @@ impl World {
             }
         };
 
-        // draw background first
         for pixel in frame.chunks_exact_mut(4) {
             pixel.copy_from_slice(&[0x48, 0xb2, 0xe8, 0xff]);
         }
