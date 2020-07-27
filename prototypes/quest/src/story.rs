@@ -4,12 +4,14 @@ pub enum StoryPhase {
 //		Exposition(u8),
 //		Tutorial(u8),
 //		Dialogue(u8),
-//		EnemyMove(u8),
 		PlayerMove,
+		EnemyMove,
+		Death,
 }
 
 pub struct StoryManager {
 		current_phase: usize,
+		new_queued: bool,
 		phases_vec: Vec<StoryPhase>,
 }
 
@@ -17,8 +19,9 @@ impl StoryManager {
 		pub fn new() -> StoryManager {
 				StoryManager {
 						current_phase: 0,
+						new_queued: false,
 						phases_vec: vec![
-								StoryPhase::Menu, StoryPhase::PlayerMove
+								StoryPhase::Menu, /*StoryPhase::Dialogue(0),*/ StoryPhase::PlayerMove, StoryPhase::EnemyMove, StoryPhase::Death
 						],
 				}
 		}
@@ -28,6 +31,12 @@ impl StoryManager {
 		}
 
 		pub fn advance_phase(&mut self) {
-				self.current_phase += 1;
+				self.new_queued = true;
+		}
+		pub fn update(&mut self) {
+				if self.new_queued {
+						self.current_phase += 1;
+						self.new_queued = false;
+				}
 		}
 }

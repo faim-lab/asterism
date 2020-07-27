@@ -70,6 +70,9 @@ impl RenderableComponent {
 		fn hide(&mut self) {
 				self.size = 0_f32;
 		}
+		fn unhide(&mut self) {
+				self.size = 0.25;
+		}
 		fn update_coordinates(&mut self, new_coords: Vector) {
 				self.position = if (new_coords.x.abs() - (self.size / 2_f32)) < 1_f32
 						|| (new_coords.y.abs() - (self.size / 2_f32)) < 1_f32 {
@@ -104,6 +107,9 @@ impl RenderableComponentVec {
 		pub fn hide(&mut self, thing_to_be_hidden_id: u32) {
 				self.parts[thing_to_be_hidden_id as usize].hide();
 		}
+		pub fn unhide(&mut self, thing_to_be_unhidden_id: u32) {
+				self.parts[thing_to_be_unhidden_id as usize].unhide();
+		}
 		pub fn update_all_coords(&mut self, new_coords: Vec<Vector>) {
 				for i in 0..self.parts.len() {
 						self.parts[i].update_coordinates(new_coords[i])
@@ -116,6 +122,9 @@ impl RenderableComponentVec {
 								TextureActions::RevertToBase(index) => self.parts[index as usize].texture.return_to_base_texture(),
 						}
 				}
+		}
+		pub fn unhighlight(&mut self, id: u32) {
+				self.parts[id as usize].texture.return_to_base_texture();
 		}
 		pub fn render_all(&self) -> (Vec<Vertex>, Vec<u16>) {
 				let mut indices_vec: Vec<u16> = Vec::new();
@@ -154,10 +163,13 @@ impl RenderableComponentVec {
 				}
 				selection_info_vec
 		}
-		pub fn get_nearest_to_coords(&self, potential_target_coords: Option<Vector>/*, indices_list: Vec<u32>*/) -> Option<u32> {
+		pub fn get_nearest_to_coords(&self, potential_target_coords: Option<Vector>, doom: bool) -> Option<u32> {
 				match potential_target_coords {
 						Some(coords) => {
-								let indices_list: Vec<u32> = vec![38, 46];
+								let mut indices_list: Vec<u32> = vec![37];
+								if !doom {
+										indices_list.push(45);
+								}
 								let target_coords: Vector = coords;
 								let mut nearest: Option<(u32, f32)> = None;
 								for index in indices_list {

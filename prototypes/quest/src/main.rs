@@ -17,6 +17,8 @@ use story::{StoryPhase, StoryManager};
 
 mod example;
 
+use std::{thread, time};
+
 pub struct Game {
 		story: StoryManager,
 		
@@ -72,6 +74,7 @@ impl Game {
 				}
 				self.renderable_components
 						.update_all_coords(self.position_components.get_render_positions(&self.view_area));
+				self.renderable_components.hide(80);
 		}
 		/*fn add_test_thing(&mut self) {
 				self.position_components.add(
@@ -87,22 +90,80 @@ impl Game {
 		}
 		fn update(&mut self) {
 				match self.story.get_current_phase() {
+						/*StoryPhase::Dialogue(number) => {
+								match number {
+										0_u8 => {
+												
+										},
+										_ => panic!("tried to access unknown dialogue"),
+								}
+						},*/
 						StoryPhase::Menu => {
 								if self.user_inputs.click {
 										self.story.advance_phase();
-										self.renderable_components.hide(65);
+										self.renderable_components.hide(82);
 								}
 						},
 						StoryPhase::PlayerMove => {
+								if self.user_inputs.click {
+										match self.selection_components.previously_highlighted {
+												Some(id) => {
+														if id == 37 {
+																self.position_components.parts[69].x =
+																		self.position_components.parts[37].x;
+																 self.position_components.parts[69].y =
+																		self.position_components.parts[37].y;
+																self.position_components.parts[81].x =
+																		self.position_components.parts[37].x;
+																 self.position_components.parts[81].y =
+																		self.position_components.parts[37].y;
+																self.renderable_components.unhide(80);
+																self.story.advance_phase();														
+														} else if id == 45 {
+																self.position_components.parts[69].x =
+																		self.position_components.parts[45].x;
+																 self.position_components.parts[69].y =
+																		self.position_components.parts[45].y;
+																self.position_components.parts[81].x =
+																		self.position_components.parts[45].x;
+																 self.position_components.parts[81].y =
+																		self.position_components.parts[45].y;
+																self.renderable_components.unhide(80);
+														} else {
+																panic!("was not highlighting 37 or 45, cringe");
+														}
+												},
+												None => (),
+										}
+								}
 								self.view_area.update_using_input(&self.user_inputs);
 								
 								self.renderable_components
 										.update_all_coords(self.position_components.get_render_positions(&self.view_area));
 								self.renderable_components
-										.update_textures(self.selection_components.highlight_under_mouse(self.renderable_components.get_nearest_to_coords(self.user_inputs.mouse_coords)));
+										.update_textures(self.selection_components.highlight_under_mouse(self.renderable_components.get_nearest_to_coords(self.user_inputs.mouse_coords, self.position_components.parts[69].y == self.position_components.parts[45].y)));
+						},
+						StoryPhase::EnemyMove => {
+								self.renderable_components.unhighlight(37);
+								thread::sleep(time::Duration::from_secs_f32(0.5));
+								self.renderable_components.hide(69);
+								self.position_components.parts[80].x =
+										self.position_components.parts[69].x;
+								self.position_components.parts[80].y =
+										self.position_components.parts[69].y;
+								self.renderable_components
+										.update_all_coords(self.position_components.get_render_positions(&self.view_area));
+								thread::sleep(time::Duration::from_secs_f32(0.5));
+								self.story.advance_phase();
+						},
+						StoryPhase::Death => {
+								thread::sleep(time::Duration::from_secs_f32(0.5));
+								self.view_area.position = Vector::new(50_f32, 50_f32);
+								self.add_things(vec![((50_f32, 50_f32), (Vector::new(1_f32, 0_f32), 2.0, (12_u32, None)))]);
 						},
 				}
 				self.user_inputs.click = false;
+				self.story.update();
 		}
 }
 
