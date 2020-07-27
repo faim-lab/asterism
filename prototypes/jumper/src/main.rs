@@ -212,8 +212,8 @@ impl World {
         Self {
             player: Entity::new(20, 70, 20, 20),
             ground: Entity::new(0, 200, WIDTH, 55),
-            platform: Entity::new(25, 70, 55, 9),
-            enemy: Entity::new(90, 100, 30, 30),
+            platform: Entity::new(25, 175, 55, 9),
+            enemy: Entity::new(90, 100, 10, 10),
         }
     }
 
@@ -262,7 +262,7 @@ impl World {
             StateID::PlayerGrounded | StateID::PlayerWalk => {
                 let values = &control.values[0][2];
                 if values.changed_by > 0.0 {
-                    self.player.vel.y = -values.value;
+                    self.player.vel.y = -values.value * 2.0;
                 }
             }
             _ => {}

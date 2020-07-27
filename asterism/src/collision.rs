@@ -65,7 +65,29 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
         self.sides_touched.clear();
         self.displacements.resize_with(self.bodies.len(), Default::default);
         self.sides_touched.resize_with(self.bodies.len(), Default::default);
+        self.step_update();
 
+        self.contacts.clear();
+        for (vel, displacement) in self.velocities.iter_mut().zip(self.displacements.iter()) {
+            if let Some(displace) = displacement {
+                if displace.x != 0.0 {
+                    vel.x = 0.0;
+                }
+
+                if displace.y != 0.0 {
+                    vel.y = 0.0;
+                }
+            } else {
+                vel.x = 0.0;
+                vel.y = 0.0;
+            }
+        }
+        self.displacements.clear();
+        self.displacements.resize_with(self.bodies.len(), Default::default);
+        self.step_update();
+    }
+
+    fn step_update(&mut self) {
         for (i, body) in self.bodies.iter().enumerate() {
             for (j, body2) in self.bodies.iter().enumerate() {
                 if body.intersects(body2) && i != j {
