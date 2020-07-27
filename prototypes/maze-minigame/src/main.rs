@@ -42,7 +42,6 @@ impl Default for CollisionID {
     fn default() -> Self { Self::Player }
 }
 
-/// Representation of the application state
 struct World {
     x: i16,
     y: i16,
@@ -52,11 +51,10 @@ struct World {
     walls: Vec<Wall>,
     items: Vec<Collectible>,
     portals: Vec<Portal>,
-    touching_portal: bool,  // checks if player has always been touching portal since teleporting
+    touching_portal: bool,
     just_teleported: bool,
 }
 
-/// Walls of the maze
 struct Wall {
     x: i16,
     y: i16,
@@ -70,7 +68,6 @@ impl Wall {
     }
 }
 
-/// Items that can be obtained and added to score
 struct Collectible {
     x: i16,
     y: i16,
@@ -250,12 +247,12 @@ impl World {
         Self {
             x: 58,
             y: 8,
-            vx: 16,
-            vy: 16,
+            vx: 0,
+            vy: 0,
             score: 0,
             walls: {
                 vec![
-                    // create horizontal walls
+                    // horizontal walls
                     Wall::new(8, 11, 43, 3),
                     Wall::new(94, 11, 218, 3),
                     Wall::new(94, 54, 46, 3),
@@ -267,7 +264,7 @@ impl World {
                     Wall::new(223, 183, 43, 3),
                     Wall::new(8, 226, 218, 3),
                     Wall::new(266, 226, 46, 3),
-                    // create vertical walls
+                    // vertical walls
                     Wall::new(8, 11, 3, 218),
                     Wall::new(51, 54, 3, 89),
                     Wall::new(94, 54, 3, 132),
