@@ -135,11 +135,11 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
 
             let Aabb {
                 min: Vec3 { x: min_i_x, y: min_i_y, .. },
-                max: Vec3 { x: max_i_x, y: max_i_y, ..}
+                max: Vec3 { x: max_i_x, y: max_i_y, .. }
             } = self.bodies[*i];
             let Aabb {
                 min: Vec3 { x: min_j_x, y: min_j_y, .. },
-                max: Vec3 { x: max_j_x, y: max_j_y, ..}
+                max: Vec3 { x: max_j_x, y: max_j_y, .. }
             } = self.bodies[*j];
 
             let mut displace = {
@@ -205,7 +205,7 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
                         if displace.y.abs() > new_displace.y.abs() {
                             new_displace.y = displace.y;
                         }
-                        // touching one side
+                    // touching one side
                     } else {
                         if all_sides.top || all_sides.bottom {
                             if displace.y.abs() > new_displace.y.abs() {
@@ -217,7 +217,7 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
                             }
                         }
                     }
-                    // already touching a corner
+                // already touching a corner
                 } else if all_sides.corner {
                     if all_sides.top || all_sides.bottom {
                         if displace.y.abs() > new_displace.y.abs() {
@@ -260,11 +260,11 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
 
         let Aabb {
             min: Vec3 { x: min_i_x, y: min_i_y, .. },
-            max: Vec3 { x: max_i_x, y: max_i_y, ..}
+            max: Vec3 { x: max_i_x, y: max_i_y, .. }
         } = self.bodies[i];
         let Aabb {
             min: Vec3 { x: min_j_x, y: min_j_y, .. },
-            max: Vec3 { x: max_j_x, y: max_j_y, ..}
+            max: Vec3 { x: max_j_x, y: max_j_y, .. }
         } = self.bodies[j];
 
         let half_isize_x = (max_i_x - min_i_x) / 2.0;
