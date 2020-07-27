@@ -212,8 +212,8 @@ impl World {
         Self {
             player: Entity::new(20, 70, 20, 20),
             ground: Entity::new(0, 200, WIDTH, 55),
-            platform: Entity::new(25, 170, 55, 9),
-            enemy: Entity::new(90, 70, 30, 30),
+            platform: Entity::new(25, 70, 55, 9),
+            enemy: Entity::new(90, 100, 30, 30),
         }
     }
 
@@ -349,6 +349,12 @@ impl World {
             entity_state.conditions[3][0] = true;
         }
 
+        if self.player.vel.y < 0.0 {
+            entity_state.conditions[1][2] = true;
+        } else {
+            entity_state.conditions[1][3] = true;
+        }
+        entity_state.conditions[2][1] = true;
         for contact in collision.contacts.iter() {
             match collision.metadata[contact.0].id {
                 CollisionID::Player(..) => {
@@ -360,29 +366,25 @@ impl World {
                                 } else {
                                     entity_state.conditions[1][1] = true;
                                 }
+                                entity_state.conditions[1][2] = false;
+                                entity_state.conditions[1][3] = false;
                             }
                         }
                         _ => {}
                     }
                 }
-                CollisionID::Enemy => {
+                CollisionID::Ground | CollisionID::MovingPlatform => {
                     match collision.metadata[contact.1].id {
-                        CollisionID::Ground | CollisionID::MovingPlatform => {
-                            if collision.sides_touched[contact.0].bottom {
+                        CollisionID::Enemy => {
+                            if collision.sides_touched[contact.1].bottom {
                                 entity_state.conditions[2][0] = true;
+                                entity_state.conditions[2][1] = false;
                             }
                         }
                         _ => {}
                     }
                 }
-                _ => {
-                    if self.player.vel.y < 0.0 {
-                        entity_state.conditions[1][2] = true;
-                    } else {
-                        entity_state.conditions[1][3] = true;
-                    }
-                    entity_state.conditions[2][1] = true;
-                }
+                _ => {}
             }
         }
     }
@@ -391,7 +393,7 @@ impl World {
         for (map, state) in entity_state.maps.iter().zip(entity_state.states.iter()) {
             match map.states[*state].id {
                 StateID::PlatformLeft => self.platform.vel.x = -1.0,
-                StateID::PlatformRight => self.platform.vel.x = 0.0,
+                StateID::PlatformRight => self.platform.vel.x = 1.0,
                 StateID::PlayerWalk | StateID::PlayerGrounded => self.player.acc.y = 0.0,
                 StateID::PlayerJump | StateID::PlayerFall => self.player.acc.y = 0.03,
                 StateID::EnemyLeft => self.enemy.vel.x = -1.0,
@@ -412,7 +414,7 @@ impl World {
         draw_rect(self.player.x, self.player.y, self.player.w, self.player.h, [0, 0, 0, 255], frame);
         draw_rect(self.ground.x, self.ground.y, self.ground.w, self.ground.h, [64, 64, 64, 255], frame);
         draw_rect(self.platform.x, self.platform.y, self.platform.w, self.platform.h, [64, 64, 64, 255], frame);
-        // draw_rect(self.enemy.x, self.enemy.y, self.enemy.w, self.enemy.h, [64, 64, 64, 255], frame);
+        draw_rect(self.enemy.x, self.enemy.y, self.enemy.w, self.enemy.h, [64, 64, 64, 255], frame);
     }
 }
 

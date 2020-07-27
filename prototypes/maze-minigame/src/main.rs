@@ -344,11 +344,6 @@ impl World {
                     // not sure if there's a better way to place the print statement
                     println!("score: {}", self.score + ITEM_VAL);
                 },
-                (CollisionID::Wall, CollisionID::Player) => {
-                    let sides = &logics.collision.sides_touched[contact.1];
-                    println!("{} {} {} {} {}",
-                        sides.top, sides.bottom, sides.left, sides.right, sides.corner);
-                }
                 _ => {}
             }
         }

@@ -67,22 +67,16 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
         self.sides_touched.resize_with(self.bodies.len(), Default::default);
 
         for (i, body) in self.bodies.iter().enumerate() {
-            for (j, body2) in self.bodies[i + 1..].iter().enumerate() {
-                if body.intersects(body2) {
-                    let j = j + i + 1;
+            for (j, body2) in self.bodies.iter().enumerate() {
+                if body.intersects(body2) && i != j {
                     let sides = self.update_sides_touched(i, j);
 
-                    if sides.0.top { self.sides_touched[i].top = true; }
-                    if sides.0.bottom { self.sides_touched[i].bottom = true; }
-                    if sides.0.left { self.sides_touched[i].left = true; }
-                    if sides.0.right { self.sides_touched[i].right = true; }
-                    if sides.0.corner { self.sides_touched[i].corner = true; }
-                    if sides.1.top { self.sides_touched[j].top = true; }
-                    if sides.1.bottom { self.sides_touched[j].bottom = true; }
-                    if sides.1.left { self.sides_touched[j].left = true; }
-                    if sides.1.right { self.sides_touched[j].right = true; }
-                    if sides.1.corner { self.sides_touched[j].corner = true; }
-                    self.contacts.push((i, j, sides.0));
+                    if sides.top { self.sides_touched[i].top = true; }
+                    if sides.bottom { self.sides_touched[i].bottom = true; }
+                    if sides.left { self.sides_touched[i].left = true; }
+                    if sides.right { self.sides_touched[i].right = true; }
+                    if sides.corner { self.sides_touched[i].corner = true; }
+                    self.contacts.push((i, j, sides));
                 }
             }
         }
@@ -93,144 +87,137 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
             let CollisionData { solid: j_solid, fixed: j_fixed, .. } =
                 self.metadata[*j];
 
-            if !(i_solid && j_solid) || i_fixed && j_fixed {
+            if !(i_solid && j_solid) || i_fixed {
                 continue;
             }
 
-            {
-                let mut i = i;
-                let mut j = j;
-                let mut sides = *sides;
-                if !j_fixed && i_fixed {
-                    let swap = i;
-                    i = j;
-                    j = swap;
-                    if sides.top {
-                        sides.top = false;
-                        sides.bottom = true;
-                    } else if sides.bottom {
-                        sides.top = true;
-                        sides.bottom = false;
-                    }
-
-                    if sides.left {
-                        sides.left = false;
-                        sides.right = true;
-                    } else if sides.right {
-                        sides.left = true;
-                        sides.right = false;
-                    }
+            let Vec2 { x: vel_i_x, y: vel_i_y } = self.velocities[*i];
+            let Vec2 { x: vel_j_x, y: vel_j_y } = self.velocities[*j];
+            let mut speed_ratio = Vec2::new(1.0, 1.0);
+            let speed_sum = Vec2::new(vel_i_x.abs() + vel_j_x.abs(), vel_i_y.abs() + vel_j_y.abs());
+            if !j_fixed {
+                if speed_sum.x == 0.0 && speed_sum.y == 0.0 {
+                    speed_ratio.x = 0.5;
+                    speed_ratio.y = 0.5;
+                } else if speed_sum.x == 0.0 {
+                    speed_ratio.x = 0.5;
+                    speed_ratio.y = vel_i_y.abs() / speed_sum.y;
+                } else if speed_sum.y == 0.0 {
+                    speed_ratio.y = 0.5;
+                    speed_ratio.x = vel_i_x.abs() / speed_sum.x;
+                } else {
+                    speed_ratio.x = vel_i_x.abs() / speed_sum.x;
+                    speed_ratio.y = vel_i_y.abs() / speed_sum.y;
                 }
+            }
 
-                let Aabb {
-                    min: Vec3 { x: min_i_x, y: min_i_y, .. },
-                    max: Vec3 { x: max_i_x, y: max_i_y, ..}
-                } = self.bodies[*i];
-                let Aabb {
-                    min: Vec3 { x: min_j_x, y: min_j_y, .. },
-                    max: Vec3 { x: max_j_x, y: max_j_y, ..}
-                } = self.bodies[*j];
+            let Aabb {
+                min: Vec3 { x: min_i_x, y: min_i_y, .. },
+                max: Vec3 { x: max_i_x, y: max_i_y, ..}
+            } = self.bodies[*i];
+            let Aabb {
+                min: Vec3 { x: min_j_x, y: min_j_y, .. },
+                max: Vec3 { x: max_j_x, y: max_j_y, ..}
+            } = self.bodies[*j];
 
-                let rel_vel_x = self.velocities[*i].x - self.velocities[*j].x;
-                let rel_vel_y = self.velocities[*i].y - self.velocities[*j].y;
-
-                let displace = {
-                    if sides.top || sides.bottom {
-                        if sides.top {
-                            Vec3::new(0.0, max_j_y - min_i_y, 0.0)
-                        } else {
-                            Vec3::new(0.0, min_j_y - max_i_y, 0.0)
-                        }
-                    } else if sides.left || sides.right {
-                        if sides.left {
-                            Vec3::new(max_j_x - min_i_x, 0.0, 0.0)
-                        } else {
-                            Vec3::new(min_j_x - max_i_x, 0.0, 0.0)
-                        }
-                    } else if sides.corner {
-                        let mut new_x = {
-                            if rel_vel_x < 0.0 {
-                                max_j_x - min_i_x
-                            } else if rel_vel_x > 0.0 {
-                                min_j_x - max_i_x
-                            } else {
-                                0.0
-                            }
-                        };
-                        let mut new_y = {
-                            if rel_vel_y < 0.0 {
-                                max_j_y - min_i_y
-                            } else if rel_vel_y > 0.0 {
-                                min_j_y - max_i_y
-                            } else {
-                                0.0
-                            }
-                        };
-                        if new_x.abs() > new_y.abs() {
-                            new_y =  {
-                                if rel_vel_y > 0.0 { -1.0 * new_x.abs() } else { new_x.abs() }
-                            };
-                        } else if new_y.abs() > new_x.abs() {
-                            new_x =  {
-                                if rel_vel_x > 0.0 { -1.0 * new_y.abs() } else { new_y.abs() }
-                            };
-                        }
-                        Vec3::new(new_x, new_y, 0.0)
-
-                    } else {  // if everything is false because vx and vy == 0 but still overlapping...
-                        Vec3::new(0.0, 0.0, 0.0)
+            let mut displace = {
+                if sides.top || sides.bottom {
+                    if sides.top {
+                        Vec3::new(0.0, max_j_y - min_i_y, 0.0)
+                    } else {
+                        Vec3::new(0.0, min_j_y - max_i_y, 0.0)
                     }
-                };
+                } else if sides.left || sides.right {
+                    if sides.left {
+                        Vec3::new(max_j_x - min_i_x, 0.0, 0.0)
+                    } else {
+                        Vec3::new(min_j_x - max_i_x, 0.0, 0.0)
+                    }
+                } else if sides.corner {
+                    let mut new_x = {
+                        if vel_i_x - vel_j_x < 0.0 {
+                            max_j_x - min_i_x
+                        } else if vel_i_x - vel_j_x > 0.0 {
+                            min_j_x - max_i_x
+                        } else {
+                            0.0
+                        }
+                    };
+                    let mut new_y = {
+                        if vel_i_y - vel_j_y < 0.0 {
+                            max_j_y - min_i_y
+                        } else if vel_i_y - vel_j_y > 0.0 {
+                            min_j_y - max_i_y
+                        } else {
+                            0.0
+                        }
+                    };
+                    if new_x.abs() > new_y.abs() {
+                        new_y =  {
+                            if vel_i_y - vel_j_y > 0.0 { -1.0 * new_x.abs() } else { new_x.abs() }
+                        };
+                    } else if new_y.abs() > new_x.abs() {
+                        new_x =  {
+                            if vel_i_x - vel_j_x > 0.0 { -1.0 * new_y.abs() } else { new_y.abs() }
+                        };
+                    }
+                    Vec3::new(new_x, new_y, 0.0)
 
-                let all_sides = &self.sides_touched[*i];
-                if let Some(new_displace) = &mut self.displacements[*i] {
-                    // already touching at least one side and no corners
-                    if {all_sides.bottom || all_sides.top || all_sides.left || sides.right}
-                    && !all_sides.corner {
-                        // touching at two different sides
-                        if (all_sides.top || all_sides.bottom) && (all_sides.left || all_sides.right) {
-                                if displace.x.abs() > new_displace.x.abs() {
-                                    new_displace.x = displace.x;
-                                } 
-                                if displace.y.abs() > new_displace.y.abs() {
-                                    new_displace.y = displace.y;
-                                }
-                                // touching one side
-                            } else {
-                                if all_sides.top || all_sides.bottom {
-                                    if displace.y.abs() > new_displace.y.abs() {
-                                        new_displace.y = displace.y;
-                                    }
-                                } else {
-                                    if displace.x.abs() > new_displace.x.abs() {
-                                        new_displace.x = displace.x;
-                                    }
-                                }
-                            }
-                        // already touching a corner
-                    } else if all_sides.corner {
+                } else {  // if everything is false because vx and vy == 0 but still overlapping...
+                    Vec3::new(0.0, 0.0, 0.0)
+                }
+            };
+            displace.x *= speed_ratio.x;
+            displace.y *= speed_ratio.y;
+
+            let all_sides = &self.sides_touched[*i];
+            if let Some(new_displace) = &mut self.displacements[*i] {
+                // already touching at least one side and no corners
+                if {all_sides.bottom || all_sides.top || all_sides.left || sides.right}
+                && !all_sides.corner {
+                    // touching at two different sides
+                    if (all_sides.top || all_sides.bottom) && (all_sides.left || all_sides.right) {
+                        if displace.x.abs() > new_displace.x.abs() {
+                            new_displace.x = displace.x;
+                        } 
+                        if displace.y.abs() > new_displace.y.abs() {
+                            new_displace.y = displace.y;
+                        }
+                        // touching one side
+                    } else {
                         if all_sides.top || all_sides.bottom {
                             if displace.y.abs() > new_displace.y.abs() {
                                 new_displace.y = displace.y;
                             }
-                            new_displace.x = 0.0;
-                        } else if all_sides.left || all_sides.right {
+                        } else {
                             if displace.x.abs() > new_displace.x.abs() {
                                 new_displace.x = displace.x;
-                            }
-                            new_displace.y = 0.0;
-                        } else {  // touching corner(s) only or something
-                            if displace.x.abs() > new_displace.x.abs() {
-                                new_displace.x = displace.x;
-                            }
-                            if displace.y.abs() > new_displace.y.abs() {
-                                new_displace.y = displace.y;
                             }
                         }
                     }
-                } else {
-                    self.displacements[*i] = Some(displace);
+                    // already touching a corner
+                } else if all_sides.corner {
+                    if all_sides.top || all_sides.bottom {
+                        if displace.y.abs() > new_displace.y.abs() {
+                            new_displace.y = displace.y;
+                        }
+                        new_displace.x = 0.0;
+                    } else if all_sides.left || all_sides.right {
+                        if displace.x.abs() > new_displace.x.abs() {
+                            new_displace.x = displace.x;
+                        }
+                        new_displace.y = 0.0;
+                    } else {  // touching corner(s) only or something
+                        if displace.x.abs() > new_displace.x.abs() {
+                            new_displace.x = displace.x;
+                        }
+                        if displace.y.abs() > new_displace.y.abs() {
+                            new_displace.y = displace.y;
+                        }
+                    }
                 }
+            } else {
+                self.displacements[*i] = Some(displace);
             }
         }
 
@@ -245,14 +232,18 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
         }
     }
 
-    fn update_sides_touched(&self, i: usize, j: usize) -> (Sides, Sides) {
+    fn update_sides_touched(&self, i: usize, j: usize) -> Sides {
         let rel_vel_x = self.velocities[i].x - self.velocities[j].x;
         let rel_vel_y = self.velocities[i].y - self.velocities[j].y;
 
-        let Aabb { min: Vec3 { x: min_i_x, y: min_i_y, .. },
-        max: Vec3 { x: max_i_x, y: max_i_y, ..} } = self.bodies[i];
-        let Aabb { min: Vec3 { x: min_j_x, y: min_j_y, .. },
-        max: Vec3 { x: max_j_x, y: max_j_y, ..} } = self.bodies[j];
+        let Aabb {
+            min: Vec3 { x: min_i_x, y: min_i_y, .. },
+            max: Vec3 { x: max_i_x, y: max_i_y, ..}
+        } = self.bodies[i];
+        let Aabb {
+            min: Vec3 { x: min_j_x, y: min_j_y, .. },
+            max: Vec3 { x: max_j_x, y: max_j_y, ..}
+        } = self.bodies[j];
 
         let half_isize_x = (max_i_x - min_i_x) / 2.0;
         let half_isize_y = (max_i_y - min_i_y) / 2.0;
@@ -278,35 +269,28 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
             (old_iy_center - old_jy_center).abs() < half_isize_y + half_jsize_y
         };
 
-        let mut sides_i = Sides::new();
-        let mut sides_j = Sides::new();
+        let mut sides = Sides::new();
 
         if !overlapped_before_y && overlapped_before_x && rel_vel_y != 0.0 {
             if rel_vel_y < 0.0 {
-                sides_i.top = true;
-                sides_j.bottom = true;
+                sides.top = true;
             } else {
-                sides_i.bottom = true;
-                sides_j.top = true;
+                sides.bottom = true;
             }
         }
 
-
         if !overlapped_before_x && overlapped_before_y && rel_vel_x != 0.0 {
             if rel_vel_x < 0.0 {
-                sides_i.left = true;
-                sides_j.right = true;
+                sides.left = true;
             } else {
-                sides_i.right = true;
-                sides_j.left = true;
+                sides.right = true;
             }
         }
 
         if !overlapped_before_x && !overlapped_before_y && rel_vel_x != 0.0 && rel_vel_y != 0.0 {
-                sides_i.corner = true;
-                sides_j.corner = true;
+            sides.corner = true;
         }
-        (sides_i, sides_j)
+        sides
     }
 
     pub fn add_collision_entity(&mut self, x: f32, y: f32, w: f32, h: f32, vel: Vec2, solid: bool, fixed: bool, id: ID) {
