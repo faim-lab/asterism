@@ -1,4 +1,4 @@
-use asterism::{QueuedResources, resources::Transaction, Linking};
+use asterism::{QueuedResources, resources::Transaction, GraphedLinking};
 use std::io::{self, prelude::*, BufReader, Error, ErrorKind};
 use std::fs::File;
 use rand::prelude::*;
@@ -21,7 +21,7 @@ struct World {
 
 struct Logics {
     resources: QueuedResources<PoolID>,
-    linking: Linking,
+    linking: GraphedLinking,
 }
 
 impl Logics {
@@ -33,7 +33,7 @@ impl Logics {
                 resources.items.insert( PoolID::NumSleep, 0.0 );
                 resources
             },
-            linking: Linking::new()
+            linking: GraphedLinking::new()
         }
     }
 }
@@ -119,7 +119,7 @@ impl World {
         println!();
     }
 
-    fn project_linking(&self, linking: &mut Linking) {
+    fn project_linking(&self, linking: &mut GraphedLinking) {
         if let Some(choice) = self.choice {
             let mut next_label = linking.maps[0].nodes[self.current_label].links[choice];
             match (self.current_label, choice) {
@@ -147,7 +147,7 @@ impl World {
         }
     }
 
-    fn unproject_linking(&mut self, linking: &Linking) {
+    fn unproject_linking(&mut self, linking: &GraphedLinking) {
         for (.., pos) in linking.maps.iter().zip(linking.positions.iter()) {
             self.current_label = *pos;
         }
@@ -202,7 +202,7 @@ impl World {
     }
 }
 
-fn read_file(world: &mut World, linking: &mut Linking) -> io::Result<()> {
+fn read_file(world: &mut World, linking: &mut GraphedLinking) -> io::Result<()> {
     let f = File::open("text")?;
     let f = BufReader::new(f);
     let mut current_label;

@@ -8,7 +8,7 @@ mod linking;
 pub use collision::AabbCollision;
 pub use control::WinitKeyboardControl;
 pub use entity_state::FlatEntityState;
-pub use linking::Linking;
+pub use linking::GraphedLinking;
 pub use physics::PointPhysics;
 pub use resources::QueuedResources;
 

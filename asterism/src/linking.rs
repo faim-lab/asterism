@@ -1,10 +1,10 @@
-pub struct Linking {
+pub struct GraphedLinking {
     pub maps: Vec<NodeMap>,
     pub conditions: Vec<Vec<bool>>,
     pub positions: Vec<usize>
 }
 
-impl Linking {
+impl GraphedLinking {
     pub fn new() -> Self {
         Self {
             maps: Vec::new(),

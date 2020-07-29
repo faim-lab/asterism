@@ -8,7 +8,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, geometry::Aabb};
-use asterism::{AabbCollision, QueuedResources, resources::Transaction, Linking};
+use asterism::{AabbCollision, QueuedResources, resources::Transaction, GraphedLinking};
 
 const WIDTH: u32 = 320;
 const HEIGHT: u32 = 240;
@@ -114,7 +114,7 @@ impl MazePhysics {
 struct Logics {
     physics: MazePhysics,
     collision: AabbCollision<CollisionID>,
-    linking: Linking,
+    linking: GraphedLinking,
     resources: QueuedResources<PoolID>,
 }
 
@@ -140,7 +140,7 @@ impl Logics {
                 collision
             },
             linking: {
-                let mut linking = Linking::new();
+                let mut linking = GraphedLinking::new();
                 linking.add_link_map(2, vec![vec![1, 2], vec![0, 2], vec![0, 1]]);
                 linking
             },
@@ -401,7 +401,7 @@ impl World {
     }
 
     // node 0: teleport to orange; node 1: teleport to blue; node 2: no teleporting
-    fn project_linking(&self, linking: &mut Linking, collision: &AabbCollision<CollisionID>) {
+    fn project_linking(&self, linking: &mut GraphedLinking, collision: &AabbCollision<CollisionID>) {
         let mut teleport:Option<usize> = None;
         for contact in collision.contacts.iter() {
             match (collision.metadata[contact.0].id,
@@ -423,7 +423,7 @@ impl World {
         }
     }
     
-    fn unproject_linking(&mut self, linking: &Linking) {
+    fn unproject_linking(&mut self, linking: &GraphedLinking) {
         let mut updated:Option<usize> = None;
         for (.., pos) in linking.maps.iter().zip(linking.positions.iter()) {
             updated = Some(*pos);

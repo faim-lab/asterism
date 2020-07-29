@@ -70,7 +70,7 @@ impl<ID: Copy + Eq + Ord> WinitKeyboardControl<ID> {
                     changed_by
                 } = &mut values;
                 match input_type {
-                    InputType::Digital => {
+                    _ => {
                         if events.key_held(key_input.keycode) {
                             self.this_frame_inputs.push(key_input.keycode);
                             if *is_valid {
@@ -90,7 +90,6 @@ impl<ID: Copy + Eq + Ord> WinitKeyboardControl<ID> {
                             }
                         }
                     }
-                    _ => {}
                 }
                 *value = (*value + *changed_by).max(Input::min(key_input)).min(Input::max(key_input));
             }
