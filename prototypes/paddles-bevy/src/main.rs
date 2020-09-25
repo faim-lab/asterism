@@ -1,18 +1,12 @@
-#![deny(clippy::all)]
-#![forbid(unsafe_code)]
+#![allow(dead_code)]
+#![allow(unused_imports)]
 
-use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
-use winit::dpi::LogicalSize;
-use winit::event::{Event, VirtualKeyCode};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::WindowBuilder;
-use winit_input_helper::WinitInputHelper;
-use ultraviolet::{Vec2, geometry::Aabb};
+use bevy::prelude::*;
 use asterism::{QueuedResources, resources::Transaction, AabbCollision, PointPhysics, WinitKeyboardControl};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
-const PADDLE_OFF_X: u8 = 16;
+const PADDLE_OFF_X: u8 = 108;
 const PADDLE_HEIGHT: u8 = 48;
 const PADDLE_WIDTH: u8 = 8;
 const BALL_SIZE: u8 = 8;
@@ -53,68 +47,6 @@ struct Logics {
     resources: QueuedResources<PoolID>,
 }
 
-impl Logics {
-    fn new() -> Self {
-        Self {
-            control: {
-                let mut control = WinitKeyboardControl::new();
-                control.add_key_map(0,
-                    VirtualKeyCode::Q,
-                    ActionID::MoveUp(Player::P1),
-                );
-                control.add_key_map(0,
-                    VirtualKeyCode::A,
-                    ActionID::MoveDown(Player::P1),
-                );
-                control.add_key_map(0,
-                    VirtualKeyCode::W,
-                    ActionID::Serve(Player::P1),
-                );
-                control.add_key_map(1,
-                    VirtualKeyCode::O,
-                    ActionID::MoveUp(Player::P2),
-                );
-                control.add_key_map(1,
-                    VirtualKeyCode::L,
-                    ActionID::MoveDown(Player::P2),
-                );
-                control.add_key_map(1,
-                    VirtualKeyCode::I,
-                    ActionID::Serve(Player::P2),
-                );
-                control
-            },
-            physics: PointPhysics::new(),
-            collision: {
-                let mut collision = AabbCollision::new();
-                collision.add_collision_entity(-1.0, 0.0,
-                    1.0, HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
-                    true, true, CollisionID::SideWall(Player::P1));
-                collision.add_collision_entity(WIDTH as f32, 0.0,
-                    1.0, HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
-                    true, true, CollisionID::SideWall(Player::P2));
-                collision.add_collision_entity(0.0, -1.0,
-                    WIDTH as f32, 1.0,
-                    Vec2::new(0.0, 0.0),
-                    true, true, CollisionID::TopWall);
-                collision.add_collision_entity(0.0, HEIGHT as f32,
-                    WIDTH as f32, 1.0,
-                    Vec2::new(0.0, 0.0),
-                    true, true, CollisionID::BottomWall);
-                collision
-            },
-            resources: {
-                let mut resources = QueuedResources::new();
-                resources.items.insert( PoolID::Points(Player::P1), 0.0 );
-                resources.items.insert( PoolID::Points(Player::P2), 0.0 );
-                resources
-            }
-        }
-    }
-}
-
 #[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
 enum Player {
     P1,
@@ -132,80 +64,80 @@ struct World {
 }
 
 
-fn main() -> Result<(), Error> {
-    let event_loop = EventLoop::new();
-    let mut input = WinitInputHelper::new();
-    let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
-        WindowBuilder::new()
-            .with_title("paddles")
-            .with_inner_size(size)
-            .with_min_inner_size(size)
-            .build(&event_loop)
-            .unwrap()
-    };
-    let mut hidpi_factor = window.scale_factor();
+fn main() {
+    let world = World::new();
+    App::build()
+        .add_default_plugins()
+        .add_resource(world)
+        .add_startup_system(setup.system())
+        .run();
+}
 
-    let mut pixels = {
-        let surface = Surface::create(&window);
-        let surface_texture = SurfaceTexture::new(WIDTH as u32, HEIGHT as u32, surface);
-        Pixels::new(WIDTH as u32, HEIGHT as u32, surface_texture)?
-    };
-    let mut world = World::new();
-    let mut logics = Logics::new();
-
-    event_loop.run(move |event, _, control_flow| {
-        // Draw the current frame
-        if let Event::RedrawRequested(_) = event {
-            world.draw(pixels.get_frame());
-            if pixels
-                .render()
-                    .map_err(|e| panic!("pixels.render() failed: {}", e))
-                    .is_err()
-            {
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-        }
-
-        // Handle input events
-        if input.update(&event) {
-            // Close events
-            if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-
-            // Adjust high DPI factor
-            if let Some(factor) = input.scale_factor_changed() {
-                hidpi_factor = factor;
-            }
-
-            // Resize the window
-            if let Some(size) = input.window_resized() {
-                pixels.resize(size.width, size.height);
-            }
-
-            // Update internal state and request a redraw
-            world.update(&mut logics, &input);
-            window.request_redraw();
-        }
-    });
+fn setup(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    world: Res<World>
+) {
+    // let bounds = Vec2::new(WIDTH as f32, HEIGHT as f32);
+    commands
+        .spawn(Camera2dComponents::default())
+        // paddle 1
+        .spawn(SpriteComponents {
+            material: materials.add(Color::rgb(1.0, 1.0, 1.0).into()),
+            transform: Transform::from_translation(
+                Vec3::new(
+                    -(PADDLE_OFF_X as f32),
+                    world.paddles.0 as f32,
+                    0.0
+                )
+            ),
+            sprite: Sprite::new(Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .with(world.paddles.0)
+        // paddle 2
+        .spawn(SpriteComponents {
+            material: materials.add(Color::rgb(1.0, 1.0, 1.0).into()),
+            transform: Transform::from_translation(
+                Vec3::new(
+                    PADDLE_OFF_X as f32,
+                    world.paddles.1 as f32,
+                    0.0
+                )
+            ),
+            sprite: Sprite::new(Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .with(world.paddles.1)
+        .spawn(SpriteComponents {
+            material: materials.add(Color::rgb(1.0, 0.75, 0.0).into()),
+            transform: Transform::from_translation(
+                Vec3::new(
+                    world.ball.0 as f32,
+                    world.ball.0 as f32,
+                    0.0
+                )
+            ),
+            sprite: Sprite::new(Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32)),
+            ..Default::default()
+        })
+        .with(world.ball);
 }
 
 impl World {
     fn new() -> Self {
         Self {
-            paddles: (HEIGHT / 2 - PADDLE_HEIGHT / 2, HEIGHT / 2 - PADDLE_HEIGHT / 2),
-            ball: (WIDTH / 2 - BALL_SIZE / 2, HEIGHT / 2 - BALL_SIZE / 2),
+            paddles: (0, 0),
+            ball: (0, 0),
             ball_err: Vec2::new(0.0, 0.0),
             ball_vel: Vec2::new(0.0, 0.0),
             serving: Some(Player::P1),
             score: (0, 0),
         }
     }
+}
 
-    fn update(&mut self, logics: &mut Logics, input: &WinitInputHelper) {
+/*    fn update(&mut self, logics: &mut Logics, input: &WinitInputHelper) {
         self.project_control(&mut logics.control);
         logics.control.update(input);
         self.unproject_control(&logics.control);
@@ -327,7 +259,7 @@ impl World {
     }
 
     fn project_physics(&self, physics: &mut PointPhysics) {
-        physics.positions.resize_with(1, Vec2::default);
+        physics.positions.resize_with(1, Vec2::new());
         physics.velocities.resize_with(1, Vec2::default);
         physics.accelerations.resize_with(1, Vec2::default);
         physics.add_physics_entity(0,
@@ -439,16 +371,66 @@ impl World {
     }
 }
 
-fn draw_rect(x:u8, y:u8, w:u8, h:u8, color:[u8;4], frame:&mut [u8]) {
-    let x = x.min(WIDTH-1) as usize;
-    let w = (w as usize).min(WIDTH as usize-x);
-    let y = y.min(HEIGHT-1) as usize;
-    let h = (h as usize).min(HEIGHT as usize-y);
-    for row in 0..h {
-        let row_start = (WIDTH as usize)*4*(y+row);
-        let slice = &mut frame[(row_start+x*4)..(row_start+(x+w)*4)];
-        for pixel in slice.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&color);
+
+impl Logics {
+    fn new() -> Self {
+        Self {
+            control: {
+                let mut control = WinitKeyboardControl::new();
+                control.add_key_map(0,
+                    VirtualKeyCode::Q,
+                    ActionID::MoveUp(Player::P1),
+                );
+                control.add_key_map(0,
+                    VirtualKeyCode::A,
+                    ActionID::MoveDown(Player::P1),
+                );
+                control.add_key_map(0,
+                    VirtualKeyCode::W,
+                    ActionID::Serve(Player::P1),
+                );
+                control.add_key_map(1,
+                    VirtualKeyCode::O,
+                    ActionID::MoveUp(Player::P2),
+                );
+                control.add_key_map(1,
+                    VirtualKeyCode::L,
+                    ActionID::MoveDown(Player::P2),
+                );
+                control.add_key_map(1,
+                    VirtualKeyCode::I,
+                    ActionID::Serve(Player::P2),
+                );
+                control
+            },
+            physics: PointPhysics::new(),
+            collision: {
+                let mut collision = AabbCollision::new();
+                collision.add_collision_entity(-1.0, 0.0,
+                    1.0, HEIGHT as f32,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::SideWall(Player::P1));
+                collision.add_collision_entity(WIDTH as f32, 0.0,
+                    1.0, HEIGHT as f32,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::SideWall(Player::P2));
+                collision.add_collision_entity(0.0, -1.0,
+                    WIDTH as f32, 1.0,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::TopWall);
+                collision.add_collision_entity(0.0, HEIGHT as f32,
+                    WIDTH as f32, 1.0,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::BottomWall);
+                collision
+            },
+            resources: {
+                let mut resources = QueuedResources::new();
+                resources.items.insert( PoolID::Points(Player::P1), 0.0 );
+                resources.items.insert( PoolID::Points(Player::P2), 0.0 );
+                resources
+            }
         }
     }
-}
+}*/
+

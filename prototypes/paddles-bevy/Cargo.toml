@@ -1,0 +1,12 @@
+[package]
+name = "paddles-bevy"
+version = "0.1.0"
+authors = ["cynthia <cxla2018@mymail.pomona.edu>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# going to lock this at v0.2.0 for now because the crate updates so fast
+bevy = "0.2.0"
+asterism = { path = "../../asterism" }
