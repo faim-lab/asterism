@@ -2,7 +2,7 @@
 #![allow(unused_imports)]
 
 use bevy::prelude::*;
-use asterism::{QueuedResources, resources::Transaction, AabbCollision, PointPhysics, WinitKeyboardControl};
+use asterism::{QueuedResources, resources::Transaction, AabbCollision, PointPhysics, BevyKeyboardControl};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -41,8 +41,8 @@ enum PoolID {
 }
 
 struct Logics {
-    control: WinitKeyboardControl<ActionID>,
-    physics: PointPhysics,
+    control: BevyKeyboardControl<ActionID>,
+    physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID>,
     resources: QueuedResources<PoolID>,
 }
@@ -53,11 +53,18 @@ enum Player {
     P2
 }
 
+struct Ball {
+    x: f32,
+    y: f32,
+}
+
+struct Paddle {
+    y: f32,
+}
 
 struct World {
-    paddles: (u8, u8),
-    ball: (u8, u8),
-    ball_err: Vec2,
+    paddles: (Paddle, Paddle),
+    ball: Ball,
     ball_vel: Vec2,
     serving: Option<Player>,
     score: (u8, u8)
@@ -66,9 +73,11 @@ struct World {
 
 fn main() {
     let world = World::new();
+    let logics = Logics::new();
     App::build()
         .add_default_plugins()
         .add_resource(world)
+        .add_resource(logics)
         .add_startup_system(setup.system())
         .run();
 }
@@ -76,8 +85,11 @@ fn main() {
 fn setup(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    world: Res<World>
+    world: Res<World>,
 ) {
+    // setup logics
+
+    // eventually make the bounds of the window what theyre actually supposed to be
     // let bounds = Vec2::new(WIDTH as f32, HEIGHT as f32);
     commands
         .spawn(Camera2dComponents::default())
@@ -87,57 +99,66 @@ fn setup(
             transform: Transform::from_translation(
                 Vec3::new(
                     -(PADDLE_OFF_X as f32),
-                    world.paddles.0 as f32,
+                    world.paddles.0.y,
                     0.0
                 )
             ),
             sprite: Sprite::new(Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32)),
             ..Default::default()
         })
-        .with(world.paddles.0)
+        .with(Paddle {y: 0.0})
         // paddle 2
         .spawn(SpriteComponents {
             material: materials.add(Color::rgb(1.0, 1.0, 1.0).into()),
             transform: Transform::from_translation(
                 Vec3::new(
                     PADDLE_OFF_X as f32,
-                    world.paddles.1 as f32,
+                    world.paddles.1.y,
                     0.0
                 )
             ),
             sprite: Sprite::new(Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32)),
             ..Default::default()
         })
-        .with(world.paddles.1)
+        .with(Paddle {y: 0.0})
         .spawn(SpriteComponents {
             material: materials.add(Color::rgb(1.0, 0.75, 0.0).into()),
             transform: Transform::from_translation(
                 Vec3::new(
-                    world.ball.0 as f32,
-                    world.ball.0 as f32,
+                    world.ball.x,
+                    world.ball.y,
                     0.0
                 )
             ),
             sprite: Sprite::new(Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32)),
             ..Default::default()
         })
-        .with(world.ball);
+        .with(Ball {x: 0.0, y: 0.0});
 }
+
+
+fn update(
+    mut world: ResMut<World>,
+    mut logics: ResMut<Logics>,
+    input: Res<Input<KeyCode>>) {
+    world.update(&mut logics, input);
+}
+
 
 impl World {
     fn new() -> Self {
         Self {
-            paddles: (0, 0),
-            ball: (0, 0),
-            ball_err: Vec2::new(0.0, 0.0),
+            paddles: (Paddle {y: 0.0}, Paddle {y: 0.0}),
+            ball: Ball {x: 0.0, y: 0.0},
             ball_vel: Vec2::new(0.0, 0.0),
             serving: Some(Player::P1),
             score: (0, 0),
         }
     }
-}
 
-/*    fn update(&mut self, logics: &mut Logics, input: &WinitInputHelper) {
+    fn update(&mut self,
+        logics: &mut Logics,
+        input: Res<Input<KeyCode>>) {
         self.project_control(&mut logics.control);
         logics.control.update(input);
         self.unproject_control(&logics.control);
@@ -146,7 +167,7 @@ impl World {
         logics.physics.update();
         self.unproject_physics(&logics.physics);
 
-        self.project_collision(&mut logics.collision, &logics.control);
+        /* self.project_collision(&mut logics.collision, &logics.control);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
@@ -209,16 +230,16 @@ impl World {
                     }
                 }
             }
-        }
+        }*/
     }
 
-    fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
+    fn project_control(&self, control: &mut BevyKeyboardControl<ActionID>) {
         control.mapping[0][0].is_valid = true;
         control.mapping[0][1].is_valid = true;
         control.mapping[1][0].is_valid = true;
         control.mapping[1][1].is_valid = true;
 
-        if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
+        if (self.ball_vel.x(), self.ball_vel.y()) == (0.0, 0.0) {
             match self.serving {
                 Some(Player::P1) => control.mapping[0][2].is_valid = true,
                 Some(Player::P2) => control.mapping[1][2].is_valid = true,
@@ -230,16 +251,13 @@ impl World {
         }
     }
 
-    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
-        self.paddles.0 = ((self.paddles.0 as i16 -
-                control.values[0][0].value as i16 +
-                control.values[0][1].value as i16)
-            .max(0) as u8).min(255 - PADDLE_HEIGHT);
-        self.paddles.1 = ((self.paddles.1 as i16 -
-                control.values[1][0].value as i16 +
-                control.values[1][1].value as i16)
-            .max(0) as u8).min(255 - PADDLE_HEIGHT);
-        if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
+    fn unproject_control(&mut self, control: &BevyKeyboardControl<ActionID>) {
+        self.paddles.0.y =
+            (self.paddles.0.y - control.values[0][0].value + control.values[0][1].value)
+            .max(0.0).min(255.0 - PADDLE_HEIGHT as f32);
+        self.paddles.1.y = (self.paddles.1.y - control.values[1][0].value + control.values[1][1].value)
+            .max(0.0).min(255.0 - PADDLE_HEIGHT as f32);
+        if (self.ball_vel.x(), self.ball_vel.y()) == (0.0, 0.0) {
             match self.serving {
                 Some(Player::P1) => {
                     let values = &control.values[0][2];
@@ -258,26 +276,23 @@ impl World {
         }
     }
 
-    fn project_physics(&self, physics: &mut PointPhysics) {
-        physics.positions.resize_with(1, Vec2::new());
+    fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
+        physics.positions.resize_with(1, Vec2::default);
         physics.velocities.resize_with(1, Vec2::default);
         physics.accelerations.resize_with(1, Vec2::default);
         physics.add_physics_entity(0,
-            Vec2::new(
-                self.ball.0 as f32 + self.ball_err.x,
-                self.ball.1 as f32 + self.ball_err.y),
+            Vec2::new(self.ball.x, self.ball.y),
             self.ball_vel,
             Vec2::new(0.0, 0.0));
     }
 
-    fn unproject_physics(&mut self, physics: &PointPhysics) {
-        self.ball.0 = physics.positions[0].x.trunc().max(0.0).min((WIDTH - BALL_SIZE) as f32) as u8;
-        self.ball.1 = physics.positions[0].y.trunc().max(0.0).min((HEIGHT - BALL_SIZE) as f32) as u8;
-        self.ball_err = physics.positions[0] - Vec2::new(self.ball.0 as f32, self.ball.1 as f32);
+    fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
+        self.ball.x = physics.positions[0].x().max(0.0).min((WIDTH - BALL_SIZE) as f32);
+        self.ball.y = physics.positions[0].y().max(0.0).min((HEIGHT - BALL_SIZE) as f32);
         self.ball_vel = physics.velocities[0];
     }
 
-    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>, control: &WinitKeyboardControl<ActionID>) {
+/*    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>, control: &BevyKeyboardControl<ActionID>) {
         collision.bodies.resize_with(4, Aabb::default);
         collision.velocities.resize_with(4, Default::default);
         collision.metadata.resize_with(4, Default::default);
@@ -347,28 +362,8 @@ impl World {
                 }
             }
         }
-    }
+    }*/
 
-    /// Draw the `World` state to the frame buffer.
-    ///
-    /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
-    fn draw(&self, frame: &mut [u8]) {
-        for pixel in frame.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&[0,0,128,255]);
-        }
-        draw_rect(PADDLE_OFF_X, self.paddles.0,
-            PADDLE_WIDTH, PADDLE_HEIGHT,
-            [255,255,255,255],
-            frame);
-        draw_rect(WIDTH-PADDLE_OFF_X-PADDLE_WIDTH, self.paddles.1,
-            PADDLE_WIDTH, PADDLE_HEIGHT,
-            [255,255,255,255],
-            frame);
-        draw_rect(self.ball.0, self.ball.1,
-            BALL_SIZE, BALL_SIZE,
-            [255,200,0,255],
-            frame);
-    }
 }
 
 
@@ -376,61 +371,43 @@ impl Logics {
     fn new() -> Self {
         Self {
             control: {
-                let mut control = WinitKeyboardControl::new();
+                let mut control = BevyKeyboardControl::new();
                 control.add_key_map(0,
-                    VirtualKeyCode::Q,
+                    KeyCode::Q,
                     ActionID::MoveUp(Player::P1),
                 );
                 control.add_key_map(0,
-                    VirtualKeyCode::A,
+                    KeyCode::A,
                     ActionID::MoveDown(Player::P1),
                 );
                 control.add_key_map(0,
-                    VirtualKeyCode::W,
+                    KeyCode::W,
                     ActionID::Serve(Player::P1),
                 );
                 control.add_key_map(1,
-                    VirtualKeyCode::O,
+                    KeyCode::O,
                     ActionID::MoveUp(Player::P2),
                 );
                 control.add_key_map(1,
-                    VirtualKeyCode::L,
+                    KeyCode::L,
                     ActionID::MoveDown(Player::P2),
                 );
                 control.add_key_map(1,
-                    VirtualKeyCode::I,
+                    KeyCode::I,
                     ActionID::Serve(Player::P2),
                 );
                 control
             },
             physics: PointPhysics::new(),
-            collision: {
-                let mut collision = AabbCollision::new();
-                collision.add_collision_entity(-1.0, 0.0,
-                    1.0, HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
-                    true, true, CollisionID::SideWall(Player::P1));
-                collision.add_collision_entity(WIDTH as f32, 0.0,
-                    1.0, HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
-                    true, true, CollisionID::SideWall(Player::P2));
-                collision.add_collision_entity(0.0, -1.0,
-                    WIDTH as f32, 1.0,
-                    Vec2::new(0.0, 0.0),
-                    true, true, CollisionID::TopWall);
-                collision.add_collision_entity(0.0, HEIGHT as f32,
-                    WIDTH as f32, 1.0,
-                    Vec2::new(0.0, 0.0),
-                    true, true, CollisionID::BottomWall);
-                collision
-            },
+            collision: AabbCollision::new(),
             resources: {
                 let mut resources = QueuedResources::new();
                 resources.items.insert( PoolID::Points(Player::P1), 0.0 );
                 resources.items.insert( PoolID::Points(Player::P2), 0.0 );
                 resources
-            }
+            },
         }
     }
-}*/
+}
+
 

@@ -1,12 +1,12 @@
-use ultraviolet::Vec2;
+use std::ops::{Add, AddAssign};
 
-pub struct PointPhysics {
+pub struct PointPhysics<Vec2: Add + AddAssign + Copy> {
     pub positions: Vec<Vec2>,
     pub velocities: Vec<Vec2>,
     pub accelerations: Vec<Vec2>,
 }
 
-impl PointPhysics {
+impl<Vec2: Add + AddAssign + Copy> PointPhysics<Vec2> {
     pub fn new() -> Self {
         Self {
             positions: Vec::new(),

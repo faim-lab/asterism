@@ -48,7 +48,7 @@ enum PoolID {
 
 struct Logics {
     control: WinitKeyboardControl<ActionID>,
-    physics: PointPhysics,
+    physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID>,
     resources: QueuedResources<PoolID>,
 }
@@ -326,7 +326,7 @@ impl World {
         }
     }
 
-    fn project_physics(&self, physics: &mut PointPhysics) {
+    fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
         physics.positions.resize_with(1, Vec2::default);
         physics.velocities.resize_with(1, Vec2::default);
         physics.accelerations.resize_with(1, Vec2::default);
@@ -338,7 +338,7 @@ impl World {
             Vec2::new(0.0, 0.0));
     }
 
-    fn unproject_physics(&mut self, physics: &PointPhysics) {
+    fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
         self.ball.0 = physics.positions[0].x.trunc().max(0.0).min((WIDTH - BALL_SIZE) as f32) as u8;
         self.ball.1 = physics.positions[0].y.trunc().max(0.0).min((HEIGHT - BALL_SIZE) as f32) as u8;
         self.ball_err = physics.positions[0] - Vec2::new(self.ball.0 as f32, self.ball.1 as f32);
