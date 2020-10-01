@@ -2,7 +2,7 @@
 #![allow(unused_imports)]
 
 use bevy::prelude::*;
-use asterism::{QueuedResources, resources::Transaction, AabbCollision, PointPhysics, BevyKeyboardControl};
+use asterism::{KeyboardControl, QueuedResources, resources::Transaction, AabbCollision, PointPhysics, BevyKeyboardControl};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -160,7 +160,7 @@ impl World {
         logics: &mut Logics,
         input: Res<Input<KeyCode>>) {
         self.project_control(&mut logics.control);
-        logics.control.update(input);
+        logics.control.update(&input);
         self.unproject_control(&logics.control);
 
         self.project_physics(&mut logics.physics);

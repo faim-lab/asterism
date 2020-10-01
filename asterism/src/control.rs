@@ -1,13 +1,36 @@
 use winit::event::VirtualKeyCode;
 use winit_input_helper::WinitInputHelper;
 use bevy::input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
-use bevy::prelude::*;
+use bevy::prelude::Res;
 
 pub trait Input {
     fn min(&self) -> f32;
     fn max(&self) -> f32;
 }
 
+pub trait KeyboardControl<ID: Copy + Eq + Ord, KeyCode, InputHandler> {
+    fn new() -> Self;
+    fn update(&mut self, events: &InputHandler);
+
+    fn mapping(&self) -> &Vec<Vec<Action<ID, KeyCode>>>;
+    fn values(&self) -> &Vec<Vec<Values>>;
+
+    fn add_key_map(&mut self, locus_idx: usize, keycode: KeyCode, id: ID);
+
+    fn get_action(&self, id: ID) -> Option<(f32, f32)> {
+        for (i, ..) in self.mapping().iter().enumerate() {
+            return self.get_action_in_set(i, id);
+        }
+        None
+    }
+
+    fn get_action_in_set(&self, action_set: usize, id: ID) -> Option<(f32, f32)> {
+        if let Some(i) = self.mapping()[action_set].iter().position(|act| act.id == id) {
+            return Some((self.values()[action_set][i].value, self.values()[action_set][i].changed_by));
+        }
+        None
+    }
+}
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct KeyInput<KeyCode> {
     keycode: KeyCode,
@@ -54,8 +77,8 @@ pub struct BevyKeyboardControl<ID: Copy + Eq + Ord> {
     this_frame_inputs: Vec<BevyKeyCode>,
 }
 
-impl<ID: Copy + Eq + Ord> WinitKeyboardControl<ID> {
-    pub fn new() -> Self {
+impl<ID: Copy + Eq + Ord> KeyboardControl<ID, VirtualKeyCode, WinitInputHelper> for WinitKeyboardControl<ID> {
+    fn new() -> Self {
         Self {
             mapping: Vec::new(),
             values: Vec::new(),
@@ -64,7 +87,13 @@ impl<ID: Copy + Eq + Ord> WinitKeyboardControl<ID> {
         }
     }
 
-    pub fn update(&mut self, events: &WinitInputHelper) {
+    fn mapping(&self) -> &Vec<Vec<Action<ID, VirtualKeyCode>>> {
+        &self.mapping
+    }
+
+    fn values(&self) -> &Vec<Vec<Values>> { &self.values }
+
+    fn update(&mut self, events: &WinitInputHelper) {
         for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
             for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
                 let Action {key_input, input_type, is_valid, ..} = action;
@@ -101,7 +130,7 @@ impl<ID: Copy + Eq + Ord> WinitKeyboardControl<ID> {
         self.this_frame_inputs.clear();
     }
 
-    pub fn add_key_map(&mut self, locus_idx: usize, keycode: VirtualKeyCode, id: ID) {
+    fn add_key_map(&mut self, locus_idx: usize, keycode: VirtualKeyCode, id: ID) {
         if locus_idx >= self.mapping.len() {
             self.mapping.resize_with(locus_idx + 1, Default::default);
             self.values.resize_with(locus_idx + 1, Default::default);
@@ -121,25 +150,11 @@ impl<ID: Copy + Eq + Ord> WinitKeyboardControl<ID> {
                 changed_by: 0.0,
             });
     }
-
-    pub fn get_action(&self, id: ID) -> Option<(f32, f32)> {
-        for (i, ..) in self.mapping.iter().enumerate() {
-            return self.get_action_in_set(i, id);
-        }
-        None
-    }
-
-    pub fn get_action_in_set(&self, action_set: usize, id: ID) -> Option<(f32, f32)> {
-        if let Some(i) = self.mapping[action_set].iter().position(|act| act.id == id) {
-            return Some((self.values[action_set][i].value, self.values[action_set][i].changed_by));
-        }
-        None
-    }
 }
 
 
-impl<ID: Copy + Eq + Ord> BevyKeyboardControl<ID> {
-    pub fn new() -> Self {
+impl<ID: Copy + Eq + Ord> KeyboardControl<ID, BevyKeyCode, Res<'_, BevyInput<BevyKeyCode>>> for BevyKeyboardControl<ID> {
+    fn new() -> Self {
         Self {
             mapping: Vec::new(),
             values: Vec::new(),
@@ -148,7 +163,13 @@ impl<ID: Copy + Eq + Ord> BevyKeyboardControl<ID> {
         }
     }
 
-    pub fn update(&mut self, events: Res<BevyInput<BevyKeyCode>>) {
+    fn mapping(&self) -> &Vec<Vec<Action<ID, BevyKeyCode>>> {
+        &self.mapping
+    }
+
+    fn values(&self) -> &Vec<Vec<Values>> { &self.values }
+
+    fn update(&mut self, events: &Res<BevyInput<BevyKeyCode>>) {
         for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
             for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
                 let Action {key_input, input_type, is_valid, ..} = action;
@@ -185,7 +206,7 @@ impl<ID: Copy + Eq + Ord> BevyKeyboardControl<ID> {
         self.this_frame_inputs.clear();
     }
 
-    pub fn add_key_map(&mut self, locus_idx: usize, keycode: BevyKeyCode, id: ID) {
+    fn add_key_map(&mut self, locus_idx: usize, keycode: BevyKeyCode, id: ID) {
         if locus_idx >= self.mapping.len() {
             self.mapping.resize_with(locus_idx + 1, Default::default);
             self.values.resize_with(locus_idx + 1, Default::default);
@@ -200,19 +221,5 @@ impl<ID: Copy + Eq + Ord> BevyKeyboardControl<ID> {
         self.values[locus_idx].push(
             Values {value: 0.0,
                 changed_by: 0.0});
-    }
-
-    pub fn get_action(&self, id: ID) -> Option<(f32, f32)> {
-        for (i, ..) in self.mapping.iter().enumerate() {
-            return self.get_action_in_set(i, id);
-        }
-        None
-    }
-
-    pub fn get_action_in_set(&self, action_set: usize, id: ID) -> Option<(f32, f32)> {
-        if let Some(i) = self.mapping[action_set].iter().position(|act| act.id == id) {
-            return Some((self.values[action_set][i].value, self.values[action_set][i].changed_by));
-        }
-        None
     }
 }
