@@ -1,7 +1,6 @@
 use winit::event::VirtualKeyCode;
 use winit_input_helper::WinitInputHelper;
-use bevy::input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
-use bevy::prelude::Res;
+use bevy_input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
 
 pub trait Input {
     fn min(&self) -> f32;
@@ -153,7 +152,7 @@ impl<ID: Copy + Eq + Ord> KeyboardControl<ID, VirtualKeyCode, WinitInputHelper> 
 }
 
 
-impl<ID: Copy + Eq + Ord> KeyboardControl<ID, BevyKeyCode, Res<'_, BevyInput<BevyKeyCode>>> for BevyKeyboardControl<ID> {
+impl<ID: Copy + Eq + Ord> KeyboardControl<ID, BevyKeyCode, BevyInput<BevyKeyCode>> for BevyKeyboardControl<ID> {
     fn new() -> Self {
         Self {
             mapping: Vec::new(),
@@ -169,7 +168,7 @@ impl<ID: Copy + Eq + Ord> KeyboardControl<ID, BevyKeyCode, Res<'_, BevyInput<Bev
 
     fn values(&self) -> &Vec<Vec<Values>> { &self.values }
 
-    fn update(&mut self, events: &Res<BevyInput<BevyKeyCode>>) {
+    fn update(&mut self, events: &BevyInput<BevyKeyCode>) {
         for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
             for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
                 let Action {key_input, input_type, is_valid, ..} = action;

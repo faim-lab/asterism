@@ -8,7 +8,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, geometry::Aabb};
-use asterism::{QueuedResources, resources::Transaction, AabbCollision, PointPhysics, WinitKeyboardControl};
+use asterism::{QueuedResources, resources::Transaction, AabbCollision, PointPhysics, KeyboardControl, WinitKeyboardControl};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;

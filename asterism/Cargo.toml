@@ -9,6 +9,6 @@ edition = "2018"
 ultraviolet = "0.4.6"
 winit = "0.22.0"
 winit_input_helper = "0.7.0"
-bevy = "0.2.0"
+bevy_input = "0.2.0"
 
 

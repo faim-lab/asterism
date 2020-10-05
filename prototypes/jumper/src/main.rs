@@ -8,7 +8,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use ultraviolet::{Vec2, geometry::Aabb};
-use asterism::{AabbCollision, WinitKeyboardControl, FlatEntityState, PointPhysics};
+use asterism::{AabbCollision, KeyboardControl, WinitKeyboardControl, FlatEntityState, PointPhysics};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -61,7 +61,7 @@ enum StateID {
 
 struct Logics {
     control: WinitKeyboardControl<ActionID>,
-    physics: PointPhysics,
+    physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID>,
     entity_state: FlatEntityState<StateID>,
 }
@@ -269,7 +269,7 @@ impl World {
         } 
     }
 
-    fn project_physics(&self, physics: &mut PointPhysics) {
+    fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
         physics.accelerations.resize_with(3, Vec2::default);
         physics.positions.resize_with(3, Vec2::default);
         physics.velocities.resize_with(3, Vec2::default);
@@ -288,7 +288,7 @@ impl World {
             self.enemy.acc);
     }
 
-    fn unproject_physics(&mut self, physics: &PointPhysics) {
+    fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
         let update_game_state = |i: usize, x: &mut u8, y: &mut u8, err: &mut Vec2, vel: &mut Vec2, w: u8, h: u8| {
             *x = physics.positions[i].x.trunc().max(0.0).min((WIDTH - w) as f32) as u8;
             *y = physics.positions[i].y.trunc().max(0.0).min((HEIGHT - h) as f32) as u8;
