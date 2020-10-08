@@ -2,11 +2,11 @@
 #![allow(unused_imports)]
 
 use bevy::prelude::*;
-use asterism::{KeyboardControl, QueuedResources, resources::Transaction, AabbCollision, PointPhysics, BevyKeyboardControl};
+use asterism::{QueuedResources, resources::Transaction, AabbCollision, PointPhysics, KeyboardControl, BevyKeyboardControl};
 
-const WIDTH: u8 = 255;
-const HEIGHT: u8 = 255;
-const PADDLE_OFF_X: u8 = 108;
+const WIDTH: u8 = 150;
+const HEIGHT: u8 = 150;
+const PADDLE_OFF_X: u8 = 120;
 const PADDLE_HEIGHT: u8 = 48;
 const PADDLE_WIDTH: u8 = 8;
 const BALL_SIZE: u8 = 8;
@@ -82,17 +82,8 @@ fn main() {
         .add_resource(logics)
         .add_resource(Serving { serving: Some(Player::P1) })
         .add_startup_system(setup.system())
-        .add_system_to_stage(stage::UPDATE, project_control.system())
-        .add_stage_after(stage::UPDATE, "up_control")
-        .add_system_to_stage("up_control", update_control.system())
-        .add_stage_after("up_control", "unproj_control")
-        .add_system_to_stage("unproj_control", unproject_control.system())
-        .add_stage_after("unproj_control", "proj_physics")
-        .add_system_to_stage("proj_physics", project_physics.system())
-        .add_stage_after("proj_physics", "up_physics")
-        .add_system_to_stage("up_physics", update_physics.system())
-        .add_stage_after("up_physics", "unproj_physics")
-        .add_system_to_stage("unproj_physics", unproject_physics.system())
+        .add_system(control.system())
+        .add_system(physics.system())
         .run();
 }
 
@@ -135,9 +126,21 @@ fn setup(
         .with(Ball { vel: Vec2::new(0.0, 0.0) });
 }
 
-fn project_control(
-    serving: Res<Serving>,
+fn control(
     mut logics: ResMut<Logics>,
+    mut serving: ResMut<Serving>,
+    input: Res<Input<KeyCode>>,
+    mut ball_query: Query<(&mut Ball, &Transform)>,
+    mut paddles_query: Query<(&Paddle, &mut Transform)>
+) {
+    project_control(&serving, &mut logics);
+    logics.control.update(&input);
+    unproject_control(&logics, &mut serving, &mut ball_query, &mut paddles_query);
+}
+
+fn project_control(
+    serving: &Serving,
+    logics: &mut Logics,
 ) {
     let control = &mut logics.control;
     control.mapping[0][0].is_valid = true;
@@ -156,16 +159,11 @@ fn project_control(
     }
 }
 
-fn update_control(mut logics: ResMut<Logics>, input: Res<Input<KeyCode>>) {
-    logics.control.update(&input);
-}
-
-
 fn unproject_control(
-    logics: Res<Logics>,
-    mut serving: ResMut<Serving>,
-    mut ball_query: Query<(&mut Ball, &Transform)>,
-    mut paddles_query: Query<(&Paddle, &mut Transform)>
+    logics: &Logics,
+    mut serving: &mut Serving,
+    ball_query: &mut Query<(&mut Ball, &Transform)>,
+    paddles_query: &mut Query<(&Paddle, &mut Transform)>
 ) {
     let control = &logics.control;
     for (paddle, mut transform) in &mut paddles_query.iter() {
@@ -175,13 +173,13 @@ fn unproject_control(
                 *translation.y_mut() += control.values[0][0].value
                     - control.values[0][1].value;
                 *translation.y_mut() = translation.y()
-                .max(0.0).min(255.0 - PADDLE_HEIGHT as f32);
+                .max(-(HEIGHT as f32)).min(HEIGHT as f32);
             }
             Player::P2 => {
                 *translation.y_mut() += control.values[1][0].value
                     - control.values[1][1].value;
                 *translation.y_mut() = translation.y()
-                .max(0.0).min(255.0 - PADDLE_HEIGHT as f32);
+                .max(-(HEIGHT as f32)).min(HEIGHT as f32);
             }
         }
     }
@@ -192,14 +190,14 @@ fn unproject_control(
                 Player::P1 => {
                     let values = &control.values[0][2];
                     if values.changed_by == 1.0 && values.value != 0.0 {
-                        ball.vel = Vec2::new(1.0, 1.0);
+                        ball.vel = Vec2::new(1.0, -1.0);
                         serving.serving = None;
                     }
                 }
                 Player::P2 => {
                     let values = &control.values[1][2];
                     if values.changed_by == 1.0 && values.value != 0.0 {
-                        ball.vel = Vec2::new(-1.0, -1.0);
+                        ball.vel = Vec2::new(-1.0, 1.0);
                         serving.serving = None;
                     }
                 }
@@ -208,30 +206,37 @@ fn unproject_control(
     }
 }
 
-fn project_physics(
+fn physics(
     mut logics: ResMut<Logics>,
-    (ball, transform): (&Ball, &Transform),
+    mut ball_query: Query<(&mut Ball, &mut Transform)>
+) {
+    project_physics(&mut logics, &mut ball_query);
+    logics.physics.update();
+    unproject_physics(&logics, &mut ball_query);
+}
+
+fn project_physics(
+    logics: &mut Logics,
+    ball_query: &mut Query<(&mut Ball, &mut Transform)>
 ) {
     let physics = &mut logics.physics;
     physics.positions.resize_with(1, Vec2::default);
     physics.velocities.resize_with(1, Vec2::default);
     physics.accelerations.resize_with(1, Vec2::default);
-    physics.add_physics_entity(0,
-        {
-            let translation = transform.translation();
-            Vec2::new(translation.x(), translation.y())
-        },
-        ball.vel,
-        Vec2::new(0.0, 0.0));
-}
-
-fn update_physics(mut logics: ResMut<Logics>) {
-    logics.physics.update();
+    for (ball, transform) in &mut ball_query.iter() {
+        physics.add_physics_entity(0,
+            {
+                let translation = transform.translation();
+                Vec2::new(translation.x(), translation.y())
+            },
+            ball.vel,
+            Vec2::new(0.0, 0.0));
+    }
 }
 
 fn unproject_physics(
-    logics: Res<Logics>,
-    mut ball_query: Query<(&mut Ball, &mut Transform)>,
+    logics: &Logics,
+    ball_query: &mut Query<(&mut Ball, &mut Transform)>,
 ) {
     let physics = &logics.physics;
     for (mut ball, mut transform) in &mut ball_query.iter() {
