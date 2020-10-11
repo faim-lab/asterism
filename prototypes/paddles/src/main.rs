@@ -7,7 +7,7 @@ use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
-use ultraviolet::{Vec2, geometry::Aabb};
+use ultraviolet::Vec2;
 use asterism::{QueuedResources, resources::Transaction, AabbCollision, PointPhysics, KeyboardControl, WinitKeyboardControl};
 
 const WIDTH: u8 = 255;
@@ -49,7 +49,7 @@ enum PoolID {
 struct Logics {
     control: WinitKeyboardControl<ActionID>,
     physics: PointPhysics<Vec2>,
-    collision: AabbCollision<CollisionID>,
+    collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
 }
 
@@ -87,20 +87,30 @@ impl Logics {
             physics: PointPhysics::new(),
             collision: {
                 let mut collision = AabbCollision::new();
-                collision.add_collision_entity(-1.0, 0.0,
-                    1.0, HEIGHT as f32,
+                // left
+                collision.add_collision_entity(
+                    Vec2::new(-1.0, (HEIGHT / 2) as f32),
+                    Vec2::new(1.0, (HEIGHT / 2) as f32),
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::SideWall(Player::P1));
-                collision.add_collision_entity(WIDTH as f32, 0.0,
-                    1.0, HEIGHT as f32,
+                // right
+                collision.add_collision_entity(
+                    Vec2::new(WIDTH as f32 + 1.0,
+                        (HEIGHT / 2) as f32),
+                    Vec2::new(1.0, (HEIGHT / 2) as f32),
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::SideWall(Player::P2));
-                collision.add_collision_entity(0.0, -1.0,
-                    WIDTH as f32, 1.0,
+                // top
+                collision.add_collision_entity(
+                    Vec2::new((WIDTH / 2) as f32, -1.0),
+                    Vec2::new((WIDTH / 2) as f32, 1.0),
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::TopWall);
-                collision.add_collision_entity(0.0, HEIGHT as f32,
-                    WIDTH as f32, 1.0,
+                // bottom
+                collision.add_collision_entity(
+                    Vec2::new((WIDTH / 2) as f32,
+                        HEIGHT as f32 + 1.0),
+                    Vec2::new((WIDTH / 2) as f32, 1.0),
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::BottomWall);
                 collision
@@ -130,7 +140,6 @@ struct World {
     serving: Option<Player>,
     score: (u8, u8)
 }
-
 
 fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
@@ -241,7 +250,8 @@ impl World {
                         self.ball_vel.y *= -1.0;
                     }
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
-                    if match player {
+                    self.ball_vel = Vec2::new(0.0, 0.0);
+                    /* if match player {
                         Player::P1 =>
                             (self.ball.0 as i16 - (PADDLE_OFF_X + PADDLE_WIDTH) as i16).abs()
                             > ((self.ball.1 + BALL_SIZE) as i16 - self.paddles.0 as i16).abs().min((self.ball.1 as i16 - (self.paddles.0 + PADDLE_HEIGHT) as i16).abs()),
@@ -253,12 +263,12 @@ impl World {
                     } else {
                         self.ball_vel.x *= -1.0;
                     }
-                    self.change_angle(player);
+                    self.change_angle(player); */
                 },
                 _ => {}
             }
         }
-        
+
         self.project_resources(&mut logics.resources);
         logics.resources.update();
         self.unproject_resources(&logics.resources);
@@ -312,13 +322,15 @@ impl World {
                 Some(Player::P1) => {
                     let values = &control.values[0][2];
                     if values.changed_by == 1.0 && values.value != 0.0 {
-                        self.ball_vel = Vec2::new(1.0, 1.0);
+                        self.ball_vel.x = 1.0;
+                        self.ball_vel.y = 1.0;
                     }
                 }
                 Some(Player::P2) => {
                     let values = &control.values[1][2];
                     if values.changed_by == 1.0 && values.value != 0.0 {
-                        self.ball_vel = Vec2::new(-1.0, -1.0);
+                        self.ball_vel.x = -1.0;
+                        self.ball_vel.y = -1.0;
                     }
                 }
                 None => {}
@@ -345,34 +357,45 @@ impl World {
         self.ball_vel = physics.velocities[0];
     }
 
-    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>, control: &WinitKeyboardControl<ActionID>) {
-        collision.bodies.resize_with(4, Aabb::default);
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID, Vec2>, control: &WinitKeyboardControl<ActionID>) {
+        collision.centers.resize_with(4, Default::default);
+        collision.half_sizes.resize_with(4, Default::default);
         collision.velocities.resize_with(4, Default::default);
         collision.metadata.resize_with(4, Default::default);
+
         collision.add_collision_entity(
-            self.ball.0 as f32, self.ball.1 as f32,
-            BALL_SIZE as f32, BALL_SIZE as f32,
+            Vec2::new(self.ball.0 as f32 + (BALL_SIZE / 2) as f32,
+                self.ball.1 as f32 + (BALL_SIZE / 2) as f32),
+            Vec2::new((BALL_SIZE / 2) as f32, (BALL_SIZE / 2) as f32),
             self.ball_vel,
             true, false, CollisionID::Ball);
+
         collision.add_collision_entity(
-            PADDLE_OFF_X as f32, self.paddles.0 as f32,
-            PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
-            Vec2::new(0.0, -control.values[0][0].value + control.values[0][1].value),
+            Vec2::new(PADDLE_OFF_X as f32 + (PADDLE_WIDTH / 2) as f32,
+                (self.paddles.0 + PADDLE_HEIGHT / 2) as f32),
+            Vec2::new((PADDLE_WIDTH / 2) as f32,
+                (PADDLE_HEIGHT / 2) as f32),
+            Vec2::new(0.0,
+                control.values[0][1].value - control.values[0][0].value),
                 true, true, CollisionID::Paddle(Player::P1));
+
         collision.add_collision_entity(
-            (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32, self.paddles.1 as f32,
-            PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
-            Vec2::new(0.0, -control.values[1][0].value + control.values[1][1].value),
+            Vec2::new((WIDTH - PADDLE_OFF_X - PADDLE_WIDTH / 2) as f32,
+                (self.paddles.1 + PADDLE_HEIGHT / 2) as f32),
+            Vec2::new((PADDLE_WIDTH / 2) as f32,
+                (PADDLE_HEIGHT / 2) as f32),
+            Vec2::new(0.0,
+                control.values[1][1].value - control.values[1][0].value),
             true, true, CollisionID::Paddle(Player::P2));
     }
 
-    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
-        self.ball.0 = collision.bodies[4].min.x.trunc() as u8;
-        self.ball.1 = collision.bodies[4].min.y.trunc() as u8;
+    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
+        self.ball.0 = (collision.centers[4].x - collision.half_sizes[4].x).trunc() as u8;
+        self.ball.1 = (collision.centers[4].y - collision.half_sizes[4].y).trunc() as u8;
     }
 
     fn change_angle(&mut self, player: Player) {
-        let Vec2{x, y} = &mut self.ball_vel;
+        let Vec2 { x, y } = &mut self.ball_vel;
         let paddle_center = match player {
             Player::P1 => self.paddles.0 + PADDLE_HEIGHT / 2,
             Player::P2 => self.paddles.1 + PADDLE_HEIGHT / 2

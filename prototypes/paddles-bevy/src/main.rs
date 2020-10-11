@@ -43,7 +43,7 @@ enum PoolID {
 struct Logics {
     control: BevyKeyboardControl<ActionID>,
     physics: PointPhysics<Vec2>,
-    collision: AabbCollision<CollisionID>,
+    collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
 }
 
@@ -75,7 +75,6 @@ struct Serving {
 
 
 fn main() {
-    // let world = World::new();
     let logics = Logics::new();
     App::build()
         .add_default_plugins()
@@ -91,8 +90,6 @@ fn setup(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    // setup logics
-
     // eventually make the bounds of the window what theyre actually supposed to be
     // let bounds = Vec2::new(WIDTH as f32, HEIGHT as f32);
     commands

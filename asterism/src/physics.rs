@@ -1,12 +1,12 @@
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, Mul};
 
-pub struct PointPhysics<Vec2: Add + AddAssign + Copy> {
+pub struct PointPhysics<Vec2: Add + AddAssign + Copy + Mul<Output = Vec2>> {
     pub positions: Vec<Vec2>,
     pub velocities: Vec<Vec2>,
     pub accelerations: Vec<Vec2>,
 }
 
-impl<Vec2: Add + AddAssign + Copy> PointPhysics<Vec2> {
+impl<Vec2: Add + AddAssign + Copy + Mul<Output = Vec2>> PointPhysics<Vec2> {
     pub fn new() -> Self {
         Self {
             positions: Vec::new(),
