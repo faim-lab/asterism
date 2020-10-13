@@ -250,8 +250,7 @@ impl World {
                         self.ball_vel.y *= -1.0;
                     }
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
-                    self.ball_vel = Vec2::new(0.0, 0.0);
-                    /* if match player {
+                    if match player {
                         Player::P1 =>
                             (self.ball.0 as i16 - (PADDLE_OFF_X + PADDLE_WIDTH) as i16).abs()
                             > ((self.ball.1 + BALL_SIZE) as i16 - self.paddles.0 as i16).abs().min((self.ball.1 as i16 - (self.paddles.0 + PADDLE_HEIGHT) as i16).abs()),
@@ -263,7 +262,7 @@ impl World {
                     } else {
                         self.ball_vel.x *= -1.0;
                     }
-                    self.change_angle(player); */
+                    self.change_angle(player);
                 },
                 _ => {}
             }

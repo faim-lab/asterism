@@ -262,9 +262,9 @@ impl<ID, V2> AabbCollision<ID, V2> where
         let (vxj, vyj) =
             (self.velocities[j].x(), self.velocities[j].y());
 
-        if sides[2] || sides[3] {
+        if sides[0] || sides[1] {
             V2::new(0.0, dy)
-        } else if sides[0] || sides[1] {
+        } else if sides[2] || sides[3] {
             V2::new(dx, 0.0)
         } else if sides[4] {
             let mut new_x = if vxi == vyi { dx } else { 0.0 };
