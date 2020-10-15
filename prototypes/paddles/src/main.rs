@@ -228,8 +228,8 @@ impl World {
         self.unproject_collision(&logics.collision);
 
         for contact in logics.collision.contacts.iter() {
-            match (logics.collision.metadata[contact.0].id,
-                logics.collision.metadata[contact.1].id) {
+            match (logics.collision.metadata[contact.i].id,
+                logics.collision.metadata[contact.j].id) {
                 (CollisionID::SideWall(player), CollisionID::Ball) => {
                     self.ball_vel = Vec2::new(0.0, 0.0);
                     self.ball = (WIDTH / 2 - BALL_SIZE / 2,

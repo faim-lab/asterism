@@ -1,5 +1,6 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
+#![allow(dead_code)]
 
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
@@ -7,7 +8,7 @@ use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
-use ultraviolet::{Vec2, geometry::Aabb};
+use ultraviolet::Vec2;
 use asterism::{AabbCollision, QueuedResources, resources::Transaction, GraphedLinking};
 
 const WIDTH: u32 = 320;
@@ -113,7 +114,7 @@ impl MazePhysics {
 
 struct Logics {
     physics: MazePhysics,
-    collision: AabbCollision<CollisionID>,
+    collision: AabbCollision<CollisionID, Vec2>,
     linking: GraphedLinking,
     resources: QueuedResources<PoolID>,
 }
@@ -124,16 +125,25 @@ impl Logics {
             physics: MazePhysics::new(),
             collision: {
                 let mut collision = AabbCollision::new();
-                for wall in walls {
-                    collision.add_collision_entity(
-                        wall.x as f32, wall.y as f32,
-                        wall.w as f32, wall.h as f32,
+                for wall in walls.iter() {
+                    let (center, half_size) = Logics::xywh_to_center_hs(
+                        wall.x as f32,
+                        wall.y as f32,
+                        wall.w as f32,
+                        wall.h as f32);
+                    collision.add_collision_entity(center,
+                        half_size,
                         Vec2::new(0.0, 0.0),
                         true, true, CollisionID::Wall);
                 }
                 for portal in portals {
-                    collision.add_collision_entity(portal.x as f32, portal.y as f32,
-                        PORTAL_SIZE as f32, PORTAL_SIZE as f32,
+                    let (center, half_size) = Logics::xywh_to_center_hs(
+                        portal.x as f32,
+                        portal.y as f32,
+                        PORTAL_SIZE as f32,
+                        PORTAL_SIZE as f32);
+                    collision.add_collision_entity(center,
+                        half_size,
                         Vec2::new(0.0, 0.0),
                         false, true, CollisionID::Portal);
                 }
@@ -150,6 +160,11 @@ impl Logics {
                 resources
             },
         }
+    }
+
+    fn xywh_to_center_hs(x: f32, y: f32, w: f32, h: f32) -> (Vec2, Vec2) {
+        (Vec2::new(x + w / 2.0, y + h / 2.0),
+        Vec2::new(w / 2.0, h / 2.0))
     }
 }
 
@@ -317,15 +332,15 @@ impl World {
         self.unproject_physics(&logics.physics);
 
         // check if player is still touching portal after teleporting (and possibly moving a bit)
-        self.touching_portal = false;
+        // self.touching_portal = false;
 
         self.project_collision(&mut logics.collision, &logics.physics);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
         for contact in logics.collision.contacts.iter() {
-            match (logics.collision.metadata[contact.0].id,
-                logics.collision.metadata[contact.1].id) {
+            match (logics.collision.metadata[contact.i].id,
+                logics.collision.metadata[contact.j].id) {
                     (CollisionID::Portal, CollisionID::Player) => {
                         if self.just_teleported {
                             self.touching_portal = true;
@@ -334,35 +349,35 @@ impl World {
                     (CollisionID::Item, CollisionID::Player) => {
                     // add to score and remove touched item from game state
                     logics.resources.transactions.push(vec![(PoolID::Points, Transaction::Change(1))]);
-                    self.items.remove(contact.0 - self.walls.len() - self.portals.len());
+                    self.items.remove(contact.i - self.walls.len() - self.portals.len());
                 }
                 _ => {}
             }
         }
         
-        if !self.touching_portal {
-            self.just_teleported = false;
-        }
+        // if !self.touching_portal {
+        //     self.just_teleported = false;
+        // }
 
-        self.project_linking(&mut logics.linking, &logics.collision);
-        logics.linking.update();
-        self.unproject_linking(&logics.linking);
+        // self.project_linking(&mut logics.linking, &logics.collision);
+        // logics.linking.update();
+        // self.unproject_linking(&logics.linking);
 
-        self.project_resources(&mut logics.resources);
-        logics.resources.update();
-        self.unproject_resources(&logics.resources);
+        // self.project_resources(&mut logics.resources);
+        // logics.resources.update();
+        // self.unproject_resources(&logics.resources);
 
-        for (completed, item_types) in logics.resources.completed.iter() {
-            if *completed {
-                for item_type in item_types {
-                    match item_type {
-                        PoolID::Points => {
-                            println!("You scored! Current points: {}", self.score);
-                        }
-                    }
-                }
-            }
-        }
+        // for (completed, item_types) in logics.resources.completed.iter() {
+        //     if *completed {
+        //         for item_type in item_types {
+        //             match item_type {
+        //                 PoolID::Points => {
+        //                     println!("You scored! Current points: {}", self.score);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
     }
 
     fn project_physics(&self, physics: &mut MazePhysics) {
@@ -377,38 +392,50 @@ impl World {
         self.y = physics.pos[1].trunc() as i16;
     }
 
-    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>, physics: &MazePhysics) {
-        collision.bodies.resize_with(self.walls.len() + self.portals.len(), Aabb::default);
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID, Vec2>, physics: &MazePhysics) {
+        collision.centers.resize_with(self.walls.len() + self.portals.len(), Vec2::default);
+        collision.half_sizes.resize_with(self.walls.len() + self.portals.len(), Vec2::default);
         collision.velocities.resize_with(self.walls.len() + self.portals.len(), Default::default);
         collision.metadata.resize_with(self.walls.len() + self.portals.len(), Default::default);
+
         // create collider for items
         for item in &self.items {
-            collision.add_collision_entity(item.x as f32, item.y as f32,
-                ITEM_SIZE as f32, ITEM_SIZE as f32,
+            let (center, half_size) = Logics::xywh_to_center_hs(
+                item.x as f32,
+                item.y as f32,
+                ITEM_SIZE as f32,
+                ITEM_SIZE as f32);
+            collision.add_collision_entity(center,
+                half_size,
                 Vec2::new(0.0, 0.0),
                 false, true, CollisionID::Item);
         }
         // create collider for player
-        collision.add_collision_entity(self.x as f32, self.y as f32,
-            BOX_SIZE as f32, BOX_SIZE as f32,
+        let (center, half_size) = Logics::xywh_to_center_hs(
+            self.x as f32,
+            self.y as f32,
+            BOX_SIZE as f32,
+            BOX_SIZE as f32);
+        collision.add_collision_entity(center,
+            half_size,
             physics.vel,
             true, false, CollisionID::Player);
     }
 
-    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
-        self.x = collision.bodies[collision.bodies.len() - 1].min.x.trunc() as i16;
-        self.y = collision.bodies[collision.bodies.len() - 1].min.y.trunc() as i16;
+    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
+        self.x = (collision.centers[collision.centers.len() - 1].x - BOX_SIZE as f32 / 2.0).trunc() as i16;
+        self.y = (collision.centers[collision.centers.len() - 1].y - BOX_SIZE as f32 / 2.0).trunc() as i16;
     }
 
     // node 0: teleport to orange; node 1: teleport to blue; node 2: no teleporting
-    fn project_linking(&self, linking: &mut GraphedLinking, collision: &AabbCollision<CollisionID>) {
+    fn project_linking(&self, linking: &mut GraphedLinking, collision: &AabbCollision<CollisionID, Vec2>) {
         let mut teleport:Option<usize> = None;
         for contact in collision.contacts.iter() {
-            match (collision.metadata[contact.0].id,
-                collision.metadata[contact.1].id) {
+            match (collision.metadata[contact.i].id,
+                collision.metadata[contact.j].id) {
                 (CollisionID::Portal, CollisionID::Player) => {
                     if !self.just_teleported && !self.touching_portal {
-                        teleport = Some(contact.0 - self.walls.len());
+                        teleport = Some(contact.i - self.walls.len());
                     } else {
                         teleport = Some(2);
                     }
