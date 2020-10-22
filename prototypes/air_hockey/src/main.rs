@@ -12,7 +12,7 @@ use asterism::{QueuedResources, resources::Transaction, AabbCollision, PointPhys
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
-const PADDLE_OFF_X: u8 = 16;
+const PADDLE_OFF_Y: u8 = 16;
 const PADDLE_HEIGHT: u8 = 48;
 const PADDLE_WIDTH: u8 = 8;
 const BALL_SIZE: u8 = 8;
@@ -34,7 +34,8 @@ enum CollisionID {
     Ball,
     LeftWall,
     RightWall,
-    EdgeWall(Player),
+    TopWall(Player),
+    BottomWall(Player),
 }
 
 impl Default for CollisionID {
@@ -87,20 +88,20 @@ impl Logics {
             physics: PointPhysics::new(),
             collision: {
                 let mut collision = AabbCollision::new();
-                collision.add_collision_entity(-1.0, 0.0,
-                    1.0, HEIGHT as f32,
+                collision.add_collision_entity(0.0, HEIGHT as f32,
+                    WIDTH as f32,0.0, 
                     Vec2::new(0.0, 0.0),
-                    true, true, CollisionID::EdgeWall(Player::P1));
-                collision.add_collision_entity(WIDTH as f32, 0.0,
-                    1.0, HEIGHT as f32,
+                    true, true, CollisionID::TopWall(Player::P1));
+                collision.add_collision_entity(0.0, 0.0,
+                    WIDTH as f32, 0.0,
                     Vec2::new(0.0, 0.0),
-                    true, true, CollisionID::EdgeWall(Player::P2));
-                collision.add_collision_entity(0.0, -1.0,
-                    WIDTH as f32, 1.0,
+                    true, true, CollisionID::BottomWall(Player::P2));
+                collision.add_collision_entity(0.0, WIDTH as f32,
+                    0.0, HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::RightWall);
-                collision.add_collision_entity(0.0, HEIGHT as f32,
-                    WIDTH as f32, 1.0,
+                collision.add_collision_entity(0.0,0.0,
+                    0.0, HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::LeftWall);
                 collision
@@ -221,7 +222,22 @@ impl World {
         for contact in logics.collision.contacts.iter() {
             match (logics.collision.metadata[contact.0].id,
                 logics.collision.metadata[contact.1].id) {
-                (CollisionID::EdgeWall(player), CollisionID::Ball) => {
+                (CollisionID::TopWall(player), CollisionID::Ball) => {
+                    self.ball_vel = Vec2::new(0.0, 0.0);
+                    self.ball = (WIDTH / 2 - BALL_SIZE / 2,
+                        HEIGHT / 2 - BALL_SIZE / 2);
+                    match player {
+                        Player::P1 => {
+                            logics.resources.transactions.push(vec![(PoolID::Points(Player::P2), Transaction::Change(1))]);
+                            self.serving = Some(Player::P2);
+                        }
+                        Player::P2 => {
+                            logics.resources.transactions.push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]);
+                            self.serving = Some(Player::P1);
+                        }
+		    }
+		}
+			 (CollisionID::BottomWall(player), CollisionID::Ball) => {
                     self.ball_vel = Vec2::new(0.0, 0.0);
                     self.ball = (WIDTH / 2 - BALL_SIZE / 2,
                         HEIGHT / 2 - BALL_SIZE / 2);
@@ -355,12 +371,12 @@ impl World {
             self.ball_vel,
             true, false, CollisionID::Ball);
         collision.add_collision_entity(
-            PADDLE_OFF_X as f32, self.paddles.0 as f32,
+            self.paddle.1 as f32, PADDLE_OFF_Y as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
             Vec2::new(0.0, -control.values[0][0].value + control.values[0][1].value),
                 true, true, CollisionID::Paddle(Player::P1));
         collision.add_collision_entity(
-            (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32, self.paddles.1 as f32,
+           self.paddle.1 as f32, (HEIGHT - PADDLE_OFF_Y - PADDLE_HEIGHT) as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
             Vec2::new(0.0, -control.values[1][0].value + control.values[1][1].value),
             true, true, CollisionID::Paddle(Player::P2));
