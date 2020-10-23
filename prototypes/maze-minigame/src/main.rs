@@ -126,24 +126,20 @@ impl Logics {
             collision: {
                 let mut collision = AabbCollision::new();
                 for wall in walls.iter() {
-                    let (center, half_size) = Logics::xywh_to_center_hs(
+                    collision.add_entity_as_xywh(
                         wall.x as f32,
                         wall.y as f32,
                         wall.w as f32,
-                        wall.h as f32);
-                    collision.add_collision_entity(center,
-                        half_size,
+                        wall.h as f32,
                         Vec2::new(0.0, 0.0),
                         true, true, CollisionID::Wall);
                 }
                 for portal in portals {
-                    let (center, half_size) = Logics::xywh_to_center_hs(
+                    collision.add_entity_as_xywh(
                         portal.x as f32,
                         portal.y as f32,
                         PORTAL_SIZE as f32,
-                        PORTAL_SIZE as f32);
-                    collision.add_collision_entity(center,
-                        half_size,
+                        PORTAL_SIZE as f32,
                         Vec2::new(0.0, 0.0),
                         false, true, CollisionID::Portal);
                 }
@@ -400,24 +396,20 @@ impl World {
 
         // create collider for items
         for item in &self.items {
-            let (center, half_size) = Logics::xywh_to_center_hs(
+            collision.add_entity_as_xywh(
                 item.x as f32,
                 item.y as f32,
                 ITEM_SIZE as f32,
-                ITEM_SIZE as f32);
-            collision.add_collision_entity(center,
-                half_size,
+                ITEM_SIZE as f32,
                 Vec2::new(0.0, 0.0),
                 false, true, CollisionID::Item);
         }
         // create collider for player
-        let (center, half_size) = Logics::xywh_to_center_hs(
+        collision.add_entity_as_xywh(
             self.x as f32,
             self.y as f32,
             BOX_SIZE as f32,
-            BOX_SIZE as f32);
-        collision.add_collision_entity(center,
-            half_size,
+            BOX_SIZE as f32,
             physics.vel,
             true, false, CollisionID::Player);
     }

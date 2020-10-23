@@ -417,7 +417,7 @@ impl World {
             resources.items.insert(PoolID::Points(Player::P1), 0.0);
         }
         if !resources.items.contains_key(&PoolID::Points(Player::P2)) {
-            resources.items.insert(PoolID::Points(Player::P1), 0.0);
+            resources.items.insert(PoolID::Points(Player::P2), 0.0);
         }
     }
 

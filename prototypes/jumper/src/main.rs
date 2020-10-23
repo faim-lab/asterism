@@ -7,7 +7,7 @@ use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
-use ultraviolet::{Vec2, geometry::Aabb};
+use ultraviolet::Vec2;
 use asterism::{AabbCollision, KeyboardControl, WinitKeyboardControl, FlatEntityState, PointPhysics};
 
 const WIDTH: u8 = 255;
@@ -62,7 +62,7 @@ enum StateID {
 struct Logics {
     control: WinitKeyboardControl<ActionID>,
     physics: PointPhysics<Vec2>,
-    collision: AabbCollision<CollisionID>,
+    collision: AabbCollision<CollisionID, Vec2>,
     entity_state: FlatEntityState<StateID>,
 }
 
@@ -79,19 +79,19 @@ impl Logics {
             physics: PointPhysics::new(),
             collision: {
                 let mut collision = AabbCollision::new();
-                collision.add_collision_entity(-1.0, 0.0,
+                collision.add_entity_as_xywh(-1.0, 0.0,
                     1.0, HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::LeftWall);
-                collision.add_collision_entity(WIDTH as f32, 0.0,
+                collision.add_entity_as_xywh(WIDTH as f32, 0.0,
                     1.0, HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::RightWall);
-                collision.add_collision_entity(0.0, -1.0,
+                collision.add_entity_as_xywh(0.0, -1.0,
                     WIDTH as f32, 1.0,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::TopWall);
-                collision.add_collision_entity(0.0, HEIGHT as f32,
+                collision.add_entity_as_xywh(0.0, HEIGHT as f32,
                     WIDTH as f32, 1.0,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::BottomWall);
@@ -104,8 +104,8 @@ impl Logics {
                     (StateID::PlatformRight, vec![0])
                     ]);
                 entity_state.add_state_map(3,
-                    vec![(StateID::PlayerGrounded, vec![1, 2]),
-                    (StateID::PlayerWalk, vec![0, 2]),
+                    vec![(StateID::PlayerGrounded, vec![1, 2, 3]),
+                    (StateID::PlayerWalk, vec![0, 2, 3]),
                     (StateID::PlayerJump, vec![3]),
                     (StateID::PlayerFall, vec![0, 1])
                     ]);
@@ -141,7 +141,7 @@ impl Entity {
             x: x, y: y, w: w, h: h,
             vel: Vec2::new(0.0, 0.0),
             err: Vec2::new(0.0, 0.0),
-            acc: Vec2::new(0.0, 0.0),
+            acc: Vec2::new(0.0, 0.03),
         }
     }
 }
@@ -231,12 +231,12 @@ impl World {
         self.unproject_collision(&logics.collision);
 
         for contact in logics.collision.contacts.iter() {
-            match (logics.collision.metadata[contact.0].id,
-                logics.collision.metadata[contact.1].id) {
+            match (logics.collision.metadata[contact.i].id,
+                logics.collision.metadata[contact.j].id) {
                 (CollisionID::Player(..), CollisionID::MovingPlatform) => {
-                    if logics.collision.sides_touched[contact.0].bottom {
+                    // if logics.collision.sides_touched[contact.0].bottom {
                         self.player.x = (self.player.x as f32 + self.platform.vel.x).trunc() as u8;
-                    }
+                    // }
                 }
                 _ => {}
             }
@@ -301,41 +301,50 @@ impl World {
         update_game_state(2, &mut self.enemy.x, &mut self.enemy.y, &mut self.enemy.err, &mut self.enemy.vel, self.enemy.w, self.enemy.h);
     }
 
-    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>) {
-        collision.bodies.resize_with(4, Aabb::default);
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID, Vec2>) {
+        collision.centers.resize_with(4, Vec2::default);
+        collision.half_sizes.resize_with(4, Vec2::default);
         collision.velocities.resize_with(4, Default::default);
         collision.metadata.resize_with(4, Default::default);
 
-        collision.add_collision_entity(self.player.x as f32 + self.player.err.x, self.player.y as f32 + self.player.err.y,
+        collision.add_entity_as_xywh(self.player.x as f32 + self.player.err.x, self.player.y as f32 + self.player.err.y,
             self.player.w as f32, self.player.h as f32,
             self.player.vel,
             true, false, CollisionID::Player(Player::P1));
-        collision.add_collision_entity(self.ground.x as f32, self.ground.y as f32,
+        collision.add_entity_as_xywh(self.ground.x as f32, self.ground.y as f32,
             self.ground.w as f32, self.ground.h as f32,
             self.ground.vel,
             true, true, CollisionID::Ground);
-        collision.add_collision_entity(self.platform.x as f32, self.platform.y as f32,
+        collision.add_entity_as_xywh(self.platform.x as f32, self.platform.y as f32,
             self.platform.w as f32, self.platform.h as f32,
             self.platform.vel,
             true, true, CollisionID::MovingPlatform);
-        collision.add_collision_entity(self.enemy.x as f32 + self.enemy.err.x, self.enemy.y as f32 + self.enemy.err.y,
+        collision.add_entity_as_xywh(self.enemy.x as f32 + self.enemy.err.x, self.enemy.y as f32 + self.enemy.err.y,
             self.enemy.w as f32, self.enemy.h as f32,
             self.enemy.vel,
             true, false, CollisionID::Enemy);
     }
 
-    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
-        self.player.x = collision.bodies[4].min.x.trunc() as u8;
-        self.player.y = collision.bodies[4].min.y.trunc() as u8;
-        self.player.err = Vec2::new(collision.bodies[4].min.x, collision.bodies[4].min.y) - Vec2::new(self.player.x as f32, self.player.y as f32);
-        self.enemy.x = collision.bodies[7].min.x.trunc() as u8;
-        self.enemy.y = collision.bodies[7].min.y.trunc() as u8;
-        self.enemy.err = Vec2::new(collision.bodies[7].min.x, collision.bodies[7].min.y) - Vec2::new(self.enemy.x as f32, self.enemy.y as f32);
+    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
+        let player_pos_f32 = Vec2::new(
+            collision.centers[4].x - collision.half_sizes[4].x,
+            collision.centers[4].y - collision.half_sizes[4].y);
+        self.player.x = player_pos_f32.x.trunc() as u8;
+        self.player.y = player_pos_f32.y.trunc() as u8;
+        self.player.err = player_pos_f32 - Vec2::new(self.player.x as f32, self.player.y as f32);
+        let enemy_pos_f32 = Vec2::new(
+            collision.centers[7].x - collision.half_sizes[7].x,
+            collision.centers[7].y - collision.half_sizes[7].y);
+        self.enemy.x = enemy_pos_f32.x.trunc() as u8;
+        self.enemy.y = enemy_pos_f32.y.trunc() as u8;
+        self.enemy.err = enemy_pos_f32 - Vec2::new(self.enemy.x as f32, self.enemy.y as f32);
     }
 
 
-    fn project_entity_state(&self, entity_state: &mut FlatEntityState<StateID>, collision: &AabbCollision<CollisionID>) {
+    fn project_entity_state(&self, entity_state: &mut FlatEntityState<StateID>, collision: &AabbCollision<CollisionID, Vec2>) {
         // update condition table
+
+        // platform and enemy left right
         if self.platform.x < 30 {
             entity_state.conditions[0][1] = true;
         }
@@ -349,6 +358,7 @@ impl World {
             entity_state.conditions[3][0] = true;
         }
 
+        // player grounded/walk/fall/jump
         if self.player.vel.y < 0.0 {
             entity_state.conditions[1][2] = true;
         } else {
@@ -356,11 +366,11 @@ impl World {
         }
         entity_state.conditions[2][1] = true;
         for contact in collision.contacts.iter() {
-            match collision.metadata[contact.0].id {
+            match collision.metadata[contact.i].id {
                 CollisionID::Player(..) => {
-                    match collision.metadata[contact.1].id {
+                    match collision.metadata[contact.j].id {
                         CollisionID::Ground | CollisionID::MovingPlatform => {
-                            if collision.sides_touched[contact.0].bottom {
+                            // if collision.sides_touched[contact.0].bottom {
                                 if self.player.vel.x == 0.0 {
                                     entity_state.conditions[1][0] = true;
                                 } else {
@@ -368,18 +378,18 @@ impl World {
                                 }
                                 entity_state.conditions[1][2] = false;
                                 entity_state.conditions[1][3] = false;
-                            }
+                            // }
                         }
                         _ => {}
                     }
                 }
                 CollisionID::Ground | CollisionID::MovingPlatform => {
-                    match collision.metadata[contact.1].id {
+                    match collision.metadata[contact.j].id {
                         CollisionID::Enemy => {
-                            if collision.sides_touched[contact.1].bottom {
+                            // if collision.sides_touched[contact.1].bottom {
                                 entity_state.conditions[2][0] = true;
                                 entity_state.conditions[2][1] = false;
-                            }
+                            // }
                         }
                         _ => {}
                     }
@@ -394,8 +404,8 @@ impl World {
             match map.states[*state].id {
                 StateID::PlatformLeft => self.platform.vel.x = -1.0,
                 StateID::PlatformRight => self.platform.vel.x = 1.0,
-                StateID::PlayerWalk | StateID::PlayerGrounded => self.player.acc.y = 0.0,
-                StateID::PlayerJump | StateID::PlayerFall => self.player.acc.y = 0.03,
+                StateID::PlayerWalk | StateID::PlayerGrounded => self.player.vel.y = 0.0,
+                StateID::PlayerJump | StateID::PlayerFall => {}
                 StateID::EnemyLeft => self.enemy.vel.x = -1.0,
                 StateID::EnemyRight => self.enemy.vel.x = 1.0,
                 StateID::EnemyGrounded => self.enemy.acc.y = 0.0,

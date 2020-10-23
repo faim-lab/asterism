@@ -3,15 +3,6 @@ use glam::Vec2 as GlamVec2;
 use std::ops::{Add, AddAssign, Mul};
 use std::cmp::Ordering;
 
-/*
-
-1. Find all contacts, add to a big vec
-2. Sort the big list by decreasing magnitude of displacement
-3. Have a vec<Vec2> of length # collision bodies; these are how much each body has been displaced so far during restitution, all initialized to (0, 0)
-4. Process contacts vec in order: appropriately adding the displacement so far for each involved entity to the contact displacement, displace the correct entity the correct "remaining" amount (which might be 0) and add that to the vec of (3). This could change "penetrating" contacts to "touching" contacts, so we should probably modify the contacts vec as we go too to update with the actual displacement performed.
-
-*/
-
 pub trait Vec2 {
     fn new(x: f32, y: f32) -> Self;
     fn x(&self) -> f32;
@@ -43,7 +34,7 @@ impl Vec2 for GlamVec2 {
 pub struct Contact<V2: Vec2> {
     pub i: usize,
     pub j: usize,
-    pub displacement: V2
+    displacement: V2
 }
 
 impl<V2: Vec2> PartialEq for Contact<V2> {
@@ -55,21 +46,12 @@ impl<V2: Vec2> PartialEq for Contact<V2> {
     }
 }
 
-// impl<V2: Vec2> Eq for Contact<V2> {}
-
 impl<V2: Vec2> PartialOrd for Contact<V2> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.displacement.magnitude()
             .partial_cmp(&other.displacement.magnitude())
     }
 }
-
-/* impl<V2: Vec2> Ord for Contact<V2> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
-            // uh i sure hope this doesnt panic lol
-    }
-} */
 
 pub struct AabbCollision<ID, V2> where
 ID: Copy + Eq,
@@ -81,7 +63,7 @@ V2: Vec2 + Add + AddAssign + Mul<Output = V2> + Copy {
     pub velocities: Vec<V2>,
     pub metadata: Vec<CollisionData<ID>>,
     pub contacts: Vec<Contact<V2>>,
-    pub displacements: Vec<V2>
+    displacements: Vec<V2>
 }
 
 #[derive(Default, Clone, Copy)]
@@ -111,14 +93,9 @@ impl<ID, V2> AabbCollision<ID, V2> where
         self.displacements.resize(self.centers.len(), V2::new(0.0, 0.0));
 
         // check contacts
-        for (i, (ci, hsi)) in self.centers.iter()
-            .zip(self.half_sizes.iter()).enumerate() {
-            for (j, (cj, hsj)) in self.centers.iter()
-                .zip(self.half_sizes.iter()).enumerate() {
-                if i != j
-                    && (ci.x() - cj.x()).abs() <= hsi.x() + hsj.x()
-                    && (ci.y() - cj.y()).abs() <= hsi.y() + hsj.y()
-                {
+        for i in 0..self.centers.len() {
+            for j in 0..self.centers.len() {
+                if i != j && self.intersects(i, j) {
                     let displacement = if
                         self.metadata[i].solid && self.metadata[j].solid
                         && !self.metadata[i].fixed
@@ -210,7 +187,22 @@ impl<ID, V2> AabbCollision<ID, V2> where
         self.centers.push(center);
         self.half_sizes.push(half_size);
         self.velocities.push(vel);
-        self.metadata.push(CollisionData { solid: solid, fixed: fixed, id: id });
+        self.metadata.push(CollisionData { solid, fixed, id });
+    }
+
+    pub fn add_entity_as_xywh(&mut self, x: f32, y: f32, w: f32, h: f32, vel: V2, solid: bool, fixed: bool, id: ID) {
+        self.add_collision_entity(
+            Vec2::new(x + w / 2.0, y + h / 2.0),
+            Vec2::new(w / 2.0, h / 2.0),
+            vel, solid, fixed, id
+        );
+    }
+
+    fn intersects(&self, i: usize, j: usize) -> bool {
+        (self.centers[i].x() - self.centers[j].x()).abs()
+            <= self.half_sizes[i].x() + self.half_sizes[j].x()
+        && (self.centers[i].y() - self.centers[j].y()).abs()
+            <= self.half_sizes[i].y() + self.half_sizes[j].y()
     }
 
 }
