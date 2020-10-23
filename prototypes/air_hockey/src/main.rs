@@ -13,8 +13,8 @@ use asterism::{QueuedResources, resources::Transaction, AabbCollision, PointPhys
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
 const PADDLE_OFF_Y: u8 = 16;
-const PADDLE_HEIGHT: u8 = 48;
-const PADDLE_WIDTH: u8 = 8;
+const PADDLE_HEIGHT: u8 = 8;
+const PADDLE_WIDTH: u8 = 68;
 const BALL_SIZE: u8 = 8;
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
@@ -60,12 +60,12 @@ impl Logics {
             control: {
                 let mut control = WinitKeyboardControl::new();
                 control.add_key_map(0,
-                    VirtualKeyCode::S,
-                    ActionID::MoveRight(Player::P1),
-                );
-                control.add_key_map(0,
                     VirtualKeyCode::A,
                     ActionID::MoveLeft(Player::P1),
+                );
+                control.add_key_map(0,
+                    VirtualKeyCode::S,
+                    ActionID::MoveRight(Player::P1),
                 );
                 control.add_key_map(0,
                     VirtualKeyCode::W,
@@ -197,7 +197,7 @@ fn main() -> Result<(), Error> {
 impl World {
     fn new() -> Self {
         Self {
-            paddles: (HEIGHT/2-PADDLE_HEIGHT/2, HEIGHT/2-PADDLE_HEIGHT/2),
+            paddles: (WIDTH/2-PADDLE_WIDTH/2, WIDTH/2-PADDLE_WIDTH/2),
             ball: (WIDTH/2-BALL_SIZE/2, HEIGHT/2-BALL_SIZE/2),
             ball_err: Vec2::new(0.0,0.0),
             ball_vel: Vec2::new(0.0,0.0),
@@ -252,22 +252,27 @@ impl World {
                         }
                     }
                 }
-                (CollisionID::LeftWall, CollisionID::Ball) |
-                    (CollisionID::RightWall, CollisionID::Ball) => {
-                        self.ball_vel.y *= -1.0;
+                (CollisionID::LeftWall, CollisionID::Ball) => {
+                    self.ball_vel.x *= -1.0;
+                }
+		 (CollisionID::RightWall, CollisionID::Ball) => {
+                        self.ball_vel.x *= 1.0;
                     }
+
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
                     if match player {
                         Player::P1 =>
-                            (self.ball.0 as i16 - (PADDLE_OFF_X + PADDLE_WIDTH) as i16).abs()
-                            > ((self.ball.1 + BALL_SIZE) as i16 - self.paddles.0 as i16).abs().min((self.ball.1 as i16 - (self.paddles.0 + PADDLE_HEIGHT) as i16).abs()),
+                            ((self.ball.0 + BALL_SIZE) as i16 - self.paddles.0 as i16).abs()
+			    .min((self.ball.0 as i16 - (self.paddles.0 + PADDLE_WIDTH) as i16).abs())
+                            < (self.ball.1 as i16 - (PADDLE_OFF_Y + PADDLE_HEIGHT) as i16).abs(),
                         Player::P2 =>
-                            ((self.ball.0 + BALL_SIZE) as i16 - (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as i16).abs()
-                            > ((self.ball.1 + BALL_SIZE) as i16 - self.paddles.1 as i16).abs().min((self.ball.1 as i16 - (self.paddles.1 + PADDLE_HEIGHT) as i16).abs()),
+                            ((self.ball.0 + BALL_SIZE) as i16 - self.paddles.0 as i16).abs()
+			    .min((self.ball.0 as i16 - (self.paddles.0 + PADDLE_WIDTH) as i16).abs())
+                            < ((self.ball.1 + BALL_SIZE) as i16 - (HEIGHT - PADDLE_OFF_Y - PADDLE_HEIGHT) as i16).abs(),
                     } {
-                        self.ball_vel.y *= -1.0;
-                    } else {
                         self.ball_vel.x *= -1.0;
+                    } else {
+                        self.ball_vel.y *= -1.0;
                     }
                     self.change_angle(player);
                 },
@@ -318,11 +323,11 @@ impl World {
         self.paddles.0 = ((self.paddles.0 as i16 -
                 control.values[0][0].value as i16 +
                 control.values[0][1].value as i16)
-            .max(0) as u8).min(255 - PADDLE_HEIGHT);
+            .max(0) as u8).min(255 - PADDLE_WIDTH);
         self.paddles.1 = ((self.paddles.1 as i16 -
                 control.values[1][0].value as i16 +
                 control.values[1][1].value as i16)
-            .max(0) as u8).min(255 - PADDLE_HEIGHT);
+            .max(0) as u8).min(255 - PADDLE_WIDTH);
         if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
             match self.serving {
                 Some(Player::P1) => {
@@ -371,12 +376,12 @@ impl World {
             self.ball_vel,
             true, false, CollisionID::Ball);
         collision.add_collision_entity(
-            self.paddle.1 as f32, PADDLE_OFF_Y as f32,
+            self.paddles.0 as f32, PADDLE_OFF_Y as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
             Vec2::new(0.0, -control.values[0][0].value + control.values[0][1].value),
                 true, true, CollisionID::Paddle(Player::P1));
         collision.add_collision_entity(
-           self.paddle.1 as f32, (HEIGHT - PADDLE_OFF_Y - PADDLE_HEIGHT) as f32,
+           self.paddles.0 as f32, (HEIGHT - PADDLE_OFF_Y - PADDLE_HEIGHT) as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
             Vec2::new(0.0, -control.values[1][0].value + control.values[1][1].value),
             true, true, CollisionID::Paddle(Player::P2));
@@ -390,12 +395,12 @@ impl World {
     fn change_angle(&mut self, player: Player) {
         let Vec2{x, y} = &mut self.ball_vel;
         let paddle_center = match player {
-            Player::P1 => self.paddles.0 + PADDLE_HEIGHT / 2,
-            Player::P2 => self.paddles.1 + PADDLE_HEIGHT / 2
+            Player::P1 => self.paddles.0 + PADDLE_WIDTH / 2,
+            Player::P2 => self.paddles.1 + PADDLE_WIDTH / 2
         } as f32;
-        let angle: f32 = (((self.ball.1 + BALL_SIZE / 2) as f32 - paddle_center)
-            .max(- (PADDLE_HEIGHT as f32) / 2.0)
-            .min(PADDLE_HEIGHT as f32 / 2.0) / PADDLE_HEIGHT as f32).abs() * 80.0;
+        let angle: f32 = (((self.ball.0 + BALL_SIZE / 2) as f32 - paddle_center)
+            .max(- (PADDLE_WIDTH as f32) / 2.0)
+            .min(PADDLE_WIDTH as f32 / 2.0) / PADDLE_WIDTH as f32).abs() * 80.0;
         let magnitude = f32::sqrt(*x * *x + *y * *y);
         *x = angle.to_radians().cos() * magnitude
             * if *x < 0.0 { -1.0 } else { 1.0 };
@@ -440,11 +445,11 @@ impl World {
         for pixel in frame.chunks_exact_mut(4) {
             pixel.copy_from_slice(&[0,0,128,255]);
         }
-        draw_rect(PADDLE_OFF_X, self.paddles.0,
+        draw_rect(self.paddles.0, PADDLE_OFF_Y,
             PADDLE_WIDTH, PADDLE_HEIGHT,
             [255,255,255,255],
             frame);
-        draw_rect(WIDTH-PADDLE_OFF_X-PADDLE_WIDTH, self.paddles.1,
+        draw_rect(self.paddles.1, HEIGHT-PADDLE_OFF_Y-PADDLE_HEIGHT,
             PADDLE_WIDTH, PADDLE_HEIGHT,
             [255,255,255,255],
             frame);
