@@ -328,7 +328,7 @@ impl World {
         self.unproject_physics(&logics.physics);
 
         // check if player is still touching portal after teleporting (and possibly moving a bit)
-        // self.touching_portal = false;
+        self.touching_portal = false;
 
         self.project_collision(&mut logics.collision, &logics.physics);
         logics.collision.update();
@@ -351,29 +351,29 @@ impl World {
             }
         }
         
-        // if !self.touching_portal {
-        //     self.just_teleported = false;
-        // }
+        if !self.touching_portal {
+            self.just_teleported = false;
+        }
 
-        // self.project_linking(&mut logics.linking, &logics.collision);
-        // logics.linking.update();
-        // self.unproject_linking(&logics.linking);
+        self.project_linking(&mut logics.linking, &logics.collision);
+        logics.linking.update();
+        self.unproject_linking(&logics.linking);
 
-        // self.project_resources(&mut logics.resources);
-        // logics.resources.update();
-        // self.unproject_resources(&logics.resources);
+        self.project_resources(&mut logics.resources);
+        logics.resources.update();
+        self.unproject_resources(&logics.resources);
 
-        // for (completed, item_types) in logics.resources.completed.iter() {
-        //     if *completed {
-        //         for item_type in item_types {
-        //             match item_type {
-        //                 PoolID::Points => {
-        //                     println!("You scored! Current points: {}", self.score);
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
+        for (completed, item_types) in logics.resources.completed.iter() {
+            if *completed {
+                for item_type in item_types {
+                    match item_type {
+                        PoolID::Points => {
+                            println!("You scored! Current points: {}", self.score);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fn project_physics(&self, physics: &mut MazePhysics) {
