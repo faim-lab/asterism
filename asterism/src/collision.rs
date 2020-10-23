@@ -48,8 +48,21 @@ impl<V2: Vec2> PartialEq for Contact<V2> {
 
 impl<V2: Vec2> PartialOrd for Contact<V2> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.displacement.magnitude()
-            .partial_cmp(&other.displacement.magnitude())
+        let e1 = if self.displacement.x() < self.displacement.y() {
+            self.displacement.x()
+        } else if self.displacement.y() < self.displacement.x() {
+            self.displacement.y()
+        } else {
+            self.displacement.magnitude()
+        };
+        let e2 = if other.displacement.x() < other.displacement.y() {
+            other.displacement.x()
+        } else if other.displacement.y() < other.displacement.x() {
+            other.displacement.y()
+        } else {
+            other.displacement.magnitude()
+        };
+        e1.partial_cmp(&e2)
     }
 }
 
