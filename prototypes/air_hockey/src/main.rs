@@ -253,10 +253,10 @@ impl World {
                     }
                 }
                 (CollisionID::LeftWall, CollisionID::Ball) => {
-                    self.ball_vel.x *= -1.0;
+                    self.ball_vel.x *= 1.0;
                 }
 		 (CollisionID::RightWall, CollisionID::Ball) => {
-                        self.ball_vel.x *= 1.0;
+                     self.ball_vel.x *= -1.0
                     }
 
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
@@ -266,9 +266,10 @@ impl World {
 			    .min((self.ball.0 as i16 - (self.paddles.0 + PADDLE_WIDTH) as i16).abs())
                             < (self.ball.1 as i16 - (PADDLE_OFF_Y + PADDLE_HEIGHT) as i16).abs(),
                         Player::P2 =>
-                            ((self.ball.0 + BALL_SIZE) as i16 - self.paddles.0 as i16).abs()
-			    .min((self.ball.0 as i16 - (self.paddles.0 + PADDLE_WIDTH) as i16).abs())
-                            < ((self.ball.1 + BALL_SIZE) as i16 - (HEIGHT - PADDLE_OFF_Y - PADDLE_HEIGHT) as i16).abs(),
+                            ((self.ball.0 + BALL_SIZE) as i16 - self.paddles.1 as i16).abs()
+			    .min((self.ball.0 as i16 - (self.paddles.1 - PADDLE_WIDTH) as i16).abs())
+                            < ((self.ball.1 + BALL_SIZE)
+			       as i16 - (HEIGHT - PADDLE_OFF_Y - PADDLE_HEIGHT) as i16).abs(),
                     } {
                         self.ball_vel.x *= -1.0;
                     } else {
