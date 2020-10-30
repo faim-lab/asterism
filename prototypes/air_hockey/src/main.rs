@@ -21,6 +21,8 @@ const BALL_SIZE: u8 = 8;
 enum ActionID {
     MoveRight(Player),
     MoveLeft(Player),
+    MoveUp(Player),
+    MoveDown(Player),
     Serve(Player),
 }
 
@@ -64,15 +66,15 @@ impl Logics {
                     ActionID::MoveLeft(Player::P1),
                 );
                 control.add_key_map(0,
-                    VirtualKeyCode::S,
+                    VirtualKeyCode::D,
                     ActionID::MoveRight(Player::P1),
                 );
                 control.add_key_map(0,
-                    VirtualKeyCode::W,
+                    VirtualKeyCode::E,
                     ActionID::Serve(Player::P1),
                 );
                 control.add_key_map(1,
-                    VirtualKeyCode::K,
+                    VirtualKeyCode::J,
                     ActionID::MoveRight(Player::P2),
                 );
                 control.add_key_map(1,
@@ -80,7 +82,7 @@ impl Logics {
                     ActionID::MoveLeft(Player::P2),
                 );
                 control.add_key_map(1,
-                    VirtualKeyCode::I,
+                    VirtualKeyCode::U,
                     ActionID::Serve(Player::P2),
                 );
                 control
@@ -96,9 +98,9 @@ impl Logics {
                     WIDTH as f32, 0.0,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::BottomWall(Player::P2));
-                collision.add_collision_entity(0.0, WIDTH as f32,
-                    0.0, HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                collision.add_collision_entity(WIDTH as f32,0.0,
+					       0.0, HEIGHT as f32,
+					       Vec2::new(0.0, 0.0),
                     true, true, CollisionID::RightWall);
                 collision.add_collision_entity(0.0,0.0,
                     0.0, HEIGHT as f32,
@@ -228,12 +230,14 @@ impl World {
                         HEIGHT / 2 - BALL_SIZE / 2);
                     match player {
                         Player::P1 => {
-                            logics.resources.transactions.push(vec![(PoolID::Points(Player::P2), Transaction::Change(1))]);
-                            self.serving = Some(Player::P2);
+                            logics.resources.transactions.push(vec![(PoolID::Points(Player::P1),
+								     Transaction::Change(1))]);
+                            self.serving = Some(Player::P1);
                         }
                         Player::P2 => {
-                            logics.resources.transactions.push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]);
-                            self.serving = Some(Player::P1);
+                            logics.resources.transactions.push(vec![(PoolID::Points(Player::P2),
+								     Transaction::Change(1))]);
+                            self.serving = Some(Player::P2);
                         }
 		    }
 		}
@@ -243,17 +247,19 @@ impl World {
                         HEIGHT / 2 - BALL_SIZE / 2);
                     match player {
                         Player::P1 => {
-                            logics.resources.transactions.push(vec![(PoolID::Points(Player::P2), Transaction::Change(1))]);
-                            self.serving = Some(Player::P2);
+                            logics.resources.transactions.push(vec![(PoolID::Points(Player::P1),
+								     Transaction::Change(1))]);
+                            self.serving = Some(Player::P1);
                         }
                         Player::P2 => {
-                            logics.resources.transactions.push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]);
-                            self.serving = Some(Player::P1);
+                            logics.resources.transactions.push(vec![(PoolID::Points(Player::P2),
+								     Transaction::Change(1))]);
+                            self.serving = Some(Player::P2);
                         }
                     }
                 }
                 (CollisionID::LeftWall, CollisionID::Ball) => {
-                    self.ball_vel.x *= 1.0;
+                    self.ball_vel.x *= -1.0
                 }
 		 (CollisionID::RightWall, CollisionID::Ball) => {
                      self.ball_vel.x *= -1.0
@@ -381,7 +387,7 @@ impl World {
             Vec2::new(0.0, -control.values[0][0].value + control.values[0][1].value),
                 true, true, CollisionID::Paddle(Player::P1));
         collision.add_collision_entity(
-           self.paddles.0 as f32, (HEIGHT - PADDLE_OFF_Y - PADDLE_HEIGHT) as f32,
+           self.paddles.1 as f32, (HEIGHT - PADDLE_OFF_Y - PADDLE_HEIGHT) as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
             Vec2::new(0.0, -control.values[1][0].value + control.values[1][1].value),
             true, true, CollisionID::Paddle(Player::P2));
