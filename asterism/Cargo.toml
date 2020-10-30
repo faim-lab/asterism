@@ -10,5 +10,6 @@ ultraviolet = "0.4.6"
 winit = "0.22.0"
 winit_input_helper = "0.7.0"
 bevy_input = "0.2.0"
+macroquad = "0.2.9"
 glam = "0.9.4"
 

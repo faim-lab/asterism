@@ -6,5 +6,6 @@ members = [
     "prototypes/maze-minigame",
     "prototypes/paddles",
     "prototypes/quest",
-    "prototypes/yarn"
+    "prototypes/yarn",
+    "prototypes/paddles-macroquad"
 ]

@@ -6,7 +6,7 @@ pub mod resources;
 mod linking;
 
 pub use collision::AabbCollision;
-pub use control::{KeyboardControl, WinitKeyboardControl, BevyKeyboardControl};
+pub use control::{KeyboardControl, WinitKeyboardControl, BevyKeyboardControl, MacroQuadKeyboardControl};
 pub use entity_state::FlatEntityState;
 pub use linking::GraphedLinking;
 pub use physics::PointPhysics;

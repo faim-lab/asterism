@@ -1,5 +1,6 @@
 use ultraviolet::Vec2 as UVVec2;
 use glam::Vec2 as GlamVec2;
+use macroquad::Vec2 as MqVec2;
 use std::ops::{Add, AddAssign, Mul};
 use std::cmp::Ordering;
 
@@ -29,6 +30,14 @@ impl Vec2 for GlamVec2 {
     fn y(&self) -> f32 { GlamVec2::x(*self) }
     fn set_x(&mut self, x: f32) { GlamVec2::set_x(&mut *self, x) }
     fn set_y(&mut self, y: f32) { GlamVec2::set_y(&mut *self, y) }
+}
+
+impl Vec2 for MqVec2 {
+    fn new(x: f32, y: f32) -> MqVec2 { MqVec2::new(x, y) }
+    fn x(&self) -> f32 { MqVec2::x(*self) }
+    fn y(&self) -> f32 { MqVec2::x(*self) }
+    fn set_x(&mut self, x: f32) { MqVec2::set_x(&mut *self, x) }
+    fn set_y(&mut self, y: f32) { MqVec2::set_y(&mut *self, y) }
 }
 
 pub struct Contact<V2: Vec2> {
