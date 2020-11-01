@@ -8,4 +8,4 @@ edition = "2018"
 
 [dependencies]
 asterism = { path = "../../asterism" }
-macroquad = "0.2.9"
+macroquad = "0.3.0-alpha.9"

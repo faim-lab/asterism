@@ -1,5 +1,5 @@
 use asterism::{QueuedResources, resources::Transaction, AabbCollision, PointPhysics, KeyboardControl, MacroQuadKeyboardControl};
-use macroquad::{self as mq, *};
+use macroquad::prelude::*;
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -13,6 +13,7 @@ enum ActionID {
     MoveUp(Player),
     MoveDown(Player),
     Serve(Player),
+    Quit,
 }
 
 impl Default for ActionID {
@@ -50,46 +51,54 @@ impl Logics {
             control: {
                 let mut control = MacroQuadKeyboardControl::new();
                 control.add_key_map(0,
-                    mq::KeyCode::Q,
+                    KeyCode::Q,
                     ActionID::MoveUp(Player::P1),
                 );
                 control.add_key_map(0,
-                    mq::KeyCode::A,
+                    KeyCode::A,
                     ActionID::MoveDown(Player::P1),
                 );
                 control.add_key_map(0,
-                    mq::KeyCode::W,
+                    KeyCode::W,
                     ActionID::Serve(Player::P1),
                 );
                 control.add_key_map(1,
-                    mq::KeyCode::O,
+                    KeyCode::O,
                     ActionID::MoveUp(Player::P2),
                 );
                 control.add_key_map(1,
-                    mq::KeyCode::L,
+                    KeyCode::L,
                     ActionID::MoveDown(Player::P2),
                 );
                 control.add_key_map(1,
-                    mq::KeyCode::I,
+                    KeyCode::I,
                     ActionID::Serve(Player::P2),
+                );
+                control.add_key_map(2,
+                    KeyCode::Escape,
+                    ActionID::Quit,
                 );
                 control
             },
             physics: PointPhysics::new(),
             collision: {
                 let mut collision = AabbCollision::new();
+                // left
                 collision.add_entity_as_xywh(-2.0, 0.0,
                     2.0, HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::SideWall(Player::P1));
+                // right
                 collision.add_entity_as_xywh(WIDTH as f32, 0.0,
                     2.0, HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::SideWall(Player::P2));
+                // top
                 collision.add_entity_as_xywh(0.0, -2.0,
                     WIDTH as f32, 2.0,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::TopWall);
+                // bottom
                 collision.add_entity_as_xywh(0.0, HEIGHT as f32,
                     WIDTH as f32, 2.0,
                     Vec2::new(0.0, 0.0),
@@ -121,13 +130,27 @@ struct World {
     score: (u8, u8)
 }
 
-#[mq::main("Paddles")]
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "paddles".to_owned(),
+        window_width: WIDTH as i32,
+        window_height: HEIGHT as i32,
+        fullscreen: false,
+        ..Default::default()
+    }
+}
+
+#[macroquad::main(window_conf)]
 async fn main() {
     let mut world = World::new();
     let mut logics = Logics::new();
 
     loop {
-        world.update(&mut logics);
+        if let Ok(cont) = world.update(&mut logics) {
+            if !cont {
+                break;
+            }
+        }
         world.draw();
         next_frame().await;
     }
@@ -144,10 +167,14 @@ impl World {
         }
     }
 
-    fn update(&mut self, logics: &mut Logics) {
+    fn update(&mut self, logics: &mut Logics) -> Result<bool, ()> {
         self.project_control(&mut logics.control);
         logics.control.update(&());
         self.unproject_control(&logics.control);
+
+        if logics.control.values[2][0].value != 0.0 {
+            return Ok(false);
+        }
 
         self.project_physics(&mut logics.physics);
         logics.physics.update();
@@ -160,6 +187,7 @@ impl World {
         for contact in logics.collision.contacts.iter() {
             match (logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id) {
+
                 (CollisionID::SideWall(player), CollisionID::Ball) => {
                     self.ball_vel = Vec2::new(0.0, 0.0);
                     self.ball = Vec2::new((WIDTH / 2 - BALL_SIZE / 2) as f32,
@@ -175,10 +203,12 @@ impl World {
                         }
                     }
                 }
+
                 (CollisionID::TopWall, CollisionID::Ball) |
                     (CollisionID::BottomWall, CollisionID::Ball) => {
                         self.ball_vel.set_y(self.ball_vel.y() * -1.0);
                     }
+
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
                     if match player {
                         Player::P1 =>
@@ -194,6 +224,7 @@ impl World {
                     }
                     self.change_angle(player);
                 },
+
                 _ => {}
             }
         }
@@ -217,6 +248,8 @@ impl World {
                 }
             }
         }
+
+        Ok(true)
     }
 
     fn project_control(&self, control: &mut MacroQuadKeyboardControl<ActionID>) {
@@ -224,6 +257,7 @@ impl World {
         control.mapping[0][1].is_valid = true;
         control.mapping[1][0].is_valid = true;
         control.mapping[1][1].is_valid = true;
+        control.mapping[2][0].is_valid = true;
 
         if (self.ball_vel.x(), self.ball_vel.y()) == (0.0, 0.0) {
             match self.serving {
@@ -365,16 +399,16 @@ impl World {
     }
 
     fn draw(&self) {
-        mq::clear_background(mq::Color::new(0., 0., 0.5, 1.));
-        mq::draw_rectangle(PADDLE_OFF_X as f32, self.paddles.0 as f32,
+        clear_background(Color::new(0., 0., 0.5, 1.));
+        draw_rectangle(PADDLE_OFF_X as f32, self.paddles.0 as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
-            mq::WHITE);
-        mq::draw_rectangle((WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32, self.paddles.1 as f32,
+            WHITE);
+        draw_rectangle((WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32, self.paddles.1 as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
-            mq::WHITE);
-        mq::draw_rectangle(self.ball.x(), self.ball.y(),
+            WHITE);
+        draw_rectangle(self.ball.x(), self.ball.y(),
             BALL_SIZE as f32, BALL_SIZE as f32,
-            mq::Color::new(1., 200., 0., 1.));
+            Color::new(1., 200., 0., 1.));
     }
 }
 

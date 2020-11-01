@@ -1,7 +1,7 @@
 use winit::event::VirtualKeyCode;
 use winit_input_helper::WinitInputHelper;
 use bevy_input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
-use macroquad::{KeyCode as MqKeyCode, is_key_down};
+use macroquad::prelude::{KeyCode as MqKeyCode, is_key_down};
 
 pub trait Input {
     fn min(&self) -> f32;
