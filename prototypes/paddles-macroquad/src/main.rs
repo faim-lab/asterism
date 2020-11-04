@@ -184,7 +184,7 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for contact in logics.collision.contacts.iter() {
+        for (_idx, contact) in logics.collision.contacts.iter().enumerate() {
             match (logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id) {
 
@@ -408,7 +408,7 @@ impl World {
             WHITE);
         draw_rectangle(self.ball.x(), self.ball.y(),
             BALL_SIZE as f32, BALL_SIZE as f32,
-            Color::new(1., 200., 0., 1.));
+            Color::new(1., 0.75, 0., 1.));
     }
 }
 

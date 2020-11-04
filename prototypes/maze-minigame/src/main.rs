@@ -257,7 +257,7 @@ impl World {
     fn new() -> Self {
         Self {
             x: 58,
-            y: 8,
+            y: 13,
             vx: 0,
             vy: 0,
             score: 0,
@@ -265,6 +265,8 @@ impl World {
                 vec![
                     // horizontal walls
                     Wall::new(8, 11, 43, 3),
+                    // test wall for flipped sign of displacement
+                    Wall::new(47, 14, 3, 3),
                     Wall::new(94, 11, 218, 3),
                     Wall::new(94, 54, 46, 3),
                     Wall::new(180, 54, 86, 3),
@@ -334,7 +336,11 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for contact in logics.collision.contacts.iter() {
+        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
+            if contact.i == 2 && contact.j == 29 {
+                panic!("{:?}", logics.collision.sides_touched(idx));
+                // 1.0, 1.0
+            }
             match (logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id) {
                     (CollisionID::Portal, CollisionID::Player) => {

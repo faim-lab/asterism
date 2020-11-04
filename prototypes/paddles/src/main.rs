@@ -408,7 +408,7 @@ impl World {
         *y = angle.to_radians().sin() * magnitude
             * if *y < 0.0 { -1.0 } else { 1.0 };
         if magnitude < 5.0 {
-            self.ball_vel *= Vec2::new(1.1, 1.1);
+            self.ball_vel *= 1.1;
         }
     }
 

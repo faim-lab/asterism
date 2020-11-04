@@ -34,7 +34,7 @@ impl Vec2 for GlamVec2 {
 pub struct Contact<V2: Vec2> {
     pub i: usize,
     pub j: usize,
-    pub displacement: V2
+    displacement: V2
 }
 
 impl<V2: Vec2> PartialEq for Contact<V2> {
@@ -126,11 +126,13 @@ impl<ID, V2> AabbCollision<ID, V2> where
             }
         }
 
+        let remove = &mut Vec::<usize>::new();
+
         // do some sort of....... iteration thru contacts
         // sorted by magnitude of displ.
-        for contact in self.contacts.iter() {
+        for (idx, contact) in self.contacts.iter().enumerate() {
             let Contact {
-                i, j: _, displacement: displ
+                i, displacement: displ, ..
             } = *contact;
 
             let already_moved = &mut self.displacements[i];
@@ -141,15 +143,36 @@ impl<ID, V2> AabbCollision<ID, V2> where
 
             if (remaining_displ.x() == 0.0
                 || remaining_displ.y() == 0.0)
-                && displ.magnitude() != 0.0 {
+                && displ.magnitude() == 0.0 {
+                    continue;
+            }
+
+            let flipped = {
+                if {
+                    already_moved.x().abs() > displ.x().abs()
+                    || already_moved.y().abs() > displ.y().abs()
+                } {
+                    true
+                } else {
+                    false
+                }
+            };
+
+            if flipped {
+                remove.push(idx);
                 continue;
             }
+
 
             if displ.x().abs() < displ.y().abs() {
                 already_moved.set_x(remaining_displ.x());
             } else if displ.y().abs() < displ.x().abs() {
                 already_moved.set_y(remaining_displ.y());
             }
+        }
+
+        for i in remove.iter() {
+            self.contacts.remove(*i);
         }
 
         for (i, displacement) in self.displacements.iter().enumerate() {
@@ -209,6 +232,11 @@ impl<ID, V2> AabbCollision<ID, V2> where
             Vec2::new(w / 2.0, h / 2.0),
             vel, solid, fixed, id
         );
+    }
+
+    /// `idx`: index in contacts. returns unit vector of normal of displacement for the `i` entity in the contact
+    pub fn sides_touched(&self, idx: usize) -> V2 {
+        unimplemented![];
     }
 
     fn intersects(&self, i: usize, j: usize) -> bool {
