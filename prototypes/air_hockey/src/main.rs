@@ -69,6 +69,14 @@ impl Logics {
                     VirtualKeyCode::D,
                     ActionID::MoveRight(Player::P1),
                 );
+		control.add_key_map(0,
+                    VirtualKeyCode::W,
+                    ActionID::MoveUp(Player::P1),
+                );
+                control.add_key_map(0,
+                    VirtualKeyCode::S,
+                    ActionID::MoveDown(Player::P1),
+                );
                 control.add_key_map(0,
                     VirtualKeyCode::E,
                     ActionID::Serve(Player::P1),
@@ -80,6 +88,14 @@ impl Logics {
                 control.add_key_map(1,
                     VirtualKeyCode::L,
                     ActionID::MoveLeft(Player::P2),
+                );
+		control.add_key_map(1,
+                    VirtualKeyCode::I,
+                    ActionID::MoveUp(Player::P2),
+                );
+                control.add_key_map(1,
+                    VirtualKeyCode::K,
+                    ActionID::MoveDown(Player::P2),
                 );
                 control.add_key_map(1,
                     VirtualKeyCode::U,
@@ -126,7 +142,7 @@ enum Player {
 
 
 struct World {
-    paddles: (u8, u8),
+    paddles: (u8, u8, u8, u8),
     ball: (u8, u8),
     ball_err: Vec2,
     ball_vel: Vec2,
@@ -199,7 +215,8 @@ fn main() -> Result<(), Error> {
 impl World {
     fn new() -> Self {
         Self {
-            paddles: (WIDTH/2-PADDLE_WIDTH/2, WIDTH/2-PADDLE_WIDTH/2),
+            paddles: (WIDTH/2-PADDLE_WIDTH/2, WIDTH/2-PADDLE_WIDTH/2,
+		      PADDLE_OFF_Y, HEIGHT-PADDLE_OFF_Y-PADDLE_HEIGHT),
             ball: (WIDTH/2-BALL_SIZE/2, HEIGHT/2-BALL_SIZE/2),
             ball_err: Vec2::new(0.0,0.0),
             ball_vel: Vec2::new(0.0,0.0),
@@ -265,26 +282,32 @@ impl World {
                      self.ball_vel.x *= -1.0
                     }
 
-                (CollisionID::Ball, CollisionID::Paddle(player)) => {
-                    if match player {
+		(CollisionID::Ball, CollisionID::Paddle(player)) => {
+		    if match player {
                         Player::P1 =>
-                            ((self.ball.1) as i16 - (PADDLE_OFF_Y + PADDLE_HEIGHT) as i16).abs()
-			    > (((self.ball.0 as i16)  - (WIDTH - self.paddles.0 - PADDLE_WIDTH) as i16).abs())
-			    .min(((self.ball.0 + BALL_SIZE) as i16 - (WIDTH - self.paddles.0) as i16).abs()),
+			    ((self.ball.1) as i16 - (self.paddles.2 + PADDLE_HEIGHT) as i16).abs()
+			    > (((self.ball.0 as i16)  - (WIDTH - self.paddles.0 - PADDLE_WIDTH)
+				as i16).abs())
+			    .min(((self.ball.0 + BALL_SIZE) as i16 - (WIDTH - self.paddles.0)
+				  as i16).abs()),
                         Player::P2 =>
-                            ((self.ball.1 + BALL_SIZE) as i16 - (HEIGHT - PADDLE_OFF_Y - PADDLE_HEIGHT) as i16).abs()
-			    > (((self.ball.0 as i16)  - ((WIDTH - self.paddles.1 - PADDLE_WIDTH) as i16)).abs())
-			    .min(((self.ball.0 + BALL_SIZE) as i16 - (WIDTH - self.paddles.1 )as i16).abs()),
-                    } {
-                        self.ball_vel.x *= -1.0;
-                    } else {
+			    ((self.ball.1 + BALL_SIZE) as i16
+			     - (self.paddles.3 + PADDLE_HEIGHT) as i16).abs()
+			    > (((self.ball.0 as i16)  - ((WIDTH - self.paddles.1 - PADDLE_WIDTH)
+							 as i16)).abs())
+			    .min(((self.ball.0 + BALL_SIZE) as i16 - (WIDTH - self.paddles.1 )
+				  as i16).abs()),
+		    } {
+			self.ball_vel.x *= -1.0;
+
+		    } else {
                         self.ball_vel.y *= -1.0;
-                    }
+		}
                     self.change_angle(player);
-                },
-                _ => {}
-            }
-        }
+            },
+            _ => {}
+	}
+    }
         
         self.project_resources(&mut logics.resources);
         logics.resources.update();
@@ -310,18 +333,22 @@ impl World {
     fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
         control.mapping[0][0].is_valid = true;
         control.mapping[0][1].is_valid = true;
+	control.mapping[0][2].is_valid = true;
+	control.mapping[0][3].is_valid = true;
         control.mapping[1][0].is_valid = true;
         control.mapping[1][1].is_valid = true;
+	control.mapping[1][2].is_valid = true;
+        control.mapping[1][3].is_valid = true;
 
         if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
             match self.serving {
-                Some(Player::P1) => control.mapping[0][2].is_valid = true,
-                Some(Player::P2) => control.mapping[1][2].is_valid = true,
+                Some(Player::P1) => control.mapping[0][4].is_valid = true,
+                Some(Player::P2) => control.mapping[1][4].is_valid = true,
                 None => {}
             }
         } else {
-            control.mapping[0][2].is_valid = false;
-            control.mapping[1][2].is_valid = false;
+            control.mapping[0][4].is_valid = false;
+	    control.mapping[1][4].is_valid = false;
         }
     }
 
@@ -329,21 +356,29 @@ impl World {
         self.paddles.0 = ((self.paddles.0 as i16 -
                 control.values[0][0].value as i16 +
                 control.values[0][1].value as i16)
-            .max(0) as u8).min(255 - PADDLE_WIDTH);
+			  .max(0) as u8).min(255 - PADDLE_WIDTH);
+	self.paddles.2 = ((self.paddles.2 as i16 -
+                control.values[0][2].value as i16 +
+                control.values[0][3].value as i16)
+            .max(0) as u8).min(255 - PADDLE_HEIGHT);
         self.paddles.1 = ((self.paddles.1 as i16 -
                 control.values[1][0].value as i16 +
                 control.values[1][1].value as i16)
-            .max(0) as u8).min(255 - PADDLE_WIDTH);
+			  .max(0) as u8).min(255 - PADDLE_WIDTH);
+	self.paddles.3 = ((self.paddles.3 as i16 -
+                control.values[1][2].value as i16 +
+                control.values[1][3].value as i16)
+            .max(0) as u8).min(255 - PADDLE_HEIGHT);
         if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
             match self.serving {
                 Some(Player::P1) => {
-                    let values = &control.values[0][2];
+                    let values = &control.values[0][4];
                     if values.changed_by == 1.0 && values.value != 0.0 {
                         self.ball_vel = Vec2::new(1.0, 1.0);
                     }
                 }
                 Some(Player::P2) => {
-                    let values = &control.values[1][2];
+                    let values = &control.values[1][4];
                     if values.changed_by == 1.0 && values.value != 0.0 {
                         self.ball_vel = Vec2::new(-1.0, -1.0);
                     }
@@ -382,14 +417,16 @@ impl World {
             self.ball_vel,
             true, false, CollisionID::Ball);
         collision.add_collision_entity(
-            self.paddles.0 as f32, PADDLE_OFF_Y as f32,
+            self.paddles.0 as f32, self.paddles.2 as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
-            Vec2::new(0.0, -control.values[0][0].value + control.values[0][1].value),
+            Vec2::new(-control.values[0][0].value + control.values[0][1].value,
+		      -control.values[0][2].value+control.values[0][3].value),
                 true, true, CollisionID::Paddle(Player::P1));
         collision.add_collision_entity(
-           self.paddles.1 as f32, (HEIGHT - PADDLE_OFF_Y - PADDLE_HEIGHT) as f32,
+           self.paddles.1 as f32, self.paddles.3 as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
-            Vec2::new(0.0, -control.values[1][0].value + control.values[1][1].value),
+            Vec2::new(-control.values[1][0].value + control.values[1][1].value,
+		      -control.values[1][2].value + control.values[1][3].value),
             true, true, CollisionID::Paddle(Player::P2));
     }
 
@@ -451,11 +488,11 @@ impl World {
         for pixel in frame.chunks_exact_mut(4) {
             pixel.copy_from_slice(&[0,0,128,255]);
         }
-        draw_rect(self.paddles.0, PADDLE_OFF_Y,
+        draw_rect(self.paddles.0, self.paddles.2,
             PADDLE_WIDTH, PADDLE_HEIGHT,
             [255,255,255,255],
             frame);
-        draw_rect(self.paddles.1, HEIGHT-PADDLE_OFF_Y-PADDLE_HEIGHT,
+        draw_rect(self.paddles.1, self.paddles.3,
             PADDLE_WIDTH, PADDLE_HEIGHT,
             [255,255,255,255],
             frame);
@@ -479,3 +516,4 @@ fn draw_rect(x:u8, y:u8, w:u8, h:u8, color:[u8;4], frame:&mut [u8]) {
         }
     }
 }
+
