@@ -48,21 +48,35 @@ impl<V2: Vec2> PartialEq for Contact<V2> {
 
 impl<V2: Vec2> PartialOrd for Contact<V2> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let e1 = if self.displacement.x() < self.displacement.y() {
-            self.displacement.x()
-        } else if self.displacement.y() < self.displacement.x() {
-            self.displacement.y()
-        } else {
-            self.displacement.magnitude()
+        let e1 = {
+            let magnitude = self.get_smaller_displ().magnitude();
+            if magnitude != 0.0 {
+                magnitude
+            } else {
+                self.displacement.magnitude()
+            }
         };
-        let e2 = if other.displacement.x() < other.displacement.y() {
-            other.displacement.x()
-        } else if other.displacement.y() < other.displacement.x() {
-            other.displacement.y()
-        } else {
-            other.displacement.magnitude()
+        let e2 = {
+            let magnitude = other.get_smaller_displ().magnitude();
+            if magnitude != 0.0 {
+                magnitude
+            } else {
+                other.displacement.magnitude()
+            }
         };
         e1.partial_cmp(&e2)
+    }
+}
+
+impl<V2: Vec2> Contact<V2> {
+    fn get_smaller_displ(&self) -> V2 {
+        if self.displacement.x().abs() < self.displacement.y().abs() {
+            V2::new(self.displacement.x(), 0.0)
+        } else if self.displacement.y().abs() < self.displacement.x().abs() {
+            V2::new(0.0, self.displacement.y())
+        } else {
+            V2::new(0.0, 0.0)
+        }
     }
 }
 
@@ -141,9 +155,8 @@ impl<ID, V2> AabbCollision<ID, V2> where
                 displ.x() - already_moved.x(),
                 displ.y() - already_moved.y());
 
-            if (remaining_displ.x() == 0.0
-                || remaining_displ.y() == 0.0)
-                && displ.magnitude() == 0.0 {
+            if remaining_displ.x() == 0.0
+                || remaining_displ.y() == 0.0 {
                     continue;
             }
 
@@ -162,7 +175,6 @@ impl<ID, V2> AabbCollision<ID, V2> where
                 remove.push(idx);
                 continue;
             }
-
 
             if displ.x().abs() < displ.y().abs() {
                 already_moved.set_x(remaining_displ.x());
@@ -236,7 +248,27 @@ impl<ID, V2> AabbCollision<ID, V2> where
 
     /// `idx`: index in contacts. returns unit vector of normal of displacement for the `i` entity in the contact
     pub fn sides_touched(&self, idx: usize) -> V2 {
-        unimplemented![];
+        let contact = &self.contacts[idx];
+        let displaced = contact.get_smaller_displ();
+        let x = {
+            if displaced.x() < 0.0 {
+                -1.0
+            } else if displaced.x() > 0.0 {
+                1.0
+            } else {
+                0.0
+            }
+        };
+        let y = {
+            if displaced.y() < 0.0 {
+                -1.0
+            } else if displaced.y() > 0.0 {
+                1.0
+            } else {
+                0.0
+            }
+        };
+        V2::new(x, y)
     }
 
     fn intersects(&self, i: usize, j: usize) -> bool {

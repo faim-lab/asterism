@@ -230,13 +230,13 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for contact in logics.collision.contacts.iter() {
+        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
             match (logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id) {
                 (CollisionID::Player(..), CollisionID::MovingPlatform) => {
-                    // if logics.collision.sides_touched[contact.0].bottom {
+                    if logics.collision.sides_touched(idx).y == -1.0 {
                         self.player.x = (self.player.x as f32 + self.platform.vel.x).trunc() as u8;
-                    // }
+                    }
                 }
                 _ => {}
             }
@@ -365,12 +365,12 @@ impl World {
             entity_state.conditions[1][3] = true;
         }
         entity_state.conditions[2][1] = true;
-        for contact in collision.contacts.iter() {
+        for (idx, contact) in collision.contacts.iter().enumerate() {
             match collision.metadata[contact.i].id {
                 CollisionID::Player(..) => {
                     match collision.metadata[contact.j].id {
                         CollisionID::Ground | CollisionID::MovingPlatform => {
-                            // if collision.sides_touched[contact.0].bottom {
+                            if collision.sides_touched(idx).y == -1.0 {
                                 if self.player.vel.x == 0.0 {
                                     entity_state.conditions[1][0] = true;
                                 } else {
@@ -378,18 +378,18 @@ impl World {
                                 }
                                 entity_state.conditions[1][2] = false;
                                 entity_state.conditions[1][3] = false;
-                            // }
+                            }
                         }
                         _ => {}
                     }
                 }
-                CollisionID::Ground | CollisionID::MovingPlatform => {
+                CollisionID::Enemy => {
                     match collision.metadata[contact.j].id {
-                        CollisionID::Enemy => {
-                            // if collision.sides_touched[contact.1].bottom {
+                        CollisionID::Ground | CollisionID::MovingPlatform => {
+                            if collision.sides_touched(idx).y == -1.0 {
                                 entity_state.conditions[2][0] = true;
                                 entity_state.conditions[2][1] = false;
-                            // }
+                            }
                         }
                         _ => {}
                     }

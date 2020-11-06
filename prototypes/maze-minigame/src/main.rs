@@ -257,7 +257,7 @@ impl World {
     fn new() -> Self {
         Self {
             x: 58,
-            y: 13,
+            y: 14,
             vx: 0,
             vy: 0,
             score: 0,
@@ -336,11 +336,7 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
-            if contact.i == 2 && contact.j == 29 {
-                panic!("{:?}", logics.collision.sides_touched(idx));
-                // 1.0, 1.0
-            }
+        for contact in logics.collision.contacts.iter() {
             match (logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id) {
                     (CollisionID::Portal, CollisionID::Player) => {

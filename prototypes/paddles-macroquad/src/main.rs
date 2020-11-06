@@ -184,7 +184,7 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for (_idx, contact) in logics.collision.contacts.iter().enumerate() {
+        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
             match (logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id) {
 
@@ -211,16 +211,12 @@ impl World {
 
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
                     if match player {
-                        Player::P1 =>
-                            (self.ball.x() - (PADDLE_OFF_X + PADDLE_WIDTH) as f32).abs()
-                            > ((self.ball.y() + BALL_SIZE as f32) - self.paddles.0 as f32).abs().min((self.ball.y() - (self.paddles.0 + PADDLE_HEIGHT) as f32).abs()),
-                        Player::P2 =>
-                            ((self.ball.x() + BALL_SIZE as f32) - (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32).abs()
-                            > ((self.ball.y() + BALL_SIZE as f32) - self.paddles.1 as f32).abs().min((self.ball.y() - (self.paddles.1 + PADDLE_HEIGHT) as f32).abs()),
+                        Player::P1 => logics.collision.sides_touched(idx).x() == 1.0,
+                        Player::P2 => logics.collision.sides_touched(idx).x() == -1.0,
                     } {
-                        self.ball_vel.set_y(self.ball_vel.y() * -1.0);
-                    } else {
                         self.ball_vel.set_x(self.ball_vel.x() * -1.0);
+                    } else {
+                        self.ball_vel.set_y(self.ball_vel.y() * -1.0);
                     }
                     self.change_angle(player);
                 },
