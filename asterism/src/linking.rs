@@ -1,7 +1,9 @@
 pub struct GraphedLinking {
     pub maps: Vec<NodeMap>,
     pub conditions: Vec<Vec<bool>>,
-    pub positions: Vec<usize>,
+    pub positions: Vec<Option<usize>>,
+    // invariants: maps, conditions, positions length are all equal. forall i, position[i] < conditions[i].len()
+    // conditions[i].len() = maps.nodes.len()
 }
 
 impl GraphedLinking {
@@ -16,12 +18,15 @@ impl GraphedLinking {
     pub fn update(&mut self) {
         // update nodes
         for (i, node_idx) in self.positions.iter_mut().enumerate() {
-            for link in &self.maps[i].nodes[*node_idx].links {
-                if self.conditions[i][*link] {
-                    *node_idx = *link;
+            if let Some(idx) = &mut *node_idx {
+                for link in &self.maps[i].nodes[*idx].links {
+                    if self.conditions[i][*link] {
+                        *idx = *link;
+                    }
                 }
             }
         }
+
         for map_conditions in self.conditions.iter_mut() {
             for val in map_conditions.iter_mut() {
                 *val = false;
@@ -29,7 +34,7 @@ impl GraphedLinking {
         }
     }
 
-    pub fn add_link_map(&mut self, starting_pos: usize, nodes: Vec<Vec<usize>>) {
+    pub fn add_link_map(&mut self, starting_pos: Option<usize>, nodes: Vec<Vec<usize>>) {
         let mut node_map = NodeMap { nodes: Vec::new() };
         for nodes in nodes.iter() {
             node_map.nodes.push(Node {

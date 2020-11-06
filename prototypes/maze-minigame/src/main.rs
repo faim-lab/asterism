@@ -31,7 +31,7 @@ enum CollisionID {
     Player,
     Wall,
     Item,
-    Portal,
+    Portal(usize, usize),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
@@ -54,7 +54,6 @@ struct World {
     walls: Vec<Wall>,
     items: Vec<Collectible>,
     portals: Vec<Portal>,
-    touching_portal: bool,
     just_teleported: bool,
 }
 
@@ -67,12 +66,7 @@ struct Wall {
 
 impl Wall {
     fn new(x: i16, y: i16, w: i16, h: i16) -> Wall {
-        Wall {
-            x: x,
-            y: y,
-            w: w,
-            h: h,
-        }
+        Wall { x, y, w, h }
     }
 }
 
@@ -83,23 +77,20 @@ struct Collectible {
 
 impl Collectible {
     fn new(x: i16, y: i16) -> Self {
-        Self { x: x, y: y }
+        Self { x, y }
     }
 }
 
 struct Portal {
     x: i16,
     y: i16,
+    to: usize,
     color: [u8; 4],
 }
 
 impl Portal {
-    fn new(x: i16, y: i16, color: [u8; 4]) -> Self {
-        Self {
-            x: x,
-            y: y,
-            color: color,
-        }
+    fn new(x: i16, y: i16, to: usize, color: [u8; 4]) -> Self {
+        Self { x, y, to, color }
     }
 }
 
@@ -148,7 +139,7 @@ impl Logics {
                         CollisionID::Wall,
                     );
                 }
-                for portal in portals {
+                for (i, portal) in portals.iter().enumerate() {
                     collision.add_entity_as_xywh(
                         portal.x as f32,
                         portal.y as f32,
@@ -157,14 +148,14 @@ impl Logics {
                         Vec2::new(0.0, 0.0),
                         false,
                         true,
-                        CollisionID::Portal,
+                        CollisionID::Portal(portal.to, i),
                     );
                 }
                 collision
             },
             linking: {
                 let mut linking = GraphedLinking::new();
-                linking.add_link_map(2, vec![vec![1, 2], vec![0, 2], vec![0, 1]]);
+                linking.add_link_map(None, vec![vec![1, 2], vec![0, 2], vec![0, 1]]);
                 linking
             },
             resources: {
@@ -277,8 +268,8 @@ impl World {
     /// Create a new `World` instance that can draw walls, portals, items, and player
     fn new() -> Self {
         Self {
-            x: 58,
-            y: 14,
+            x: 110,
+            y: 100,
             vx: 0,
             vy: 0,
             score: 0,
@@ -323,11 +314,10 @@ impl World {
             },
             portals: {
                 vec![
-                    Portal::new(110, 70, [0x4f, 0xe5, 0xff, 0xff]), // blue portal 0
-                    Portal::new(280, 27, [0xfc, 0x8c, 0x03, 0xff]), // orange portal 1
+                    Portal::new(110, 70, 1, [0x4f, 0xe5, 0xff, 0xff]), // blue portal 0
+                    Portal::new(280, 27, 0, [0xfc, 0x8c, 0x03, 0xff]), // orange portal 1
                 ]
             },
-            touching_portal: false,
             just_teleported: false,
         }
     }
@@ -350,23 +340,18 @@ impl World {
         logics.physics.update();
         self.unproject_physics(&logics.physics);
 
-        // check if player is still touching portal after teleporting (and possibly moving a bit)
-        self.touching_portal = false;
-
         self.project_collision(&mut logics.collision, &logics.physics);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
+
+        let mut touching_portal = false;
 
         for contact in logics.collision.contacts.iter() {
             match (
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Portal, CollisionID::Player) => {
-                    if self.just_teleported {
-                        self.touching_portal = true;
-                    }
-                }
+                (CollisionID::Portal(_, _), CollisionID::Player) => touching_portal = true,
                 (CollisionID::Item, CollisionID::Player) => {
                     // add to score and remove touched item from game state
                     logics
@@ -380,7 +365,7 @@ impl World {
             }
         }
 
-        if !self.touching_portal {
+        if !touching_portal {
             self.just_teleported = false;
         }
 
@@ -474,50 +459,40 @@ impl World {
         linking: &mut GraphedLinking,
         collision: &AabbCollision<CollisionID, Vec2>,
     ) {
-        let mut teleport: Option<usize> = None;
+        linking.positions[0] = None;
         for contact in collision.contacts.iter() {
             match (
                 collision.metadata[contact.i].id,
                 collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Portal, CollisionID::Player) => {
-                    if !self.just_teleported && !self.touching_portal {
-                        teleport = Some(contact.i - self.walls.len());
-                    } else {
-                        teleport = Some(2);
+                (CollisionID::Portal(to, from), CollisionID::Player) => {
+                    if !self.just_teleported {
+                        linking.conditions[0][to] = true;
+                        linking.positions[0] = Some(from);
                     }
                 }
                 _ => {}
             }
         }
-
-        if let Some(choice) = teleport {
-            let next_pos = choice;
-            linking.conditions[0][next_pos] = true;
-        }
     }
 
     fn unproject_linking(&mut self, linking: &GraphedLinking) {
-        let mut updated: Option<usize> = None;
-        for (.., pos) in linking.maps.iter().zip(linking.positions.iter()) {
-            updated = Some(*pos);
-        }
-
-        if let Some(new_pos) = updated {
-            match new_pos {
-                0 => {
-                    // teleport to orange portal
-                    self.x = 277;
-                    self.y = 24;
-                    self.just_teleported = true;
+        for (_, position) in linking.maps.iter().zip(linking.positions.iter()) {
+            if let Some(pos) = position {
+                match pos {
+                    1 => {
+                        // teleport to orange portal
+                        self.x = 277;
+                        self.y = 24;
+                    }
+                    0 => {
+                        // teleport to blue portal
+                        self.x = 107;
+                        self.y = 67;
+                    }
+                    _ => {}
                 }
-                1 => {
-                    // teleport to blue portal
-                    self.x = 107;
-                    self.y = 67;
-                    self.just_teleported = true;
-                }
-                _ => {}
+                self.just_teleported = true;
             }
         }
     }
