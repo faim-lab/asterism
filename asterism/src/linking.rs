@@ -1,7 +1,7 @@
 pub struct GraphedLinking {
     pub maps: Vec<NodeMap>,
     pub conditions: Vec<Vec<bool>>,
-    pub positions: Vec<usize>
+    pub positions: Vec<usize>,
 }
 
 impl GraphedLinking {
@@ -9,7 +9,7 @@ impl GraphedLinking {
         Self {
             maps: Vec::new(),
             conditions: Vec::new(),
-            positions: Vec::new()
+            positions: Vec::new(),
         }
     }
 
@@ -39,7 +39,7 @@ impl GraphedLinking {
                         self_nodes.push(*node);
                     }
                     self_nodes
-                }
+                },
             });
         }
         self.maps.push(node_map);
@@ -59,6 +59,5 @@ impl Default for NodeMap {
 }
 
 pub struct Node {
-    pub links: Vec<usize>
+    pub links: Vec<usize>,
 }
-

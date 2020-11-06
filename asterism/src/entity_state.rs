@@ -1,7 +1,7 @@
 pub struct FlatEntityState<ID: Copy + Eq> {
     pub maps: Vec<StateMap<ID>>,
     pub conditions: Vec<Vec<bool>>,
-    pub states: Vec<usize>
+    pub states: Vec<usize>,
 }
 
 impl<ID: Copy + Eq> FlatEntityState<ID> {
@@ -10,7 +10,7 @@ impl<ID: Copy + Eq> FlatEntityState<ID> {
             // one map per entity
             maps: Vec::new(),
             conditions: Vec::new(),
-            states: Vec::new()
+            states: Vec::new(),
         }
     }
 
@@ -45,7 +45,7 @@ impl<ID: Copy + Eq> FlatEntityState<ID> {
                         self_edges.push(*edge);
                     }
                     self_edges
-                }
+                },
             });
         }
         self.maps.push(state_map);
@@ -66,6 +66,5 @@ impl<ID: Copy + Eq> Default for StateMap<ID> {
 
 pub struct State<ID> {
     pub id: ID,
-    pub edges: Vec<usize>
+    pub edges: Vec<usize>,
 }
-

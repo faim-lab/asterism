@@ -16,12 +16,20 @@ pub trait Default {
 
 impl Texture {
     // 1.
-    pub fn from_bytes(device: &wgpu::Device, bytes: &[u8], label: &str) -> Result<(Self, wgpu::CommandBuffer), anyhow::Error> {
+    pub fn from_bytes(
+        device: &wgpu::Device,
+        bytes: &[u8],
+        label: &str,
+    ) -> Result<(Self, wgpu::CommandBuffer), anyhow::Error> {
         let img = image::load_from_memory(bytes)?;
         Self::from_image(device, &img, Some(label))
     }
 
-    pub fn from_image(device: &wgpu::Device, img: &image::DynamicImage, label:Option<&str>) -> Result<(Self, wgpu::CommandBuffer), anyhow::Error> {
+    pub fn from_image(
+        device: &wgpu::Device,
+        img: &image::DynamicImage,
+        label: Option<&str>,
+    ) -> Result<(Self, wgpu::CommandBuffer), anyhow::Error> {
         let rgba = img.as_rgba8().unwrap();
         let dimensions = img.dimensions();
 
@@ -38,13 +46,10 @@ impl Texture {
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
-            label: label
+            label: label,
         });
 
-        let buffer = device.create_buffer_with_data(
-            &rgba,
-            wgpu::BufferUsage::COPY_SRC,
-        );
+        let buffer = device.create_buffer_with_data(&rgba, wgpu::BufferUsage::COPY_SRC);
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("texture_buffer_copy_encoder"),
@@ -81,6 +86,13 @@ impl Texture {
             compare: wgpu::CompareFunction::Always,
         });
 
-        Ok((Self { texture, view, sampler }, cmd_buffer))
+        Ok((
+            Self {
+                texture,
+                view,
+                sampler,
+            },
+            cmd_buffer,
+        ))
     }
 }

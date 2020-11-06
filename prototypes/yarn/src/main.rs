@@ -1,12 +1,12 @@
-use asterism::{QueuedResources, resources::Transaction, GraphedLinking};
-use std::io::{self, prelude::*, BufReader, Error, ErrorKind};
-use std::fs::File;
+use asterism::{resources::Transaction, GraphedLinking, QueuedResources};
 use rand::prelude::*;
+use std::fs::File;
+use std::io::{self, prelude::*, BufReader, Error, ErrorKind};
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone)]
 enum PoolID {
     Energy,
-    NumSleep
+    NumSleep,
 }
 
 struct World {
@@ -18,7 +18,6 @@ struct World {
     energy: u8,
 }
 
-
 struct Logics {
     resources: QueuedResources<PoolID>,
     linking: GraphedLinking,
@@ -29,11 +28,11 @@ impl Logics {
         Self {
             resources: {
                 let mut resources = QueuedResources::new();
-                resources.items.insert( PoolID::Energy, 49.0 );
-                resources.items.insert( PoolID::NumSleep, 0.0 );
+                resources.items.insert(PoolID::Energy, 49.0);
+                resources.items.insert(PoolID::NumSleep, 0.0);
                 resources
             },
-            linking: GraphedLinking::new()
+            linking: GraphedLinking::new(),
         }
     }
 }
@@ -87,27 +86,45 @@ impl World {
         self.project_linking(&mut logics.linking);
         logics.linking.update();
         self.unproject_linking(&logics.linking);
-        
+
         let mut rng = thread_rng();
         match self.current_label {
             0 => {
                 self.reset(logics);
             }
             5 => {
-                logics.resources.transactions.push(vec![(PoolID::NumSleep, Transaction::Change(1))]);
-                logics.resources.transactions.push(vec![(PoolID::Energy, Transaction::Change(12))]);
+                logics
+                    .resources
+                    .transactions
+                    .push(vec![(PoolID::NumSleep, Transaction::Change(1))]);
+                logics
+                    .resources
+                    .transactions
+                    .push(vec![(PoolID::Energy, Transaction::Change(12))]);
             }
             7 => {
-                logics.resources.transactions.push(vec![(PoolID::Energy, Transaction::Change(-6))]);
+                logics
+                    .resources
+                    .transactions
+                    .push(vec![(PoolID::Energy, Transaction::Change(-6))]);
             }
             8 => {
-                logics.resources.transactions.push(vec![(PoolID::Energy, Transaction::Change(rng.gen_range(11, 17)))]);
+                logics.resources.transactions.push(vec![(
+                    PoolID::Energy,
+                    Transaction::Change(rng.gen_range(11, 17)),
+                )]);
             }
             9 => {
-                logics.resources.transactions.push(vec![(PoolID::Energy, Transaction::Change(rng.gen_range(10, 20)))]);
+                logics.resources.transactions.push(vec![(
+                    PoolID::Energy,
+                    Transaction::Change(rng.gen_range(10, 20)),
+                )]);
             }
             10 => {
-                logics.resources.transactions.push(vec![(PoolID::Energy, Transaction::Change(- rng.gen_range(15, 20)))]);
+                logics.resources.transactions.push(vec![(
+                    PoolID::Energy,
+                    Transaction::Change(-rng.gen_range(15, 20)),
+                )]);
             }
             _ => {}
         }
@@ -187,8 +204,8 @@ impl World {
         self.numsleep = 0;
         logics.resources = {
             let mut resources = QueuedResources::new();
-            resources.items.insert( PoolID::Energy, 49.0 );
-            resources.items.insert( PoolID::NumSleep, 0.0 );
+            resources.items.insert(PoolID::Energy, 49.0);
+            resources.items.insert(PoolID::NumSleep, 0.0);
             resources
         };
     }
@@ -228,10 +245,13 @@ fn read_file(world: &mut World, linking: &mut GraphedLinking) -> io::Result<()> 
                         link_count += 1;
                         let link_label = String::from(&line[5..]);
                         if let Some(label_end) = link_label.find(" ") {
-                            world.dialogue[labels.len() - 1].push(String::from(link_count.to_string() + &link_label[label_end..]));
+                            world.dialogue[labels.len() - 1].push(String::from(
+                                link_count.to_string() + &link_label[label_end..],
+                            ));
                             links.push((labels.len() - 1, String::from(&line[5..(label_end + 5)])));
                         } else {
-                            world.dialogue[labels.len() - 1].push(String::from(link_count.to_string() + &link_label));
+                            world.dialogue[labels.len() - 1]
+                                .push(String::from(link_count.to_string() + &link_label));
                             links.push((labels.len() - 1, String::from(&line[5..])));
                         }
                     } else if line.starts_with("secretlink") {
@@ -241,7 +261,9 @@ fn read_file(world: &mut World, linking: &mut GraphedLinking) -> io::Result<()> 
                     }
                 }
             }
-            Err(error) => { return Err(error); }
+            Err(error) => {
+                return Err(error);
+            }
         }
     }
     world.num_links.push(link_count);

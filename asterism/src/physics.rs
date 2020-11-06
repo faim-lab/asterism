@@ -16,7 +16,11 @@ impl<Vec2: Add + AddAssign + Copy + Mul<Output = Vec2>> PointPhysics<Vec2> {
     }
 
     pub fn update(&mut self) {
-        for (pos, (vel, acc)) in self.positions.iter_mut().zip(self.velocities.iter_mut().zip(self.accelerations.iter())) {
+        for (pos, (vel, acc)) in self
+            .positions
+            .iter_mut()
+            .zip(self.velocities.iter_mut().zip(self.accelerations.iter()))
+        {
             *vel += *acc;
             *pos += *vel;
         }
@@ -27,7 +31,4 @@ impl<Vec2: Add + AddAssign + Copy + Mul<Output = Vec2>> PointPhysics<Vec2> {
         self.velocities[i] = vel;
         self.accelerations[i] = acc;
     }
-
 }
-
-
