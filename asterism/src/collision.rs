@@ -1,9 +1,9 @@
 use glam::Vec2 as GlamVec2;
 use std::cmp::Ordering;
-use std::ops::{Add, AddAssign, Mul};
+use std::ops::{Add, AddAssign};
 use ultraviolet::Vec2 as UVVec2;
 
-pub trait Vec2 {
+pub trait Vec2: Add + AddAssign + Copy {
     fn new(x: f32, y: f32) -> Self;
     fn x(&self) -> f32;
     fn y(&self) -> f32;
@@ -100,12 +100,7 @@ impl<V2: Vec2> Contact<V2> {
     }
 }
 
-pub struct AabbCollision<ID, V2>
-where
-    ID: Copy + Eq,
-    V2: Vec2 + Add + AddAssign + Mul<Output = V2> + Copy,
-{
-    // this trait bound makes me want to cry
+pub struct AabbCollision<ID: Copy + Eq, V2: Vec2> {
     pub centers: Vec<V2>,
     pub half_sizes: Vec<V2>,
     // Vec2 {x: width * 0.5, y: height * 0.5}
@@ -122,11 +117,7 @@ pub struct CollisionData<ID: Copy + Eq> {
     pub id: ID,
 }
 
-impl<ID, V2> AabbCollision<ID, V2>
-where
-    ID: Copy + Eq,
-    V2: Vec2 + Add + AddAssign + Mul<Output = V2> + Copy,
-{
+impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
     pub fn new() -> Self {
         Self {
             centers: Vec::new(),
@@ -152,20 +143,22 @@ where
                         && self.metadata[j].solid
                         && !self.metadata[i].fixed
                     {
-                        self.find_displacement(i, j) * self.get_speed_ratio(i, j)
+                        let displ = self.find_displacement(i, j);
+                        let speed_ratio = self.get_speed_ratio(i, j);
+                        V2::new(displ.x() * speed_ratio.x(), displ.y() * speed_ratio.y())
                     } else {
                         V2::new(0.0, 0.0)
                     };
                     let contact = Contact { i, j, displacement };
                     self.contacts.push(contact);
-                    self.contacts.sort_by(|e1, e2| e2.partial_cmp(e1).unwrap());
                 }
             }
         }
 
+        self.contacts.sort_by(|e1, e2| e2.partial_cmp(e1).unwrap());
+
         let remove = &mut Vec::<usize>::new();
 
-        // do some sort of....... iteration thru contacts
         // sorted by magnitude of displ.
         for (idx, contact) in self.contacts.iter().enumerate() {
             let Contact {
@@ -222,11 +215,10 @@ where
             hsi.x() + hsj.x() - (ci.x() - cj.x()).abs(),
             hsi.y() + hsj.y() - (ci.y() - cj.y()).abs(),
         );
-        let displ_signs = V2::new(
-            if ci.x() - cj.x() < 0.0 { -1.0 } else { 1.0 },
-            if ci.y() - cj.y() < 0.0 { -1.0 } else { 1.0 },
-        );
-        displ_abs * displ_signs
+        V2::new(
+            if ci.x() - cj.x() < 0.0 { -1.0 } else { 1.0 } * displ_abs.x(),
+            if ci.y() - cj.y() < 0.0 { -1.0 } else { 1.0 } * displ_abs.y(),
+        )
     }
 
     fn get_speed_ratio(&self, i: usize, j: usize) -> V2 {

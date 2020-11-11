@@ -18,7 +18,7 @@ impl GraphedLinking {
     pub fn update(&mut self) {
         // update nodes
         for (i, node_idx) in self.positions.iter_mut().enumerate() {
-            if let Some(idx) = &mut *node_idx {
+            if let Some(idx) = node_idx.as_mut() {
                 for link in &self.maps[i].nodes[*idx].links {
                     if self.conditions[i][*link] {
                         *idx = *link;
