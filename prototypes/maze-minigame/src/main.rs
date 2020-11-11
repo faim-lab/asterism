@@ -165,13 +165,6 @@ impl Logics {
             },
         }
     }
-
-    fn xywh_to_center_hs(x: f32, y: f32, w: f32, h: f32) -> (Vec2, Vec2) {
-        (
-            Vec2::new(x + w / 2.0, y + h / 2.0),
-            Vec2::new(w / 2.0, h / 2.0),
-        )
-    }
 }
 
 fn main() -> Result<(), Error> {
