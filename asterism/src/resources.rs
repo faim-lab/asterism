@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 pub struct QueuedResources<ID: Copy + Ord> {
     pub items: BTreeMap<ID, f32>,
     pub transactions: Vec<Vec<(ID, Transaction)>>,
-    pub completed: Vec<(bool, Vec<ID>)>
+    pub completed: Vec<(bool, Vec<ID>)>,
 }
 
 impl<ID: Copy + Ord> QueuedResources<ID> {
@@ -20,7 +20,7 @@ impl<ID: Copy + Ord> QueuedResources<ID> {
         'exchange: for exchange in self.transactions.iter() {
             let mut snapshot: BTreeMap<ID, f32> = BTreeMap::new();
             for (item_type, ..) in exchange {
-                snapshot.insert( *item_type, *self.items.get(&item_type).unwrap() );
+                snapshot.insert(*item_type, *self.items.get(&item_type).unwrap());
             }
             let mut item_types = vec![];
             for (item_type, change) in exchange.iter() {
@@ -44,7 +44,7 @@ impl<ID: Copy + Ord> QueuedResources<ID> {
         self.transactions.clear();
     }
 
-    fn is_possible (&self, item_type: &ID, transaction: &Transaction) -> bool {
+    fn is_possible(&self, item_type: &ID, transaction: &Transaction) -> bool {
         if !self.items.contains_key(item_type) {
             false
         } else {
@@ -53,7 +53,9 @@ impl<ID: Copy + Ord> QueuedResources<ID> {
                 Transaction::Change(amt) => {
                     if value.unwrap() + *amt as f32 >= 0.0 {
                         true
-                    } else { false }
+                    } else {
+                        false
+                    }
                 }
             }
         }
@@ -62,12 +64,9 @@ impl<ID: Copy + Ord> QueuedResources<ID> {
     pub fn get_value_by_itemtype(&self, item_type: &ID) -> f32 {
         *self.items.get(item_type).unwrap()
     }
-
 }
 
 #[derive(Clone, Copy)]
 pub enum Transaction {
     Change(i8),
 }
-
-

@@ -1,17 +1,8 @@
-#![deny(clippy::all)]
-#![forbid(unsafe_code)]
-
 use asterism::{
-    resources::Transaction, AabbCollision, KeyboardControl, PointPhysics, QueuedResources,
-    WinitKeyboardControl,
+    resources::Transaction, AabbCollision, KeyboardControl, MacroQuadKeyboardControl, PointPhysics,
+    QueuedResources,
 };
-use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
-use ultraviolet::Vec2;
-use winit::dpi::LogicalSize;
-use winit::event::{Event, VirtualKeyCode};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::WindowBuilder;
-use winit_input_helper::WinitInputHelper;
+use macroquad::prelude::*;
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -25,6 +16,7 @@ enum ActionID {
     MoveUp(Player),
     MoveDown(Player),
     Serve(Player),
+    Quit,
 }
 
 impl Default for ActionID {
@@ -33,7 +25,7 @@ impl Default for ActionID {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
 enum CollisionID {
     Paddle(Player),
     Ball,
@@ -54,7 +46,7 @@ enum PoolID {
 }
 
 struct Logics {
-    control: WinitKeyboardControl<ActionID>,
+    control: MacroQuadKeyboardControl<ActionID>,
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
@@ -64,49 +56,58 @@ impl Logics {
     fn new() -> Self {
         Self {
             control: {
-                let mut control = WinitKeyboardControl::new();
-                control.add_key_map(0, VirtualKeyCode::Q, ActionID::MoveUp(Player::P1));
-                control.add_key_map(0, VirtualKeyCode::A, ActionID::MoveDown(Player::P1));
-                control.add_key_map(0, VirtualKeyCode::W, ActionID::Serve(Player::P1));
-                control.add_key_map(1, VirtualKeyCode::O, ActionID::MoveUp(Player::P2));
-                control.add_key_map(1, VirtualKeyCode::L, ActionID::MoveDown(Player::P2));
-                control.add_key_map(1, VirtualKeyCode::I, ActionID::Serve(Player::P2));
+                let mut control = MacroQuadKeyboardControl::new();
+                control.add_key_map(0, KeyCode::Q, ActionID::MoveUp(Player::P1));
+                control.add_key_map(0, KeyCode::A, ActionID::MoveDown(Player::P1));
+                control.add_key_map(0, KeyCode::W, ActionID::Serve(Player::P1));
+                control.add_key_map(1, KeyCode::O, ActionID::MoveUp(Player::P2));
+                control.add_key_map(1, KeyCode::L, ActionID::MoveDown(Player::P2));
+                control.add_key_map(1, KeyCode::I, ActionID::Serve(Player::P2));
+                control.add_key_map(2, KeyCode::Escape, ActionID::Quit);
                 control
             },
             physics: PointPhysics::new(),
             collision: {
                 let mut collision = AabbCollision::new();
                 // left
-                collision.add_collision_entity(
-                    Vec2::new(-1.0, (HEIGHT / 2) as f32),
-                    Vec2::new(1.0, (HEIGHT / 2) as f32),
+                collision.add_entity_as_xywh(
+                    -2.0,
+                    0.0,
+                    2.0,
+                    HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
                     CollisionID::SideWall(Player::P1),
                 );
                 // right
-                collision.add_collision_entity(
-                    Vec2::new(WIDTH as f32 + 1.0, (HEIGHT / 2) as f32),
-                    Vec2::new(1.0, (HEIGHT / 2) as f32),
+                collision.add_entity_as_xywh(
+                    WIDTH as f32,
+                    0.0,
+                    2.0,
+                    HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
                     CollisionID::SideWall(Player::P2),
                 );
                 // top
-                collision.add_collision_entity(
-                    Vec2::new((WIDTH / 2) as f32, -1.0),
-                    Vec2::new((WIDTH / 2) as f32, 1.0),
+                collision.add_entity_as_xywh(
+                    0.0,
+                    -2.0,
+                    WIDTH as f32,
+                    2.0,
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
                     CollisionID::TopWall,
                 );
                 // bottom
-                collision.add_collision_entity(
-                    Vec2::new((WIDTH / 2) as f32, HEIGHT as f32 + 1.0),
-                    Vec2::new((WIDTH / 2) as f32, 1.0),
+                collision.add_entity_as_xywh(
+                    0.0,
+                    HEIGHT as f32,
+                    WIDTH as f32,
+                    2.0,
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
@@ -124,7 +125,7 @@ impl Logics {
     }
 }
 
-#[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
+#[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Debug)]
 enum Player {
     P1,
     P2,
@@ -132,72 +133,36 @@ enum Player {
 
 struct World {
     paddles: (u8, u8),
-    ball: (u8, u8),
-    ball_err: Vec2,
+    ball: Vec2,
     ball_vel: Vec2,
     serving: Option<Player>,
     score: (u8, u8),
 }
 
-fn main() -> Result<(), Error> {
-    let event_loop = EventLoop::new();
-    let mut input = WinitInputHelper::new();
-    let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
-        WindowBuilder::new()
-            .with_title("paddles")
-            .with_inner_size(size)
-            .with_min_inner_size(size)
-            .build(&event_loop)
-            .unwrap()
-    };
-    let mut hidpi_factor = window.scale_factor();
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "paddles".to_owned(),
+        window_width: WIDTH as i32,
+        window_height: HEIGHT as i32,
+        fullscreen: false,
+        ..Default::default()
+    }
+}
 
-    let mut pixels = {
-        let surface = Surface::create(&window);
-        let surface_texture = SurfaceTexture::new(WIDTH as u32, HEIGHT as u32, surface);
-        Pixels::new(WIDTH as u32, HEIGHT as u32, surface_texture)?
-    };
+#[macroquad::main(window_conf)]
+async fn main() {
     let mut world = World::new();
     let mut logics = Logics::new();
 
-    event_loop.run(move |event, _, control_flow| {
-        // Draw the current frame
-        if let Event::RedrawRequested(_) = event {
-            world.draw(pixels.get_frame());
-            if pixels
-                .render()
-                .map_err(|e| panic!("pixels.render() failed: {}", e))
-                .is_err()
-            {
-                *control_flow = ControlFlow::Exit;
-                return;
+    loop {
+        if let Ok(cont) = world.update(&mut logics) {
+            if !cont {
+                break;
             }
         }
-
-        // Handle input events
-        if input.update(&event) {
-            // Close events
-            if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-
-            // Adjust high DPI factor
-            if let Some(factor) = input.scale_factor_changed() {
-                hidpi_factor = factor;
-            }
-
-            // Resize the window
-            if let Some(size) = input.window_resized() {
-                pixels.resize(size.width, size.height);
-            }
-
-            // Update internal state and request a redraw
-            world.update(&mut logics, &input);
-            window.request_redraw();
-        }
-    });
+        world.draw();
+        next_frame().await;
+    }
 }
 
 impl World {
@@ -207,18 +172,24 @@ impl World {
                 HEIGHT / 2 - PADDLE_HEIGHT / 2,
                 HEIGHT / 2 - PADDLE_HEIGHT / 2,
             ),
-            ball: (WIDTH / 2 - BALL_SIZE / 2, HEIGHT / 2 - BALL_SIZE / 2),
-            ball_err: Vec2::new(0.0, 0.0),
+            ball: Vec2::new(
+                (WIDTH / 2 - BALL_SIZE / 2) as f32,
+                (HEIGHT / 2 - BALL_SIZE / 2) as f32,
+            ),
             ball_vel: Vec2::new(0.0, 0.0),
             serving: Some(Player::P1),
             score: (0, 0),
         }
     }
 
-    fn update(&mut self, logics: &mut Logics, input: &WinitInputHelper) {
+    fn update(&mut self, logics: &mut Logics) -> Result<bool, ()> {
         self.project_control(&mut logics.control);
-        logics.control.update(input);
+        logics.control.update(&());
         self.unproject_control(&logics.control);
+
+        if logics.control.values[2][0].value != 0.0 {
+            return Ok(false);
+        }
 
         self.project_physics(&mut logics.physics);
         logics.physics.update();
@@ -228,14 +199,17 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for contact in logics.collision.contacts.iter() {
+        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
             match (
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
                 (CollisionID::SideWall(player), CollisionID::Ball) => {
                     self.ball_vel = Vec2::new(0.0, 0.0);
-                    self.ball = (WIDTH / 2 - BALL_SIZE / 2, HEIGHT / 2 - BALL_SIZE / 2);
+                    self.ball = Vec2::new(
+                        (WIDTH / 2 - BALL_SIZE / 2) as f32,
+                        (HEIGHT / 2 - BALL_SIZE / 2) as f32,
+                    );
                     match player {
                         Player::P1 => {
                             logics
@@ -253,41 +227,24 @@ impl World {
                         }
                     }
                 }
+
                 (CollisionID::TopWall, CollisionID::Ball)
                 | (CollisionID::BottomWall, CollisionID::Ball) => {
-                    self.ball_vel.y *= -1.0;
+                    self.ball_vel.set_y(self.ball_vel.y() * -1.0);
                 }
+
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
                     if match player {
-                        Player::P1 => {
-                            (self.ball.0 as i16 - (PADDLE_OFF_X + PADDLE_WIDTH) as i16).abs()
-                                > ((self.ball.1 + BALL_SIZE) as i16 - self.paddles.0 as i16)
-                                    .abs()
-                                    .min(
-                                        (self.ball.1 as i16
-                                            - (self.paddles.0 + PADDLE_HEIGHT) as i16)
-                                            .abs(),
-                                    )
-                        }
-                        Player::P2 => {
-                            ((self.ball.0 + BALL_SIZE) as i16
-                                - (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as i16)
-                                .abs()
-                                > ((self.ball.1 + BALL_SIZE) as i16 - self.paddles.1 as i16)
-                                    .abs()
-                                    .min(
-                                        (self.ball.1 as i16
-                                            - (self.paddles.1 + PADDLE_HEIGHT) as i16)
-                                            .abs(),
-                                    )
-                        }
+                        Player::P1 => logics.collision.sides_touched(idx).x() == 1.0,
+                        Player::P2 => logics.collision.sides_touched(idx).x() == -1.0,
                     } {
-                        self.ball_vel.y *= -1.0;
+                        self.ball_vel.set_x(self.ball_vel.x() * -1.0);
                     } else {
-                        self.ball_vel.x *= -1.0;
+                        self.ball_vel.set_y(self.ball_vel.y() * -1.0);
                     }
                     self.change_angle(player);
                 }
+
                 _ => {}
             }
         }
@@ -311,15 +268,18 @@ impl World {
                 }
             }
         }
+
+        Ok(true)
     }
 
-    fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
+    fn project_control(&self, control: &mut MacroQuadKeyboardControl<ActionID>) {
         control.mapping[0][0].is_valid = true;
         control.mapping[0][1].is_valid = true;
         control.mapping[1][0].is_valid = true;
         control.mapping[1][1].is_valid = true;
+        control.mapping[2][0].is_valid = true;
 
-        if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
+        if (self.ball_vel.x(), self.ball_vel.y()) == (0.0, 0.0) {
             match self.serving {
                 Some(Player::P1) => control.mapping[0][2].is_valid = true,
                 Some(Player::P2) => control.mapping[1][2].is_valid = true,
@@ -331,7 +291,7 @@ impl World {
         }
     }
 
-    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
+    fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
         self.paddles.0 = ((self.paddles.0 as i16 - control.values[0][0].value as i16
             + control.values[0][1].value as i16)
             .max(0) as u8)
@@ -340,20 +300,20 @@ impl World {
             + control.values[1][1].value as i16)
             .max(0) as u8)
             .min(255 - PADDLE_HEIGHT);
-        if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
+        if (self.ball_vel.x(), self.ball_vel.y()) == (0.0, 0.0) {
             match self.serving {
                 Some(Player::P1) => {
                     let values = &control.values[0][2];
                     if values.changed_by == 1.0 && values.value != 0.0 {
-                        self.ball_vel.x = 1.0;
-                        self.ball_vel.y = 1.0;
+                        self.ball_vel.set_x(1.0);
+                        self.ball_vel.set_y(1.0);
                     }
                 }
                 Some(Player::P2) => {
                     let values = &control.values[1][2];
                     if values.changed_by == 1.0 && values.value != 0.0 {
-                        self.ball_vel.x = -1.0;
-                        self.ball_vel.y = -1.0;
+                        self.ball_vel.set_x(-1.0);
+                        self.ball_vel.set_y(-1.0);
                     }
                 }
                 None => {}
@@ -365,72 +325,62 @@ impl World {
         physics.positions.resize_with(1, Vec2::default);
         physics.velocities.resize_with(1, Vec2::default);
         physics.accelerations.resize_with(1, Vec2::default);
-        physics.add_physics_entity(
-            0,
-            Vec2::new(
-                self.ball.0 as f32 + self.ball_err.x,
-                self.ball.1 as f32 + self.ball_err.y,
-            ),
-            self.ball_vel,
-            Vec2::new(0.0, 0.0),
-        );
+        physics.add_physics_entity(0, self.ball, self.ball_vel, Vec2::new(0.0, 0.0));
     }
 
     fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
-        self.ball.0 = physics.positions[0]
-            .x
-            .trunc()
-            .max(0.0)
-            .min((WIDTH - BALL_SIZE) as f32) as u8;
-        self.ball.1 = physics.positions[0]
-            .y
-            .trunc()
-            .max(0.0)
-            .min((HEIGHT - BALL_SIZE) as f32) as u8;
-        self.ball_err = physics.positions[0] - Vec2::new(self.ball.0 as f32, self.ball.1 as f32);
+        self.ball.set_x(
+            physics.positions[0]
+                .x()
+                .max(0.0)
+                .min((WIDTH - BALL_SIZE) as f32),
+        );
+        self.ball.set_y(
+            physics.positions[0]
+                .y()
+                .max(0.0)
+                .min((HEIGHT - BALL_SIZE) as f32),
+        );
         self.ball_vel = physics.velocities[0];
     }
 
     fn project_collision(
         &self,
         collision: &mut AabbCollision<CollisionID, Vec2>,
-        control: &WinitKeyboardControl<ActionID>,
+        control: &MacroQuadKeyboardControl<ActionID>,
     ) {
         collision.centers.resize_with(4, Default::default);
         collision.half_sizes.resize_with(4, Default::default);
         collision.velocities.resize_with(4, Default::default);
         collision.metadata.resize_with(4, Default::default);
 
-        collision.add_collision_entity(
-            Vec2::new(
-                self.ball.0 as f32 + (BALL_SIZE / 2) as f32,
-                self.ball.1 as f32 + (BALL_SIZE / 2) as f32,
-            ),
-            Vec2::new((BALL_SIZE / 2) as f32, (BALL_SIZE / 2) as f32),
+        collision.add_entity_as_xywh(
+            self.ball.x(),
+            self.ball.y(),
+            BALL_SIZE as f32,
+            BALL_SIZE as f32,
             self.ball_vel,
             true,
             false,
             CollisionID::Ball,
         );
 
-        collision.add_collision_entity(
-            Vec2::new(
-                PADDLE_OFF_X as f32 + (PADDLE_WIDTH / 2) as f32,
-                (self.paddles.0 + PADDLE_HEIGHT / 2) as f32,
-            ),
-            Vec2::new((PADDLE_WIDTH / 2) as f32, (PADDLE_HEIGHT / 2) as f32),
+        collision.add_entity_as_xywh(
+            PADDLE_OFF_X as f32,
+            self.paddles.0 as f32,
+            PADDLE_WIDTH as f32,
+            PADDLE_HEIGHT as f32,
             Vec2::new(0.0, control.values[0][1].value - control.values[0][0].value),
             true,
             true,
             CollisionID::Paddle(Player::P1),
         );
 
-        collision.add_collision_entity(
-            Vec2::new(
-                (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH / 2) as f32,
-                (self.paddles.1 + PADDLE_HEIGHT / 2) as f32,
-            ),
-            Vec2::new((PADDLE_WIDTH / 2) as f32, (PADDLE_HEIGHT / 2) as f32),
+        collision.add_entity_as_xywh(
+            (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32,
+            self.paddles.1 as f32,
+            PADDLE_WIDTH as f32,
+            PADDLE_HEIGHT as f32,
             Vec2::new(0.0, control.values[1][1].value - control.values[1][0].value),
             true,
             true,
@@ -439,25 +389,30 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        self.ball.0 = (collision.centers[4].x - collision.half_sizes[4].x).trunc() as u8;
-        self.ball.1 = (collision.centers[4].y - collision.half_sizes[4].y).trunc() as u8;
+        self.ball
+            .set_x(collision.centers[4].x() - collision.half_sizes[4].x());
+        self.ball
+            .set_y(collision.centers[4].y() - collision.half_sizes[4].y());
     }
 
     fn change_angle(&mut self, player: Player) {
-        let Vec2 { x, y } = &mut self.ball_vel;
         let paddle_center = match player {
             Player::P1 => self.paddles.0 + PADDLE_HEIGHT / 2,
             Player::P2 => self.paddles.1 + PADDLE_HEIGHT / 2,
         } as f32;
-        let angle: f32 = (((self.ball.1 + BALL_SIZE / 2) as f32 - paddle_center)
+        let angle: f32 = (((self.ball.y() + (BALL_SIZE / 2) as f32) - paddle_center)
             .max(-(PADDLE_HEIGHT as f32) / 2.0)
             .min(PADDLE_HEIGHT as f32 / 2.0)
             / PADDLE_HEIGHT as f32)
             .abs()
             * 80.0;
-        let magnitude = f32::sqrt(*x * *x + *y * *y);
-        *x = angle.to_radians().cos() * magnitude * if *x < 0.0 { -1.0 } else { 1.0 };
-        *y = angle.to_radians().sin() * magnitude * if *y < 0.0 { -1.0 } else { 1.0 };
+        let magnitude = f32::sqrt(self.ball_vel.x().powi(2) + self.ball_vel.y().powi(2));
+        self.ball_vel.set_x(
+            angle.to_radians().cos() * magnitude * if self.ball_vel.x() < 0.0 { -1.0 } else { 1.0 },
+        );
+        self.ball_vel.set_y(
+            angle.to_radians().sin() * magnitude * if self.ball_vel.y() < 0.0 { -1.0 } else { 1.0 },
+        );
         if magnitude < 5.0 {
             self.ball_vel *= 1.1;
         }
@@ -476,7 +431,7 @@ impl World {
         for (completed, item_types) in resources.completed.iter() {
             if *completed {
                 for item_type in item_types {
-                    let value = resources.get_value_by_itemtype(item_type).min(255.0) as u8;
+                    let value = resources.get_value_by_itemtype(item_type) as u8;
                     match item_type {
                         PoolID::Points(player) => match player {
                             Player::P1 => self.score.0 = value,
@@ -488,50 +443,28 @@ impl World {
         }
     }
 
-    /// Draw the `World` state to the frame buffer.
-    ///
-    /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
-    fn draw(&self, frame: &mut [u8]) {
-        for pixel in frame.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&[0, 0, 128, 255]);
-        }
-        draw_rect(
-            PADDLE_OFF_X,
-            self.paddles.0,
-            PADDLE_WIDTH,
-            PADDLE_HEIGHT,
-            [255, 255, 255, 255],
-            frame,
+    fn draw(&self) {
+        clear_background(Color::new(0., 0., 0.5, 1.));
+        draw_rectangle(
+            PADDLE_OFF_X as f32,
+            self.paddles.0 as f32,
+            PADDLE_WIDTH as f32,
+            PADDLE_HEIGHT as f32,
+            WHITE,
         );
-        draw_rect(
-            WIDTH - PADDLE_OFF_X - PADDLE_WIDTH,
-            self.paddles.1,
-            PADDLE_WIDTH,
-            PADDLE_HEIGHT,
-            [255, 255, 255, 255],
-            frame,
+        draw_rectangle(
+            (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32,
+            self.paddles.1 as f32,
+            PADDLE_WIDTH as f32,
+            PADDLE_HEIGHT as f32,
+            WHITE,
         );
-        draw_rect(
-            self.ball.0,
-            self.ball.1,
-            BALL_SIZE,
-            BALL_SIZE,
-            [255, 200, 0, 255],
-            frame,
+        draw_rectangle(
+            self.ball.x(),
+            self.ball.y(),
+            BALL_SIZE as f32,
+            BALL_SIZE as f32,
+            Color::new(1., 0.75, 0., 1.),
         );
-    }
-}
-
-fn draw_rect(x: u8, y: u8, w: u8, h: u8, color: [u8; 4], frame: &mut [u8]) {
-    let x = x.min(WIDTH - 1) as usize;
-    let w = (w as usize).min(WIDTH as usize - x);
-    let y = y.min(HEIGHT - 1) as usize;
-    let h = (h as usize).min(HEIGHT as usize - y);
-    for row in 0..h {
-        let row_start = (WIDTH as usize) * 4 * (y + row);
-        let slice = &mut frame[(row_start + x * 4)..(row_start + (x + w) * 4)];
-        for pixel in slice.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&color);
-        }
     }
 }

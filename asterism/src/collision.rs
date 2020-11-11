@@ -1,43 +1,113 @@
-use ultraviolet::{Vec2, Vec3, geometry::Aabb};
+use glam::Vec2 as GlamVec2;
+use std::cmp::Ordering;
+use std::ops::{Add, AddAssign};
+use ultraviolet::Vec2 as UVVec2;
 
-// - see chat w/ julie re: structures?
-//   - or maybe make a fn that checks which side the contacts happening on..???
-// - this is just my personal suffer zone
+pub trait Vec2: Add + AddAssign + Copy {
+    fn new(x: f32, y: f32) -> Self;
+    fn x(&self) -> f32;
+    fn y(&self) -> f32;
+    fn set_x(&mut self, x: f32);
+    fn set_y(&mut self, y: f32);
 
-#[derive(Copy, Clone)]
-pub struct Sides {
-    pub top: bool,
-    pub bottom: bool,
-    pub right: bool,
-    pub left: bool,
-    pub corner: bool,
+    fn magnitude(&self) -> f32 {
+        (self.x().powi(2) + self.y().powi(2)).sqrt()
+    }
 }
 
-impl Sides {
-    pub fn new() -> Self {
-        Self {
-            right: false,
-            left: false,
-            top: false,
-            bottom: false,
-            corner: false,
+impl Vec2 for UVVec2 {
+    fn new(x: f32, y: f32) -> UVVec2 {
+        UVVec2::new(x, y)
+    }
+    fn x(&self) -> f32 {
+        self.x
+    }
+    fn y(&self) -> f32 {
+        self.y
+    }
+    fn set_x(&mut self, x: f32) {
+        self.x = x;
+    }
+    fn set_y(&mut self, y: f32) {
+        self.y = y;
+    }
+}
+
+impl Vec2 for GlamVec2 {
+    fn new(x: f32, y: f32) -> GlamVec2 {
+        GlamVec2::new(x, y)
+    }
+    fn x(&self) -> f32 {
+        GlamVec2::x(*self)
+    }
+    fn y(&self) -> f32 {
+        GlamVec2::y(*self)
+    }
+    fn set_x(&mut self, x: f32) {
+        GlamVec2::set_x(&mut *self, x)
+    }
+    fn set_y(&mut self, y: f32) {
+        GlamVec2::set_y(&mut *self, y)
+    }
+}
+
+pub struct Contact<V2: Vec2> {
+    pub i: usize,
+    pub j: usize,
+    displacement: V2,
+}
+
+impl<V2: Vec2> PartialEq for Contact<V2> {
+    fn eq(&self, other: &Self) -> bool {
+        self.i == other.i
+            && self.j == other.j
+            && self.displacement.x() == other.displacement.x()
+            && self.displacement.y() == other.displacement.y()
+    }
+}
+
+impl<V2: Vec2> PartialOrd for Contact<V2> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let e1 = {
+            let magnitude = self.get_smaller_displ().magnitude();
+            if magnitude != 0.0 {
+                magnitude
+            } else {
+                self.displacement.magnitude()
+            }
+        };
+        let e2 = {
+            let magnitude = other.get_smaller_displ().magnitude();
+            if magnitude != 0.0 {
+                magnitude
+            } else {
+                other.displacement.magnitude()
+            }
+        };
+        e1.partial_cmp(&e2)
+    }
+}
+
+impl<V2: Vec2> Contact<V2> {
+    fn get_smaller_displ(&self) -> V2 {
+        if self.displacement.x().abs() < self.displacement.y().abs() {
+            V2::new(self.displacement.x(), 0.0)
+        } else if self.displacement.y().abs() < self.displacement.x().abs() {
+            V2::new(0.0, self.displacement.y())
+        } else {
+            V2::new(0.0, 0.0)
         }
     }
 }
 
-impl Default for Sides {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-pub struct AabbCollision<ID: Copy + Eq> {
-    pub bodies: Vec<Aabb>,
-    pub velocities: Vec<Vec2>,
+pub struct AabbCollision<ID: Copy + Eq, V2: Vec2> {
+    pub centers: Vec<V2>,
+    pub half_sizes: Vec<V2>,
+    // Vec2 {x: width * 0.5, y: height * 0.5}
+    pub velocities: Vec<V2>,
     pub metadata: Vec<CollisionData<ID>>,
-    pub contacts: Vec<(usize, usize, Sides)>,
-    pub displacements: Vec<Option<Vec3>>,
-    pub sides_touched: Vec<Sides>,
+    pub contacts: Vec<Contact<V2>>,
+    displacements: Vec<V2>,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -47,281 +117,195 @@ pub struct CollisionData<ID: Copy + Eq> {
     pub id: ID,
 }
 
-impl<ID: Copy + Eq> AabbCollision<ID> {
+impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
     pub fn new() -> Self {
         Self {
-            bodies: Vec::new(),
+            centers: Vec::new(),
+            half_sizes: Vec::new(),
             velocities: Vec::new(),
             metadata: Vec::new(),
             contacts: Vec::new(),
             displacements: Vec::new(),
-            sides_touched: Vec::new(),
         }
     }
 
     pub fn update(&mut self) {
         self.contacts.clear();
         self.displacements.clear();
-        self.sides_touched.clear();
-        self.displacements.resize_with(self.bodies.len(), Default::default);
-        self.sides_touched.resize_with(self.bodies.len(), Default::default);
-        self.step_update();
+        self.displacements
+            .resize(self.centers.len(), V2::new(0.0, 0.0));
 
-        self.contacts.clear();
-        for (vel, displacement) in self.velocities.iter_mut().zip(self.displacements.iter()) {
-            if let Some(displace) = displacement {
-                if displace.x != 0.0 {
-                    vel.x = 0.0;
-                }
-
-                if displace.y != 0.0 {
-                    vel.y = 0.0;
-                }
-            } else {
-                vel.x = 0.0;
-                vel.y = 0.0;
-            }
-        }
-        self.displacements.clear();
-        self.displacements.resize_with(self.bodies.len(), Default::default);
-        self.step_update();
-    }
-
-    fn step_update(&mut self) {
-        for (i, body) in self.bodies.iter().enumerate() {
-            for (j, body2) in self.bodies.iter().enumerate() {
-                if body.intersects(body2) && i != j {
-                    let sides = self.update_sides_touched(i, j);
-
-                    if sides.top { self.sides_touched[i].top = true; }
-                    if sides.bottom { self.sides_touched[i].bottom = true; }
-                    if sides.left { self.sides_touched[i].left = true; }
-                    if sides.right { self.sides_touched[i].right = true; }
-                    if sides.corner { self.sides_touched[i].corner = true; }
-                    self.contacts.push((i, j, sides));
+        // check contacts
+        for i in 0..self.centers.len() {
+            for j in 0..self.centers.len() {
+                if i != j && self.intersects(i, j) {
+                    let displacement = if self.metadata[i].solid
+                        && self.metadata[j].solid
+                        && !self.metadata[i].fixed
+                    {
+                        let displ = self.find_displacement(i, j);
+                        let speed_ratio = self.get_speed_ratio(i, j);
+                        V2::new(displ.x() * speed_ratio.x(), displ.y() * speed_ratio.y())
+                    } else {
+                        V2::new(0.0, 0.0)
+                    };
+                    let contact = Contact { i, j, displacement };
+                    self.contacts.push(contact);
                 }
             }
         }
 
-        for (i, j, sides) in self.contacts.iter() {
-            let CollisionData { solid: i_solid, fixed: i_fixed, .. } =
-                self.metadata[*i];
-            let CollisionData { solid: j_solid, fixed: j_fixed, .. } =
-                self.metadata[*j];
+        self.contacts.sort_by(|e1, e2| e2.partial_cmp(e1).unwrap());
 
-            if !(i_solid && j_solid) || i_fixed {
+        let remove = &mut Vec::<usize>::new();
+
+        // sorted by magnitude of displ.
+        for (idx, contact) in self.contacts.iter().enumerate() {
+            let Contact {
+                i,
+                displacement: displ,
+                ..
+            } = *contact;
+
+            let already_moved = &mut self.displacements[i];
+
+            let remaining_displ =
+                V2::new(displ.x() - already_moved.x(), displ.y() - already_moved.y());
+
+            if remaining_displ.x() == 0.0 || remaining_displ.y() == 0.0 {
                 continue;
             }
 
-            let Vec2 { x: vel_i_x, y: vel_i_y } = self.velocities[*i];
-            let Vec2 { x: vel_j_x, y: vel_j_y } = self.velocities[*j];
-            let mut speed_ratio = Vec2::new(1.0, 1.0);
-            let speed_sum = Vec2::new(vel_i_x.abs() + vel_j_x.abs(), vel_i_y.abs() + vel_j_y.abs());
-            if !j_fixed {
-                if speed_sum.x == 0.0 && speed_sum.y == 0.0 {
-                    speed_ratio.x = 0.5;
-                    speed_ratio.y = 0.5;
-                } else if speed_sum.x == 0.0 {
-                    speed_ratio.x = 0.5;
-                    speed_ratio.y = vel_i_y.abs() / speed_sum.y;
-                } else if speed_sum.y == 0.0 {
-                    speed_ratio.y = 0.5;
-                    speed_ratio.x = vel_i_x.abs() / speed_sum.x;
+            let flipped = {
+                if {
+                    already_moved.x().abs() > displ.x().abs()
+                        || already_moved.y().abs() > displ.y().abs()
+                } {
+                    true
                 } else {
-                    speed_ratio.x = vel_i_x.abs() / speed_sum.x;
-                    speed_ratio.y = vel_i_y.abs() / speed_sum.y;
-                }
-            }
-
-            let Aabb {
-                min: Vec3 { x: min_i_x, y: min_i_y, .. },
-                max: Vec3 { x: max_i_x, y: max_i_y, .. }
-            } = self.bodies[*i];
-            let Aabb {
-                min: Vec3 { x: min_j_x, y: min_j_y, .. },
-                max: Vec3 { x: max_j_x, y: max_j_y, .. }
-            } = self.bodies[*j];
-
-            let mut displace = {
-                if sides.top || sides.bottom {
-                    if sides.top {
-                        Vec3::new(0.0, max_j_y - min_i_y, 0.0)
-                    } else {
-                        Vec3::new(0.0, min_j_y - max_i_y, 0.0)
-                    }
-                } else if sides.left || sides.right {
-                    if sides.left {
-                        Vec3::new(max_j_x - min_i_x, 0.0, 0.0)
-                    } else {
-                        Vec3::new(min_j_x - max_i_x, 0.0, 0.0)
-                    }
-                } else if sides.corner {
-                    let mut new_x = {
-                        if vel_i_x - vel_j_x < 0.0 {
-                            max_j_x - min_i_x
-                        } else if vel_i_x - vel_j_x > 0.0 {
-                            min_j_x - max_i_x
-                        } else {
-                            0.0
-                        }
-                    };
-                    let mut new_y = {
-                        if vel_i_y - vel_j_y < 0.0 {
-                            max_j_y - min_i_y
-                        } else if vel_i_y - vel_j_y > 0.0 {
-                            min_j_y - max_i_y
-                        } else {
-                            0.0
-                        }
-                    };
-                    if new_x.abs() > new_y.abs() {
-                        new_y =  {
-                            if vel_i_y - vel_j_y > 0.0 { -1.0 * new_x.abs() } else { new_x.abs() }
-                        };
-                    } else if new_y.abs() > new_x.abs() {
-                        new_x =  {
-                            if vel_i_x - vel_j_x > 0.0 { -1.0 * new_y.abs() } else { new_y.abs() }
-                        };
-                    }
-                    Vec3::new(new_x, new_y, 0.0)
-
-                } else {  // if everything is false because vx and vy == 0 but still overlapping...
-                    Vec3::new(0.0, 0.0, 0.0)
+                    false
                 }
             };
-            displace.x *= speed_ratio.x;
-            displace.y *= speed_ratio.y;
 
-            let all_sides = &self.sides_touched[*i];
-            if let Some(new_displace) = &mut self.displacements[*i] {
-                // already touching at least one side and no corners
-                if {all_sides.bottom || all_sides.top || all_sides.left || sides.right}
-                && !all_sides.corner {
-                    // touching at two different sides
-                    if (all_sides.top || all_sides.bottom) && (all_sides.left || all_sides.right) {
-                        if displace.x.abs() > new_displace.x.abs() {
-                            new_displace.x = displace.x;
-                        } 
-                        if displace.y.abs() > new_displace.y.abs() {
-                            new_displace.y = displace.y;
-                        }
-                    // touching one side
-                    } else {
-                        if all_sides.top || all_sides.bottom {
-                            if displace.y.abs() > new_displace.y.abs() {
-                                new_displace.y = displace.y;
-                            }
-                        } else {
-                            if displace.x.abs() > new_displace.x.abs() {
-                                new_displace.x = displace.x;
-                            }
-                        }
-                    }
-                // already touching a corner
-                } else if all_sides.corner {
-                    if all_sides.top || all_sides.bottom {
-                        if displace.y.abs() > new_displace.y.abs() {
-                            new_displace.y = displace.y;
-                        }
-                        new_displace.x = 0.0;
-                    } else if all_sides.left || all_sides.right {
-                        if displace.x.abs() > new_displace.x.abs() {
-                            new_displace.x = displace.x;
-                        }
-                        new_displace.y = 0.0;
-                    } else {  // touching corner(s) only or something
-                        if displace.x.abs() > new_displace.x.abs() {
-                            new_displace.x = displace.x;
-                        }
-                        if displace.y.abs() > new_displace.y.abs() {
-                            new_displace.y = displace.y;
-                        }
-                    }
-                }
-            } else {
-                self.displacements[*i] = Some(displace);
+            if flipped {
+                remove.push(idx);
+                continue;
             }
+
+            if displ.x().abs() < displ.y().abs() {
+                already_moved.set_x(remaining_displ.x());
+            } else if displ.y().abs() < displ.x().abs() {
+                already_moved.set_y(remaining_displ.y());
+            }
+        }
+
+        for i in remove.iter() {
+            self.contacts.remove(*i);
         }
 
         for (i, displacement) in self.displacements.iter().enumerate() {
-            match displacement {
-                Some(new_displace) => {
-                    self.bodies[i].min += *new_displace;
-                    self.bodies[i].max += *new_displace;
-                }
-                None => {}
-            }
+            self.centers[i] += *displacement;
         }
     }
 
-    fn update_sides_touched(&self, i: usize, j: usize) -> Sides {
-        let rel_vel_x = self.velocities[i].x - self.velocities[j].x;
-        let rel_vel_y = self.velocities[i].y - self.velocities[j].y;
-
-        let Aabb {
-            min: Vec3 { x: min_i_x, y: min_i_y, .. },
-            max: Vec3 { x: max_i_x, y: max_i_y, .. }
-        } = self.bodies[i];
-        let Aabb {
-            min: Vec3 { x: min_j_x, y: min_j_y, .. },
-            max: Vec3 { x: max_j_x, y: max_j_y, .. }
-        } = self.bodies[j];
-
-        let half_isize_x = (max_i_x - min_i_x) / 2.0;
-        let half_isize_y = (max_i_y - min_i_y) / 2.0;
-        let half_jsize_x = (max_j_x - min_j_x) / 2.0;
-        let half_jsize_y = (max_j_y - min_j_y) / 2.0;
-
-        let i_center = Vec2::new(
-            (max_i_x + min_i_x) / 2.0,
-            (max_i_y + min_i_y) / 2.0);
-        let j_center = Vec2::new(
-            (max_j_x + min_j_x) / 2.0,
-            (max_j_y + min_j_y) / 2.0);
-
-        let overlapped_before_x = {
-            let old_ix_center = i_center.x - self.velocities[i].x;
-            let old_jx_center = j_center.x - self.velocities[j].x;
-            (old_ix_center - old_jx_center).abs() < half_isize_x + half_jsize_x
-        };
-
-        let overlapped_before_y = {
-            let old_iy_center = i_center.y - self.velocities[i].y;
-            let old_jy_center = j_center.y - self.velocities[j].y;
-            (old_iy_center - old_jy_center).abs() < half_isize_y + half_jsize_y
-        };
-
-        let mut sides = Sides::new();
-
-        if !overlapped_before_y && overlapped_before_x && rel_vel_y != 0.0 {
-            if rel_vel_y < 0.0 {
-                sides.top = true;
-            } else {
-                sides.bottom = true;
-            }
-        }
-
-        if !overlapped_before_x && overlapped_before_y && rel_vel_x != 0.0 {
-            if rel_vel_x < 0.0 {
-                sides.left = true;
-            } else {
-                sides.right = true;
-            }
-        }
-
-        if !overlapped_before_x && !overlapped_before_y && rel_vel_x != 0.0 && rel_vel_y != 0.0 {
-            sides.corner = true;
-        }
-        sides
+    fn find_displacement(&self, i: usize, j: usize) -> V2 {
+        let (ci, cj) = (self.centers[i], self.centers[j]);
+        let (hsi, hsj) = (self.half_sizes[i], self.half_sizes[j]);
+        let displ_abs = V2::new(
+            hsi.x() + hsj.x() - (ci.x() - cj.x()).abs(),
+            hsi.y() + hsj.y() - (ci.y() - cj.y()).abs(),
+        );
+        V2::new(
+            if ci.x() - cj.x() < 0.0 { -1.0 } else { 1.0 } * displ_abs.x(),
+            if ci.y() - cj.y() < 0.0 { -1.0 } else { 1.0 } * displ_abs.y(),
+        )
     }
 
-    pub fn add_collision_entity(&mut self, x: f32, y: f32, w: f32, h: f32, vel: Vec2, solid: bool, fixed: bool, id: ID) {
-        self.bodies.push(
-            Aabb::new(
-                Vec3::new(x, y, 0.0),
-                Vec3::new(x + w, y + h, 0.0)));
+    fn get_speed_ratio(&self, i: usize, j: usize) -> V2 {
+        let (vxi, vyi) = (self.velocities[i].x(), self.velocities[i].y());
+        let (vxj, vyj) = (self.velocities[j].x(), self.velocities[j].y());
+
+        let speed_sum = V2::new(vxi.abs() + vxj.abs(), vyi.abs() + vyj.abs());
+        if !self.metadata[j].fixed {
+            if speed_sum.x() == 0.0 && speed_sum.y() == 0.0 {
+                V2::new(0.5, 0.5)
+            } else if speed_sum.x() == 0.0 {
+                V2::new(0.5, vyi.abs() / speed_sum.y())
+            } else if speed_sum.y() == 0.0 {
+                V2::new(0.5, vxi.abs() / speed_sum.x())
+            } else {
+                V2::new(vxi.abs() / speed_sum.x(), vyi.abs() / speed_sum.y())
+            }
+        } else {
+            V2::new(1.0, 1.0)
+        }
+    }
+
+    pub fn add_collision_entity(
+        &mut self,
+        center: V2,
+        half_size: V2,
+        vel: V2,
+        solid: bool,
+        fixed: bool,
+        id: ID,
+    ) {
+        self.centers.push(center);
+        self.half_sizes.push(half_size);
         self.velocities.push(vel);
-        self.metadata.push(CollisionData { solid: solid, fixed: fixed, id: id });
-        self.displacements.push(None);
+        self.metadata.push(CollisionData { solid, fixed, id });
+    }
+
+    pub fn add_entity_as_xywh(
+        &mut self,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        vel: V2,
+        solid: bool,
+        fixed: bool,
+        id: ID,
+    ) {
+        self.add_collision_entity(
+            Vec2::new(x + w / 2.0, y + h / 2.0),
+            Vec2::new(w / 2.0, h / 2.0),
+            vel,
+            solid,
+            fixed,
+            id,
+        );
+    }
+
+    /// `idx`: index in contacts. returns unit vector of normal of displacement for the `i` entity in the contact
+    pub fn sides_touched(&self, idx: usize) -> V2 {
+        let contact = &self.contacts[idx];
+        let displaced = contact.get_smaller_displ();
+        let x = {
+            if displaced.x() < 0.0 {
+                -1.0
+            } else if displaced.x() > 0.0 {
+                1.0
+            } else {
+                0.0
+            }
+        };
+        let y = {
+            if displaced.y() < 0.0 {
+                -1.0
+            } else if displaced.y() > 0.0 {
+                1.0
+            } else {
+                0.0
+            }
+        };
+        V2::new(x, y)
+    }
+
+    fn intersects(&self, i: usize, j: usize) -> bool {
+        (self.centers[i].x() - self.centers[j].x()).abs()
+            <= self.half_sizes[i].x() + self.half_sizes[j].x()
+            && (self.centers[i].y() - self.centers[j].y()).abs()
+                <= self.half_sizes[i].y() + self.half_sizes[j].y()
     }
 }

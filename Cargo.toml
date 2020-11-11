@@ -7,4 +7,5 @@ members = [
     "prototypes/paddles",
     "prototypes/quest",
     "prototypes/yarn",
+    "prototypes/paddles-macroquad"
 ]
