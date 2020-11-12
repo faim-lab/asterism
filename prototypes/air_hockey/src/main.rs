@@ -138,8 +138,9 @@ struct World {
     ball: (u8, u8),
     ball_err: Vec2,
     ball_vel: Vec2,
+    ball_dir: f32,
     serving: Option<Player>,
-    score: (u8, u8)
+    score: (u8, u8),
 }
 
 
@@ -212,6 +213,7 @@ impl World {
             ball: (WIDTH/2-BALL_SIZE/2, PADDLE_OFF_Y + BALL_SIZE * 3),
             ball_err: Vec2::new(0.0,0.0),
             ball_vel: Vec2::new(0.0,0.0),
+	    ball_dir: 0.0,
             serving: Some(Player::P1),
             score: (0, 0),
         }
@@ -281,39 +283,42 @@ impl World {
 		(CollisionID::Ball, CollisionID::Paddle(player)) => {
 		    if match player {
                         Player::P1 =>
-			    ((self.ball.1) as i16 - (self.paddles.0.1 + PADDLE_HEIGHT) as i16).abs()
-			    > (((self.ball.0 as i16)  - (WIDTH - self.paddles.0.0 - PADDLE_WIDTH)
+			    if self.ball.1 as i16 > self.paddles.0.1 as i16 {
+				self.ball_dir = -1.0;
+			    (((self.ball.1) as i16 - (self.paddles.0.1 + PADDLE_HEIGHT) as i16).abs())
+				> (((self.ball.0 as i16)  - (WIDTH - self.paddles.0.0 - PADDLE_WIDTH)
 				as i16).abs())
-			    .min(((self.ball.0 + BALL_SIZE) as i16 - (WIDTH - self.paddles.0.0)
-				  as i16).abs()),
+				.min(((self.ball.0 + BALL_SIZE) as i16 - (WIDTH - self.paddles.0.0)
+				      as i16).abs())
+			}
+			else {
+			    (((self.ball.1 + BALL_SIZE) as i16 - (self.paddles.0.1) as i16).abs())
+				> (((self.ball.0 as i16)  - (WIDTH - self.paddles.0.0 - PADDLE_WIDTH)
+				as i16).abs())
+				.min(((self.ball.0 + BALL_SIZE) as i16 - (WIDTH - self.paddles.0.0)
+				      as i16).abs())
+				{
+				    self.ball_dir = 1.0
+				}
+			},
+			  
                         Player::P2 =>
 			    ((self.ball.1 + BALL_SIZE) as i16
 			     - (self.paddles.1.1 + PADDLE_HEIGHT) as i16).abs()
-			    > (((self.ball.0 as i16)  - ((WIDTH - self.paddles.1.0 - PADDLE_WIDTH)
+			    < (((self.ball.0 as i16)  - ((WIDTH - self.paddles.1.0 - PADDLE_WIDTH)
 							 as i16)).abs())
 			    .min(((self.ball.0 + BALL_SIZE) as i16 - (WIDTH - self.paddles.1.0 )
 				  as i16).abs()),
-		    } {
-			if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0)
-			{
-			    match self.serving
-			    {
-				Some(Player::P1) => {
-				    self.ball_vel.y = -0.5;
-				}
-				
-				Some(Player::P2) => {
-				    self.ball_vel.y = 0.5;
-				}
-				None => {}
-			    }
-			} else {
-
+		    }{
+			if (self.ball_vel.x, self.ball_vel.y) == (0.0,0.0){
+			    self.ball_vel = Vec2::new(self.ball_dir, self.ball_dir)
+			}
+			else{
 			    self.ball_vel.x *= -1.0;
 			}
-			
-
-		    } else {
+		    }
+		    
+		    else {
 			self.ball_vel.y *= -1.0;
 		    }
                 self.change_angle(player);
