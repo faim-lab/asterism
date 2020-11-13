@@ -7,12 +7,7 @@ members = [
     "prototypes/paddles",
     "prototypes/quest",
     "prototypes/yarn",
-<<<<<<< HEAD
     "prototypes/paddles-macroquad",
     "prototypes/air_hockey"
     ]
 
-=======
-    "prototypes/air_hockey"
-]
->>>>>>> 17ca57435f376d4f995e4fb305e13fe7b038ef57
