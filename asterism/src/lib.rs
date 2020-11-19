@@ -1,3 +1,9 @@
+//! # Asterism
+//!
+//! An asterism is a pattern people can see in stars, and while there is a fixed set of true constellations we can come up with as many asterisms as we like.
+//!
+//! Asterism is a project in operationalizing operational logics to the extent that they can be composed to form game engines.
+
 mod collision;
 pub mod control;
 mod entity_state;
