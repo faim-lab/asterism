@@ -1,9 +1,15 @@
+//! # Collision logics
+//!
+//! Collision logics offer an illusion of physical space is provided by the fact that some game
+//! objects occlude the movement of others. They detect overlaps between subsets of entities and/or
+//! regions of space, and automatically trigger reactions when such overlaps occur.
+
 use glam::Vec2 as GlamVec2;
 use std::cmp::Ordering;
 use std::ops::{Add, AddAssign};
 use ultraviolet::Vec2 as UVVec2;
 
-/// A trait for implementing a two-dimensional vector in collision
+/// A trait for a set of two coordinates that represent a point in 2d space.
 pub trait Vec2: Add + AddAssign + Copy {
     fn new(x: f32, y: f32) -> Self;
     fn x(&self) -> f32;
@@ -150,7 +156,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         }
     }
 
-    /// Checks collisions every frame.
+    /// Checks collisions every frame and handles restitution (works most of the time).
     ///
     /// Uses the following algorithm:
     ///
@@ -162,7 +168,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
     ///    involved entity to the contact displacement, displace the correct entity the correct
     ///    "remaining" amount (which might be 0) and add that to the vec of (3).
     ///
-    /// (explanation mostly ripped from direct messages with Prof Osborn)
+    /// Explanation lightly modified from direct messages with Prof Osborn.
     pub fn update(&mut self) {
         self.contacts.clear();
         self.displacements.clear();
