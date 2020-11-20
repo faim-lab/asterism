@@ -1,4 +1,4 @@
-use asterism::{resources::Transaction, GraphedLinking, QueuedResources};
+use asterism::{linking::GraphedLinking, resources::QueuedResources, resources::Transaction};
 use rand::prelude::*;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader, Error, ErrorKind};

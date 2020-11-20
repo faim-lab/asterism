@@ -2,8 +2,8 @@
 #![forbid(unsafe_code)]
 
 use asterism::{
-    resources::Transaction, AabbCollision, KeyboardControl, PointPhysics, QueuedResources,
-    WinitKeyboardControl,
+    collision::AabbCollision, control::KeyboardControl, control::WinitKeyboardControl,
+    physics::PointPhysics, resources::QueuedResources, resources::Transaction,
 };
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use ultraviolet::Vec2;

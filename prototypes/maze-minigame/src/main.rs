@@ -2,7 +2,10 @@
 #![forbid(unsafe_code)]
 #![allow(dead_code)]
 
-use asterism::{resources::Transaction, AabbCollision, GraphedLinking, QueuedResources};
+use asterism::{
+    collision::AabbCollision, linking::GraphedLinking, resources::QueuedResources,
+    resources::Transaction,
+};
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use ultraviolet::Vec2;
 use winit::dpi::LogicalSize;

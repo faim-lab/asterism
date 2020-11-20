@@ -1,6 +1,6 @@
 use asterism::{
-    resources::Transaction, AabbCollision, KeyboardControl, MacroQuadKeyboardControl, PointPhysics,
-    QueuedResources,
+    collision::AabbCollision, control::KeyboardControl, control::MacroQuadKeyboardControl,
+    physics::PointPhysics, resources::QueuedResources, resources::Transaction,
 };
 use macroquad::prelude::*;
 

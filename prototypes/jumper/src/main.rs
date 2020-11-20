@@ -2,7 +2,8 @@
 #![forbid(unsafe_code)]
 
 use asterism::{
-    AabbCollision, FlatEntityState, KeyboardControl, PointPhysics, WinitKeyboardControl,
+    collision::AabbCollision, control::KeyboardControl, control::WinitKeyboardControl,
+    entity_state::FlatEntityState, physics::PointPhysics,
 };
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use ultraviolet::Vec2;
