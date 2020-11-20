@@ -137,7 +137,6 @@ struct World {
     ball: (u8, u8),
     ball_err: Vec2,
     ball_vel: Vec2,
-    serving: Option<Player>,
     score: (u8, u8),
 }
 
@@ -212,7 +211,6 @@ impl World {
             ball: (WIDTH/2-BALL_SIZE/2, PADDLE_OFF_Y + BALL_SIZE * 3),
             ball_err: Vec2::new(0.0,0.0),
             ball_vel: Vec2::new(0.0,0.0),
-            serving: Some(Player::P1),
             score: (0, 0),
         }
     }
@@ -243,13 +241,11 @@ impl World {
                         Player::P1 => {
                             logics.resources.transactions.push(vec![(PoolID::Points(Player::P1),
 								     Transaction::Change(1))]);
-                            self.serving = Some(Player::P1);
 			    
                         }
                         Player::P2 => {
                             logics.resources.transactions.push(vec![(PoolID::Points(Player::P2),
 								     Transaction::Change(1))]);
-                            self.serving = Some(Player::P2);
                         }
 		    }
 		}
@@ -261,21 +257,19 @@ impl World {
 					     Vec2::new((WIDTH/2-PADDLE_WIDTH/2) as f32,
 						       (HEIGHT-PADDLE_OFF_Y-PADDLE_HEIGHT) as f32));
 			     
-                    match player {
+                    match player { //unnesscary unless walls combined
                         Player::P1 => {
                             logics.resources.transactions.push(vec![(PoolID::Points(Player::P1),
 								     Transaction::Change(1))]);
-                            self.serving = Some(Player::P1);
                         }
                         Player::P2 => {
                             logics.resources.transactions.push(vec![(PoolID::Points(Player::P2),
 								     Transaction::Change(1))]);
-                            self.serving = Some(Player::P2);
                         }
                     }
                 }
                 (CollisionID::LeftWall, CollisionID::Ball) => {
-                    self.ball_vel.x *= -1.0
+                    self.ball_vel.x *= -1.0 //good canidtate for being combined
                 }
 		 (CollisionID::RightWall, CollisionID::Ball) => {
                      self.ball_vel.x *= -1.0
@@ -352,8 +346,8 @@ impl World {
     fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
         self.paddles.0.x = ((self.paddles.0.x -
                 control.values[0][0].value as f32 +
-                control.values[0][1].value as f32)
-			  .max(0.0) as f32).min((255 - PADDLE_WIDTH) as f32);
+                control.values[0][1].value as f32)//confusing, incorporate ActionIds
+			  .max(0.0) as f32).min((255 - PADDLE_WIDTH) as f32);//drive with data not code
 	self.paddles.0.y = ((self.paddles.0.y as f32 -
                 control.values[0][2].value as f32 +
                 control.values[0][3].value as f32)
@@ -372,7 +366,7 @@ impl World {
 
 
     fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
-        physics.positions.resize_with(1, Vec2::default);
+        physics.positions.resize_with(1, Vec2::default);//due to split between static and dyaamic, kinda wonky->make better story
         physics.velocities.resize_with(1, Vec2::default);
         physics.accelerations.resize_with(1, Vec2::default);
         physics.add_physics_entity(0,
@@ -463,6 +457,7 @@ impl World {
                 }
             }
         }
+	
     }
 
     /// Draw the `World` state to the frame buffer.
@@ -500,4 +495,4 @@ fn draw_rect(x:u8, y:u8, w:u8, h:u8, color:[u8;4], frame:&mut [u8]) {
         }
     }
 }
-
+//nice variation, 
