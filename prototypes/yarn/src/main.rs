@@ -166,9 +166,7 @@ impl World {
 
     fn unproject_linking(&mut self, linking: &GraphedLinking) {
         for (_, position) in linking.maps.iter().zip(linking.positions.iter()) {
-            if let Some(pos) = position {
-                self.current_label = *pos;
-            }
+            self.current_label = *position;
         }
     }
 
@@ -285,7 +283,7 @@ fn read_file(world: &mut World, linking: &mut GraphedLinking) -> io::Result<()> 
         nodes[from_label].push(idx as usize);
     }
 
-    linking.add_link_map(Some(0), nodes);
+    linking.add_link_map(0, nodes);
 
     Ok(())
 }
