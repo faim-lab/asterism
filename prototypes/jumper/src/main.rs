@@ -331,12 +331,11 @@ impl World {
     }
 
     fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
-        physics.accelerations.resize_with(3, Vec2::default);
-        physics.positions.resize_with(3, Vec2::default);
-        physics.velocities.resize_with(3, Vec2::default);
+        physics.accelerations.clear();
+        physics.positions.clear();
+        physics.velocities.clear();
 
         physics.add_physics_entity(
-            0,
             Vec2::new(
                 self.player.x as f32 + self.player.err.x,
                 self.player.y as f32 + self.player.err.y,
@@ -345,13 +344,11 @@ impl World {
             self.player.acc,
         );
         physics.add_physics_entity(
-            1,
             Vec2::new(self.platform.x as f32, self.platform.y as f32),
             self.platform.vel,
             Vec2::new(0.0, 0.0),
         );
         physics.add_physics_entity(
-            2,
             Vec2::new(
                 self.enemy.x as f32 + self.enemy.err.x,
                 self.enemy.y as f32 + self.enemy.err.y,

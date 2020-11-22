@@ -362,11 +362,10 @@ impl World {
     }
 
     fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
-        physics.positions.resize_with(1, Vec2::default);
-        physics.velocities.resize_with(1, Vec2::default);
-        physics.accelerations.resize_with(1, Vec2::default);
+        physics.positions.clear();
+        physics.velocities.clear();
+        physics.accelerations.clear();
         physics.add_physics_entity(
-            0,
             Vec2::new(
                 self.ball.0 as f32 + self.ball_err.x,
                 self.ball.1 as f32 + self.ball_err.y,
