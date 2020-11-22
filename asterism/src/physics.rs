@@ -4,16 +4,16 @@
 //! They update and honor objects' physical properties like position, velocity, density, etc.,
 //! according to physical laws integrated over time.
 
-use std::ops::{Add, AddAssign, Mul};
+use crate::collision::Vec2;
 
 /// A physics logic for physics with 2d points.
-pub struct PointPhysics<Vec2: Add + AddAssign + Copy + Mul<Output = Vec2>> {
-    pub positions: Vec<Vec2>,
-    pub velocities: Vec<Vec2>,
-    pub accelerations: Vec<Vec2>,
+pub struct PointPhysics<V2: Vec2> {
+    pub positions: Vec<V2>,
+    pub velocities: Vec<V2>,
+    pub accelerations: Vec<V2>,
 }
 
-impl<Vec2: Add + AddAssign + Copy + Mul<Output = Vec2>> PointPhysics<Vec2> {
+impl<V2: Vec2> PointPhysics<V2> {
     pub fn new() -> Self {
         Self {
             positions: Vec::new(),
@@ -36,7 +36,7 @@ impl<Vec2: Add + AddAssign + Copy + Mul<Output = Vec2>> PointPhysics<Vec2> {
     }
 
     /// Adds a physics entity to the logic with the given position, velocity, and acceleration.
-    pub fn add_physics_entity(&mut self, pos: Vec2, vel: Vec2, acc: Vec2) {
+    pub fn add_physics_entity(&mut self, pos: V2, vel: V2, acc: V2) {
         self.positions.push(pos);
         self.velocities.push(vel);
         self.accelerations.push(acc);
