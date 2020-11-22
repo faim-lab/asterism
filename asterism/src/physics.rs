@@ -1,5 +1,12 @@
+//! # Physics logics
+//!
+//! Physics logics communicate that physical laws govern the movement of some in-game entities.
+//! They update and honor objects' physical properties like position, velocity, density, etc.,
+//! according to physical laws integrated over time.
+
 use std::ops::{Add, AddAssign, Mul};
 
+/// A physics logic for physics with 2d points.
 pub struct PointPhysics<Vec2: Add + AddAssign + Copy + Mul<Output = Vec2>> {
     pub positions: Vec<Vec2>,
     pub velocities: Vec<Vec2>,
@@ -15,6 +22,8 @@ impl<Vec2: Add + AddAssign + Copy + Mul<Output = Vec2>> PointPhysics<Vec2> {
         }
     }
 
+    /// Update the velocities of entities based on acceleration, then update entities' positions
+    /// based on updated velocities.
     pub fn update(&mut self) {
         for (pos, (vel, acc)) in self
             .positions
