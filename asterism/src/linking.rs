@@ -18,7 +18,7 @@ pub struct GraphedLinking {
     /// that means the node `j` in `maps[i]` can be moved to, i.e. `position[i]` can be set to
     /// `j`.
     pub conditions: Vec<Vec<bool>>,
-    /// The current node the map is on.
+    /// The current node the map is on. `positions[i]` is an index in `maps[i].nodes`.
     pub positions: Vec<usize>,
     // invariants: maps, conditions, positions length are all equal. forall i, position[i] < conditions[i].len()
     // conditions[i].len() = maps[i].nodes.len()
@@ -35,9 +35,9 @@ impl GraphedLinking {
 
     /// Updates the linking logic.
     ///
-    /// First, check the status of all the links the current node in the condition table. If any of
-    /// those links are `true`, i.e. that node can be moved to, move the current position. Then,
-    /// reset the condition table.
+    /// First, check the status of all the links from the current node in the condition table. If
+    /// any of those links are `true`, i.e. that node can be moved to, move the current position.
+    /// Then, reset the condition table.
     pub fn update(&mut self) {
         for (i, idx) in self.positions.iter_mut().enumerate() {
             for link in &self.maps[i].nodes[*idx].links {
@@ -82,7 +82,7 @@ impl GraphedLinking {
     }
 }
 
-/// A structure representing a map of nodes.
+/// A representation of a map of nodes.
 pub struct NodeMap {
     /// A list of the nodes in the NodeMap.
     pub nodes: Vec<Node>,
