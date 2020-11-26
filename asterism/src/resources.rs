@@ -68,5 +68,5 @@ impl<ID: Copy + Ord> QueuedResources<ID> {
 
 #[derive(Clone, Copy)]
 pub enum Transaction {
-    Change(i8),
+    Change(f32),
 }

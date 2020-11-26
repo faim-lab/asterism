@@ -349,7 +349,7 @@ impl World {
                     logics
                         .resources
                         .transactions
-                        .push(vec![(PoolID::Points, Transaction::Change(1))]);
+                        .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
                     self.items
                         .remove(contact.i - self.walls.len() - self.portals.len());
                 }

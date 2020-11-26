@@ -96,34 +96,34 @@ impl World {
                 logics
                     .resources
                     .transactions
-                    .push(vec![(PoolID::NumSleep, Transaction::Change(1))]);
+                    .push(vec![(PoolID::NumSleep, Transaction::Change(1.0))]);
                 logics
                     .resources
                     .transactions
-                    .push(vec![(PoolID::Energy, Transaction::Change(12))]);
+                    .push(vec![(PoolID::Energy, Transaction::Change(12.0))]);
             }
             7 => {
                 logics
                     .resources
                     .transactions
-                    .push(vec![(PoolID::Energy, Transaction::Change(-6))]);
+                    .push(vec![(PoolID::Energy, Transaction::Change(-6.0))]);
             }
             8 => {
                 logics.resources.transactions.push(vec![(
                     PoolID::Energy,
-                    Transaction::Change(rng.gen_range(11, 17)),
+                    Transaction::Change(rng.gen_range(11.0, 17.0)),
                 )]);
             }
             9 => {
                 logics.resources.transactions.push(vec![(
                     PoolID::Energy,
-                    Transaction::Change(rng.gen_range(10, 20)),
+                    Transaction::Change(rng.gen_range(10.0, 20.0)),
                 )]);
             }
             10 => {
                 logics.resources.transactions.push(vec![(
                     PoolID::Energy,
-                    Transaction::Change(-rng.gen_range(15, 20)),
+                    Transaction::Change(-rng.gen_range(15.0, 20.0)),
                 )]);
             }
             _ => {}

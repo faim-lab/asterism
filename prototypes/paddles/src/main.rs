@@ -241,14 +241,14 @@ impl World {
                             logics
                                 .resources
                                 .transactions
-                                .push(vec![(PoolID::Points(Player::P2), Transaction::Change(1))]);
+                                .push(vec![(PoolID::Points(Player::P2), Transaction::Change(1.0))]);
                             self.serving = Some(Player::P2);
                         }
                         Player::P2 => {
                             logics
                                 .resources
                                 .transactions
-                                .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]);
+                                .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1.0))]);
                             self.serving = Some(Player::P1);
                         }
                     }

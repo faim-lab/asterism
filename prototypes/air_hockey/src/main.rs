@@ -257,13 +257,13 @@ impl World {
                             logics
                                 .resources
                                 .transactions
-                                .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]);
+                                .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1.0))]);
                         }
                         Player::P2 => {
                             logics
                                 .resources
                                 .transactions
-                                .push(vec![(PoolID::Points(Player::P2), Transaction::Change(1))]);
+                                .push(vec![(PoolID::Points(Player::P2), Transaction::Change(1.0))]);
                         }
                     }
                 }
@@ -287,13 +287,13 @@ impl World {
                             logics
                                 .resources
                                 .transactions
-                                .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]);
+                                .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1.0))]);
                         }
                         Player::P2 => {
                             logics
                                 .resources
                                 .transactions
-                                .push(vec![(PoolID::Points(Player::P2), Transaction::Change(1))]);
+                                .push(vec![(PoolID::Points(Player::P2), Transaction::Change(1.0))]);
                         }
                     }
                 }
