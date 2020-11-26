@@ -22,7 +22,7 @@ trait Input {
 pub trait KeyboardControl<ID: Copy + Eq + Ord, KeyCode, InputHandler> {
     fn new() -> Self;
 
-    /// Checks what inputs are being pressed every frame.
+    /// Checks and updates what inputs are being pressed every frame.
     fn update(&mut self, events: &InputHandler);
 
     fn mapping(&self) -> &Vec<Vec<Action<ID, KeyCode>>>;
