@@ -4,7 +4,9 @@
 //! constellations we can come up with as many asterisms as we like.
 //!
 //! Asterism is a project in operationalizing operational logics to the extent that they can be
-//! composed to form game engines.
+//! composed to form game engines. This means that instead of a monolithic `update()` function
+//! that combines different logics and extremely concrete instantiations of abstract processes, the
+//! game loop arbitrates its rules by configuring and calling out to a variety of logics.
 //!
 //! The descriptions of logics in the modules are lightly modified from Prof Osborn's dissertation.
 

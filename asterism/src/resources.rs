@@ -12,11 +12,11 @@ use std::collections::BTreeMap;
 pub struct QueuedResources<ID: Copy + Ord> {
     /// The items involved, and their values.
     pub items: BTreeMap<ID, f32>,
-    /// Each transaction is a list of items involved in the transaction and the amount
-    /// they're being changed.
+    /// Each transaction is a list of items involved in the transaction and the amount they're
+    /// being changed.
     pub transactions: Vec<Vec<(ID, Transaction)>>,
-    /// If the transaction was able to be completed or not. `completed[i].1` is the list
-    /// of changes that could be successfully completed for the transaction.
+    /// If the transaction was able to be completed or not. `completed[i].1` is the list of changes
+    /// that could be successfully completed for the transaction.
     pub completed: Vec<(bool, Vec<ID>)>,
 }
 
@@ -29,10 +29,10 @@ impl<ID: Copy + Ord> QueuedResources<ID> {
         }
     }
 
-    /// Updates the values of resources based on the queued transactions. If a
-    /// transaction cannot be completed (if the value goes below zero), a snapshot of the
-    /// resources before the transaction occurred is restored, and the transaction is marked as
-    /// incomplete, and we continue to process the remaining transactions.
+    /// Updates the values of resources based on the queued transactions. If a transaction cannot
+    /// be completed (if the value goes below zero), a snapshot of the resources before the
+    /// transaction occurred is restored, and the transaction is marked as incomplete, and we
+    /// continue to process the remaining transactions.
     pub fn update(&mut self) {
         self.completed.clear();
         'exchange: for exchange in self.transactions.iter() {
@@ -62,8 +62,8 @@ impl<ID: Copy + Ord> QueuedResources<ID> {
         self.transactions.clear();
     }
 
-    /// Checks if the transaction is possible or not, assuming that the value of the resource cannot be less
-    /// than zero.
+    /// Checks if the transaction is possible or not, assuming that the value of the resource
+    /// cannot be less than zero.
     fn is_possible(&self, item_type: &ID, transaction: &Transaction) -> bool {
         if !self.items.contains_key(item_type) {
             false

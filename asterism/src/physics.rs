@@ -6,7 +6,7 @@
 
 use crate::collision::Vec2;
 
-/// A physics logic for physics with 2d points.
+/// A physics logic using 2d points.
 pub struct PointPhysics<V2: Vec2> {
     pub positions: Vec<V2>,
     pub velocities: Vec<V2>,
@@ -22,8 +22,8 @@ impl<V2: Vec2> PointPhysics<V2> {
         }
     }
 
-    /// Update the velocities of entities based on acceleration, then update entities' positions
-    /// based on updated velocities.
+    /// Update the physics logic: changes the velocities of entities based on acceleration, then
+    /// changes entities' positions based on updated velocities.
     pub fn update(&mut self) {
         for (pos, (vel, acc)) in self
             .positions

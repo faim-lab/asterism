@@ -74,7 +74,7 @@ pub trait KeyboardControl<ID: Copy + Eq + Ord, KeyCode, InputHandler> {
     }
 }
 
-/// A keyboard input
+/// A keyboard input.
 pub struct KeyInput<KeyCode> {
     /// The keycode that the input is tracking.
     keycode: KeyCode,

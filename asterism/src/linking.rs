@@ -4,24 +4,19 @@
 //! each other. They maintain, enumerate, and follow/activate directed connections between
 //! concepts.
 //!
-//! Linking logics are incredibly broad and have a wide range of uses. To me (Cynthia), some other
-//! logics feel like subsets of linking logics--- the code here is almost identical to that of
-//! entity-state logics (those were written first). I also find linking logics deeply confusing to
-//! visualize because of all the nested vecs. I recommend looking at `yarn` and `maze-minigame` in
-//! `/prototypes/` for examples.
+//! Linking logics are incredibly broad and have a wide range of uses. Linking logics are slightly
+//! confusing to visualize because of all the nested vecs. I recommend looking at `yarn` and
+//! `maze-minigame` in `/prototypes/` for examples.
 
 /// A generic linking logic.
 pub struct GraphedLinking {
-    /// A vec of [maps](NodeMap).
+    /// A vec of maps.
     pub maps: Vec<NodeMap>,
-    /// Condition tables for each map in `self.maps`. If `conditions[i][j]` is true,
-    /// that means the node `j` in `maps[i]` can be moved to, i.e. `position[i]` can be set to
-    /// `j`.
+    /// Condition tables for each map in `self.maps`. If `conditions[i][j]` is true, that means the
+    /// node `j` in `maps[i]` can be moved to, i.e. `position[i]` can be set to `j`.
     pub conditions: Vec<Vec<bool>>,
     /// The current node the map is on. `positions[i]` is an index in `maps[i].nodes`.
     pub positions: Vec<usize>,
-    // invariants: maps, conditions, positions length are all equal. forall i, position[i] < conditions[i].len()
-    // conditions[i].len() = maps[i].nodes.len()
 }
 
 impl GraphedLinking {

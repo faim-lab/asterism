@@ -5,9 +5,9 @@
 //! the finite, discrete states of a set of game characters or other entities, update states when
 //! necessary, and condition the operators of other logics on entities' discrete states.
 
-/// An entity-state logic for flat entity state machines
+/// An entity-state logic for flat entity state machines.
 pub struct FlatEntityState<ID: Copy + Eq> {
-    /// A vec of graphs representing each state machine
+    /// A vec of graphs representing each state machine.
     pub maps: Vec<StateMap<ID>>,
     /// Condition tables for each map in `self.maps`. If `conditions[i][j]` is true,
     /// that means the node `j` in `maps[i]` can be moved to, i.e. `position[i]` can be set to
@@ -55,8 +55,8 @@ impl<ID: Copy + Eq> FlatEntityState<ID> {
 
     /// Adds a state machine to the logic.
     ///
-    /// At each index i of `states`, the vec of indices j_0, j_1, j_2, ... represents the indices of
-    /// states to which the entity can move to from state i.
+    /// At each index i of `states`, the vec of indices represents the indices of states to which
+    /// the entity can move to from state i.
     ///
     /// All conditions by default are set to false.
     pub fn add_state_map(&mut self, starting_state: usize, states: Vec<(ID, Vec<usize>)>) {
