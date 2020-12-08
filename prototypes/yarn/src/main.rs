@@ -1,4 +1,4 @@
-use asterism::{resources::Transaction, GraphedLinking, QueuedResources};
+use asterism::{linking::GraphedLinking, resources::QueuedResources, resources::Transaction};
 use rand::prelude::*;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader, Error, ErrorKind};
@@ -96,34 +96,34 @@ impl World {
                 logics
                     .resources
                     .transactions
-                    .push(vec![(PoolID::NumSleep, Transaction::Change(1))]);
+                    .push(vec![(PoolID::NumSleep, Transaction::Change(1.0))]);
                 logics
                     .resources
                     .transactions
-                    .push(vec![(PoolID::Energy, Transaction::Change(12))]);
+                    .push(vec![(PoolID::Energy, Transaction::Change(12.0))]);
             }
             7 => {
                 logics
                     .resources
                     .transactions
-                    .push(vec![(PoolID::Energy, Transaction::Change(-6))]);
+                    .push(vec![(PoolID::Energy, Transaction::Change(-6.0))]);
             }
             8 => {
                 logics.resources.transactions.push(vec![(
                     PoolID::Energy,
-                    Transaction::Change(rng.gen_range(11, 17)),
+                    Transaction::Change(rng.gen_range(11.0, 17.0)),
                 )]);
             }
             9 => {
                 logics.resources.transactions.push(vec![(
                     PoolID::Energy,
-                    Transaction::Change(rng.gen_range(10, 20)),
+                    Transaction::Change(rng.gen_range(10.0, 20.0)),
                 )]);
             }
             10 => {
                 logics.resources.transactions.push(vec![(
                     PoolID::Energy,
-                    Transaction::Change(-rng.gen_range(15, 20)),
+                    Transaction::Change(-rng.gen_range(15.0, 20.0)),
                 )]);
             }
             _ => {}
@@ -166,9 +166,7 @@ impl World {
 
     fn unproject_linking(&mut self, linking: &GraphedLinking) {
         for (_, position) in linking.maps.iter().zip(linking.positions.iter()) {
-            if let Some(pos) = position {
-                self.current_label = *pos;
-            }
+            self.current_label = *position;
         }
     }
 
@@ -285,7 +283,7 @@ fn read_file(world: &mut World, linking: &mut GraphedLinking) -> io::Result<()> 
         nodes[from_label].push(idx as usize);
     }
 
-    linking.add_link_map(Some(0), nodes);
+    linking.add_link_map(0, nodes);
 
     Ok(())
 }

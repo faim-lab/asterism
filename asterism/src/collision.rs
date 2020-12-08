@@ -1,9 +1,15 @@
+//! # Collision logics
+//!
+//! Collision logics offer an illusion of physical space is provided by the fact that some game
+//! objects occlude the movement of others. They detect overlaps between subsets of entities and/or
+//! regions of space, and automatically trigger reactions when such overlaps occur.
+
 use glam::Vec2 as GlamVec2;
 use std::cmp::Ordering;
 use std::ops::{Add, AddAssign};
 use ultraviolet::Vec2 as UVVec2;
 
-/// A trait for implementing a two-dimensional vector in collision
+/// A trait for a set of two coordinates that represent a point in 2d space.
 pub trait Vec2: Add + AddAssign + Copy {
     fn new(x: f32, y: f32) -> Self;
     fn x(&self) -> f32;
@@ -104,17 +110,17 @@ impl<V2: Vec2> Contact<V2> {
 /// Metadata of each collision entity.
 #[derive(Default, Clone, Copy)]
 pub struct CollisionData<ID: Copy + Eq> {
-    /// true if the entity is solid, i.e. can stop other entities.
+    /// True if the entity is solid, i.e. can stop other entities.
     ///
     /// For example, a wall or player character might be solid, while a section of the ground that
     /// applies an affect on the player character when they walk over it (colliding with it) might
     /// not be.
-    solid: bool,
-    /// true if the entity is fixed, i.e. does _not_ participate in restitution.
+    pub solid: bool,
+    /// True if the entity is fixed, i.e. does _not_ participate in restitution.
     ///
     /// Pushable entities are _not_ fixed, while entities that shouldn't be pushable, such as walls
     /// or moving platforms, are.
-    fixed: bool,
+    pub fixed: bool,
     pub id: ID,
 }
 
@@ -150,7 +156,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         }
     }
 
-    /// Checks collisions every frame.
+    /// Checks collisions every frame and handles restitution (works most of the time).
     ///
     /// Uses the following algorithm:
     ///
@@ -162,7 +168,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
     ///    involved entity to the contact displacement, displace the correct entity the correct
     ///    "remaining" amount (which might be 0) and add that to the vec of (3).
     ///
-    /// (explanation mostly ripped from direct messages with Prof Osborn)
+    /// Explanation lightly modified from direct messages with Prof Osborn.
     pub fn update(&mut self) {
         self.contacts.clear();
         self.displacements.clear();
@@ -284,8 +290,10 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         }
     }
 
-    /// adds a collision entity to the logic, taking two Vec2s with the center and half the
-    /// dimensions of the AABB.
+    /// Adds a collision entity to the logic, taking two Vec2s with the center and half the
+    /// dimensions of the AABB. `solid` represents if the entity can stop other entities, and
+    /// `fixed` represents if it can participate in restitution, i.e. be moved by the collision
+    /// logic or not. See [CollisionData] for further explanation.
     pub fn add_collision_entity(
         &mut self,
         center: V2,
@@ -301,7 +309,10 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         self.metadata.push(CollisionData { solid, fixed, id });
     }
 
-    /// adds a collision entity to the logic, taking the x, y, width, and height of the AABB.
+    /// Adds a collision entity to the logic, taking the x, y, width, and height of the AABB as
+    /// well as its velocity and some metadata. See
+    /// [add_collision_entity][AabbCollision::add_collision_entity] for details on what the other
+    /// fields represent.
     pub fn add_entity_as_xywh(
         &mut self,
         x: f32,

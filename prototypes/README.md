@@ -3,7 +3,8 @@
 These are some prototypes of games made with Asterism.
 
 - `paddles`: remake of Atari Pong. Outputs to a framebuffer using the Pixels crate, as well as the terminal. Logics used: control, physics, collision, resource.
-- `paddles-macroquad`: Same as above, but with the crate =macroquad= for rendering to move away from framebuffer graphics.
+- `air_hockey`: Paddles, but flipped 180 degrees and with both horizontal and vertical movement. Logics used: control, physics, collision, resource.
+- `paddles-macroquad`: Same as above, but with the crate `macroquad` for rendering to move away from framebuffer graphics.
 - `jumper`: simple 2d platformer. Outputs to a framebuffer using the Pixels crate. Logics used: control, physics, collision, entity-state.
 - `maze-minigame`: top-down navigation game. Outputs to a framebuffer using the Pixels crate. Has some destroyable items and portals (from Portal 2). Logics used: collision, resource, linking.
     - Collision and physics aren't currently implemented with Asterism.

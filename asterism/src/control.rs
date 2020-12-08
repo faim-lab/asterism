@@ -1,15 +1,28 @@
+//! # Control logics
+//!
+//! Control logics communicate that different entities are controlled by different inputs at
+//! different times. They map button inputs, AI intentions, network socket messages, etc onto
+//! high-level game actions.
+//!
+//! We're currently trying to consider analog as well as digital inputs, but we haven't implemented
+//! controller support, so some of these fields don't really make sense yet.
+
 use bevy_input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
 use macroquad::prelude::{is_key_down, KeyCode as MqKeyCode};
 use winit::event::VirtualKeyCode;
 use winit_input_helper::WinitInputHelper;
 
-pub trait Input {
+/// Information for a key/button press.
+trait Input {
     fn min(&self) -> f32;
     fn max(&self) -> f32;
 }
 
+/// Trait for generic keyboard control.
 pub trait KeyboardControl<ID: Copy + Eq + Ord, KeyCode, InputHandler> {
     fn new() -> Self;
+
+    /// Checks and updates what inputs are being pressed every frame.
     fn update(&mut self, events: &InputHandler);
 
     fn mapping(&self) -> &Vec<Vec<Action<ID, KeyCode>>>;
@@ -17,6 +30,7 @@ pub trait KeyboardControl<ID: Copy + Eq + Ord, KeyCode, InputHandler> {
     fn values(&self) -> &Vec<Vec<Values>>;
     fn values_mut(&mut self) -> &mut Vec<Vec<Values>>;
 
+    /// Returns the values of value and changed_by for the first action with the given ID.
     fn get_action(&self, id: ID) -> Option<(f32, f32)> {
         for (i, ..) in self.mapping().iter().enumerate() {
             return self.get_action_in_set(i, id);
@@ -24,6 +38,8 @@ pub trait KeyboardControl<ID: Copy + Eq + Ord, KeyCode, InputHandler> {
         None
     }
 
+    /// Returns the value of value and changed_by for the action with the given ID in the given
+    /// set of mappings.
     fn get_action_in_set(&self, action_set: usize, id: ID) -> Option<(f32, f32)> {
         if let Some(i) = self.mapping()[action_set]
             .iter()
@@ -37,6 +53,7 @@ pub trait KeyboardControl<ID: Copy + Eq + Ord, KeyCode, InputHandler> {
         None
     }
 
+    /// Adds a single keymap to the logic.
     fn add_key_map(&mut self, locus_idx: usize, keycode: KeyCode, id: ID) {
         if locus_idx >= self.mapping().len() {
             self.mapping_mut()
@@ -57,15 +74,18 @@ pub trait KeyboardControl<ID: Copy + Eq + Ord, KeyCode, InputHandler> {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd)]
+/// A keyboard input.
 pub struct KeyInput<KeyCode> {
+    /// The keycode that the input is tracking.
     keycode: KeyCode,
 }
 
 impl<KeyCode> Input for KeyInput<KeyCode> {
+    /// Minimum value for a keypress is 0.0.
     fn min(&self) -> f32 {
         0.0
     }
+    /// Maximum value for a keypress is 1.0.
     fn max(&self) -> f32 {
         1.0
     }
@@ -76,32 +96,39 @@ pub enum InputType {
     Digital,
 }
 
-impl Default for InputType {
-    fn default() -> Self {
-        Self::Digital
-    }
-}
-
 pub struct Values {
+    /// How much the value of the input was changed last frame.
     pub changed_by: f32,
+    /// What the value of the input is now.
     pub value: f32,
 }
 
 pub struct Action<ID, KeyCode> {
     pub id: ID,
+    /// The input's keycode and min/max.
     pub key_input: KeyInput<KeyCode>,
+    /// If the input is valid that frame, i.e. should be able to be pressed.
     pub is_valid: bool,
+    /// If the input is digital or analog.
     pub input_type: InputType,
 }
 
+/// Implementation of keyboard control for `winit_input_helper`.
 pub struct WinitKeyboardControl<ID: Copy + Eq + Ord> {
+    /// Keymaps for each player.
+    ///
+    /// An index in the outer vec, i.e. `mapping[i]`, points to a keymap for a player. Indexing
+    /// that vec will get you actual actions.
     pub mapping: Vec<Vec<Action<ID, VirtualKeyCode>>>,
+    /// The values for each input in `mapping`.
     pub values: Vec<Vec<Values>>,
+    // Invariants: mapping.len() == values.len(), mapping[i].inputs.len() == values[i].len()
     last_frame_inputs: Vec<VirtualKeyCode>,
     this_frame_inputs: Vec<VirtualKeyCode>,
-    // Invariants: mapping.len() == values.len(), mapping[i].inputs.len() == values[i].len()
 }
 
+/// Implementation of keyboard control for Bevy's input handler. See [WinitKeyboardControl] for
+/// documentation of fields.
 pub struct BevyKeyboardControl<ID: Copy + Eq + Ord> {
     pub mapping: Vec<Vec<Action<ID, BevyKeyCode>>>,
     pub values: Vec<Vec<Values>>,
@@ -109,6 +136,8 @@ pub struct BevyKeyboardControl<ID: Copy + Eq + Ord> {
     this_frame_inputs: Vec<BevyKeyCode>,
 }
 
+/// Implementation of keyboard control for Macroquad's input handler. See [WinitKeyboardControl] for
+/// documentation of fields.
 pub struct MacroQuadKeyboardControl<ID: Copy + Eq + Ord> {
     pub mapping: Vec<Vec<Action<ID, MqKeyCode>>>,
     pub values: Vec<Vec<Values>>,
@@ -183,8 +212,8 @@ impl<ID: Copy + Eq + Ord> KeyboardControl<ID, VirtualKeyCode, WinitInputHelper>
                     }
                 }
                 *value = (*value + *changed_by)
-                    .max(Input::min(key_input))
-                    .min(Input::max(key_input));
+                    .max(key_input.min())
+                    .min(key_input.max());
             }
         }
         self.last_frame_inputs.clear();
@@ -262,8 +291,8 @@ impl<ID: Copy + Eq + Ord> KeyboardControl<ID, BevyKeyCode, BevyInput<BevyKeyCode
                     }
                 }
                 *value = (*value + *changed_by)
-                    .max(Input::min(key_input))
-                    .min(Input::max(key_input));
+                    .max(key_input.min())
+                    .min(key_input.max());
             }
         }
         self.last_frame_inputs.clear();
@@ -274,6 +303,7 @@ impl<ID: Copy + Eq + Ord> KeyboardControl<ID, BevyKeyCode, BevyInput<BevyKeyCode
     }
 }
 
+/// Macroquad doesn't have a keyboard handler type, so use the unit type.
 impl<ID: Copy + Eq + Ord> KeyboardControl<ID, MqKeyCode, ()> for MacroQuadKeyboardControl<ID> {
     fn new() -> Self {
         Self {
@@ -298,6 +328,7 @@ impl<ID: Copy + Eq + Ord> KeyboardControl<ID, MqKeyCode, ()> for MacroQuadKeyboa
         &mut self.values
     }
 
+    /// Instead of an input handler type, pass in a reference to the unit type (?)
     fn update(&mut self, _events: &()) {
         for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
             for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
@@ -339,8 +370,8 @@ impl<ID: Copy + Eq + Ord> KeyboardControl<ID, MqKeyCode, ()> for MacroQuadKeyboa
                     }
                 }
                 *value = (*value + *changed_by)
-                    .max(Input::min(key_input))
-                    .min(Input::max(key_input));
+                    .max(key_input.min())
+                    .min(key_input.max());
             }
         }
         self.last_frame_inputs.clear();

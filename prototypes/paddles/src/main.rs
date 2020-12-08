@@ -2,8 +2,8 @@
 #![forbid(unsafe_code)]
 
 use asterism::{
-    resources::Transaction, AabbCollision, KeyboardControl, PointPhysics, QueuedResources,
-    WinitKeyboardControl,
+    collision::AabbCollision, control::KeyboardControl, control::WinitKeyboardControl,
+    physics::PointPhysics, resources::QueuedResources, resources::Transaction,
 };
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use ultraviolet::Vec2;
@@ -241,14 +241,14 @@ impl World {
                             logics
                                 .resources
                                 .transactions
-                                .push(vec![(PoolID::Points(Player::P2), Transaction::Change(1))]);
+                                .push(vec![(PoolID::Points(Player::P2), Transaction::Change(1.0))]);
                             self.serving = Some(Player::P2);
                         }
                         Player::P2 => {
                             logics
                                 .resources
                                 .transactions
-                                .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]);
+                                .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1.0))]);
                             self.serving = Some(Player::P1);
                         }
                     }
@@ -362,11 +362,10 @@ impl World {
     }
 
     fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
-        physics.positions.resize_with(1, Vec2::default);
-        physics.velocities.resize_with(1, Vec2::default);
-        physics.accelerations.resize_with(1, Vec2::default);
+        physics.positions.clear();
+        physics.velocities.clear();
+        physics.accelerations.clear();
         physics.add_physics_entity(
-            0,
             Vec2::new(
                 self.ball.0 as f32 + self.ball_err.x,
                 self.ball.1 as f32 + self.ball_err.y,

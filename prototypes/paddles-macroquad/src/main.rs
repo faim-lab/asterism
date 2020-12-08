@@ -1,6 +1,6 @@
 use asterism::{
-    resources::Transaction, AabbCollision, KeyboardControl, MacroQuadKeyboardControl, PointPhysics,
-    QueuedResources,
+    collision::AabbCollision, control::KeyboardControl, control::MacroQuadKeyboardControl,
+    physics::PointPhysics, resources::QueuedResources, resources::Transaction,
 };
 use macroquad::prelude::*;
 
@@ -215,14 +215,14 @@ impl World {
                             logics
                                 .resources
                                 .transactions
-                                .push(vec![(PoolID::Points(Player::P2), Transaction::Change(1))]);
+                                .push(vec![(PoolID::Points(Player::P2), Transaction::Change(1.0))]);
                             self.serving = Some(Player::P2);
                         }
                         Player::P2 => {
                             logics
                                 .resources
                                 .transactions
-                                .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]);
+                                .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1.0))]);
                             self.serving = Some(Player::P1);
                         }
                     }
@@ -322,10 +322,10 @@ impl World {
     }
 
     fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
-        physics.positions.resize_with(1, Vec2::default);
-        physics.velocities.resize_with(1, Vec2::default);
-        physics.accelerations.resize_with(1, Vec2::default);
-        physics.add_physics_entity(0, self.ball, self.ball_vel, Vec2::new(0.0, 0.0));
+        physics.positions.clear();
+        physics.velocities.clear();
+        physics.accelerations.clear();
+        physics.add_physics_entity(self.ball, self.ball_vel, Vec2::new(0.0, 0.0));
     }
 
     fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {

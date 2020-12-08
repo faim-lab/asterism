@@ -2,7 +2,10 @@
 #![forbid(unsafe_code)]
 #![allow(dead_code)]
 
-use asterism::{resources::Transaction, AabbCollision, GraphedLinking, QueuedResources};
+use asterism::{
+    collision::AabbCollision, linking::GraphedLinking, resources::QueuedResources,
+    resources::Transaction,
+};
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use ultraviolet::Vec2;
 use winit::dpi::LogicalSize;
@@ -153,11 +156,7 @@ impl Logics {
                 }
                 collision
             },
-            linking: {
-                let mut linking = GraphedLinking::new();
-                linking.add_link_map(None, vec![vec![1, 2], vec![0, 2], vec![0, 1]]);
-                linking
-            },
+            linking: GraphedLinking::new(),
             resources: {
                 let mut resources = QueuedResources::new();
                 resources.items.insert(PoolID::Points, 0.0);
@@ -350,7 +349,7 @@ impl World {
                     logics
                         .resources
                         .transactions
-                        .push(vec![(PoolID::Points, Transaction::Change(1))]);
+                        .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
                     self.items
                         .remove(contact.i - self.walls.len() - self.portals.len());
                 }
@@ -452,7 +451,7 @@ impl World {
         linking: &mut GraphedLinking,
         collision: &AabbCollision<CollisionID, Vec2>,
     ) {
-        linking.positions[0] = None;
+        let mut touched_portal = false;
         for contact in collision.contacts.iter() {
             match (
                 collision.metadata[contact.i].id,
@@ -460,33 +459,43 @@ impl World {
             ) {
                 (CollisionID::Portal(to, from), CollisionID::Player) => {
                     if !self.just_teleported {
+                        touched_portal = true;
+                        linking.add_link_map(from, {
+                            let mut map = Vec::new();
+                            map.push(vec![1]);
+                            map.push(vec![0]);
+                            map
+                        });
                         linking.conditions[0][to] = true;
-                        linking.positions[0] = Some(from);
+                        linking.positions[0] = from;
                     }
                 }
                 _ => {}
             }
         }
+        if !touched_portal {
+            linking.maps.clear();
+            linking.conditions.clear();
+            linking.positions.clear();
+        }
     }
 
     fn unproject_linking(&mut self, linking: &GraphedLinking) {
         for (_, position) in linking.maps.iter().zip(linking.positions.iter()) {
-            if let Some(pos) = position {
-                match pos {
-                    1 => {
-                        // teleport to orange portal
-                        self.x = 277;
-                        self.y = 24;
-                    }
-                    0 => {
-                        // teleport to blue portal
-                        self.x = 107;
-                        self.y = 67;
-                    }
-                    _ => {}
+            match position {
+                1 => {
+                    // teleport to orange portal
+                    self.x = 277;
+                    self.y = 24;
                 }
-                self.just_teleported = true;
+                0 => {
+                    // teleport to blue portal
+                    self.x = 107;
+                    self.y = 67;
+                }
+                _ => {}
             }
+            self.just_teleported = true;
         }
     }
 
