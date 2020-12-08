@@ -8,6 +8,7 @@ members = [
     "prototypes/quest",
     "prototypes/yarn",
     "prototypes/paddles-macroquad",
-    "prototypes/air_hockey"
-    ]
+    "prototypes/air_hockey",
+    "prototypes/breakout"
+]
 
