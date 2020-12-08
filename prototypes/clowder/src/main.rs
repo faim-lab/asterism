@@ -27,19 +27,19 @@ enum ActionID {
 }
 
 impl Default for ActionID {
-    fn default() -> Self { Self::MoveLeft(Player::P1) }
+    fn default() -> Self { Self::MoveLeft(Player::P1)}
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum CollisionID {
     Paddle(Player),
-    Ball,
+    Ball(B),
     InertWall(Location),
     Goal(Player),
 }
 
 impl Default for CollisionID {
-    fn default() -> Self { Self::Ball }
+    fn default() -> Self { Self::Ball(B::B1) }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
@@ -84,14 +84,22 @@ impl Logics {
                     WIDTH as f32, 0.0,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::InertWall(Location::Bottom));
-                collision.add_entity_as_xywh(WIDTH as f32,0.0,
+	       collision.add_entity_as_xywh(0.0, 0.0,((WIDTH/2) - BALL_SIZE) as f32, BALL_SIZE as f32,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::InertWall(Location::TopL));
+	       collision.add_entity_as_xywh(((WIDTH/2) + (BALL_SIZE *2) ) as f32, 0.0,
+					    ((WIDTH/2) - BALL_SIZE) as f32, BALL_SIZE as f32,
+                    Vec2::new(0.0, 0.0),
+                    true, true, CollisionID::InertWall(Location::TopR));
+	       collision.add_entity_as_xywh(WIDTH as f32,0.0,
 					       0.0, HEIGHT as f32,
 					       Vec2::new(0.0, 0.0),
                     true, true, CollisionID::InertWall(Location::Right));
                 collision.add_entity_as_xywh(0.0,0.0,0.0, HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true, true, CollisionID::InertWall(Location::Left));
-	       collision.add_entity_as_xywh(0.0, 0.0, WIDTH as f32, 0.0, Vec2::new(0.0, 0.0),
+	       collision.add_entity_as_xywh(0.0, 0.0, WIDTH as f32, 0.0,
+					    Vec2::new(0.0, 0.0),
                     true, true, CollisionID::Goal(Player::P1));
 	       collision
            },
@@ -116,6 +124,15 @@ enum Location {
 #[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
 enum Player {
     P1
+}
+
+
+#[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
+enum B {
+    B1,
+    B2,
+    B3
+	
 }
 
 struct World {
@@ -221,9 +238,9 @@ impl World {
         for (idx,contact) in logics.collision.contacts.iter().enumerate() {
             match (logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id) {
-                (CollisionID::Goal(Player::P1), CollisionID::Ball) => {
+                (CollisionID::Goal(_player), CollisionID::Ball(b)) => {
                     self.ball_vel = Vec2::new(0.0, 0.0);
-		    self.ball.0 = Vec2:: new(WIDTH as f32,HEIGHT as f32);
+		    self.ball.0 = Vec2::new(WIDTH as f32,HEIGHT as f32);
                     self.ball.1 = false;
 		    
                     logics.resources.transactions.push(vec![(PoolID::Points(Player::P1),
@@ -232,7 +249,7 @@ impl World {
 		    
 		}
 			
-                (CollisionID::InertWall(location), CollisionID::Ball) => {
+                (CollisionID::InertWall(location), CollisionID::Ball(b)) => {
 		    match location {
 			Location::Right | Location::Left =>  self.ball_vel.x *= -1.0,
 			Location::TopL | Location::TopR
@@ -242,7 +259,7 @@ impl World {
                 }
 		 
 
-		(CollisionID::Ball, CollisionID::Paddle(player)) => {
+		(CollisionID::Ball(b), CollisionID::Paddle(player)) => {
 		    let Vec2 {x:touch_x, y:touch_y} = logics.collision.sides_touched(idx);
 		    if (self.ball_vel.x, self.ball_vel.y) == (0.0,0.0)
 		    {
@@ -349,7 +366,17 @@ impl World {
             self.ball.0.x, self.ball.0.y,
             BALL_SIZE as f32, BALL_SIZE as f32,
             self.ball_vel,
-            true, false, CollisionID::Ball);
+            true, false, CollisionID::Ball(B::B1));
+	collision.add_entity_as_xywh(
+            self.ball2.0.x, self.ball2.0.y,
+            BALL_SIZE as f32, BALL_SIZE as f32,
+            self.ball_vel,
+            true, false, CollisionID::Ball(B::B2));
+	collision.add_entity_as_xywh(
+            self.ball3.0.x, self.ball3.0.y,
+            BALL_SIZE as f32, BALL_SIZE as f32,
+            self.ball_vel,
+            true, false, CollisionID::Ball(B::B3));
         collision.add_entity_as_xywh(
             self.paddles.0.x as f32, self.paddles.0.y as f32,
             PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32,
@@ -422,19 +449,25 @@ impl World {
 			  [255,200,0,255],
 			  frame);
 	    }
-	draw_rect(self.ball2.0.x as u8, self.ball2.0.y as u8,
-            BALL_SIZE, BALL_SIZE,
-            [255,200,0,255],
-		  frame);
-	draw_rect(self.ball3.0.x as u8, self.ball3.0.y as u8,
-            BALL_SIZE, BALL_SIZE,
-            [255,200,0,255],
-		  frame);
+	if self.ball2.1
+	    {
+		draw_rect(self.ball2.0.x as u8, self.ball2.0.y as u8,
+			  BALL_SIZE, BALL_SIZE,
+			  [255,200,0,255],
+			  frame);
+	    }
+	if self.ball3.1
+	    {
+		draw_rect(self.ball3.0.x as u8, self.ball3.0.y as u8,
+			  BALL_SIZE, BALL_SIZE,
+			  [255,200,0,255],
+			  frame);
+	    }
 	draw_rect(0, 0,
                   (WIDTH/2)-BALL_SIZE, BALL_SIZE,
 		  [255,255,255,255],
 		  frame);
-	draw_rect((WIDTH/2)+BALL_SIZE, 0,
+	draw_rect((WIDTH/2)+(BALL_SIZE *2), 0,
 		  (WIDTH/2)-BALL_SIZE,BALL_SIZE,
 		  [255,255,255,255],
 		  frame);
@@ -449,8 +482,7 @@ fn draw_rect(x:u8, y:u8, w:u8, h:u8, color:[u8;4], frame:&mut [u8]) {
     for row in 0..h {
         let row_start = (WIDTH as usize)*4*(y+row);
         let slice = &mut frame[(row_start+x*4)..(row_start+(x+w)*4)];
-        for pixel in slice.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&color);
+        for pixel in slice.chunks_exact_mut(4) {           pixel.copy_from_slice(&color);
         }
     }
 }
