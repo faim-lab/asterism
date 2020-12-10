@@ -174,7 +174,7 @@ impl Logics {
 impl World {
     fn new() -> Self {
         Self {
-            paddle: 160, // WIDTH / 2 - PADDLE_WIDTH / 2,
+            paddle: WIDTH / 2 - PADDLE_WIDTH / 2,
             ball: Vec2::new((WIDTH / 2 - BALL_SIZE / 2) as f32, (HEIGHT / 4 * 3) as f32),
             ball_vel: Vec2::new(0.0, 0.0),
             blocks: [
@@ -205,6 +205,7 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
+        let mut block_broken = false;
         for (idx, contact) in logics.collision.contacts.iter().enumerate() {
             match (
                 logics.collision.metadata[contact.i].id,
@@ -218,12 +219,11 @@ impl World {
                 }
                 (CollisionID::Ball, CollisionID::Paddle) => {
                     let sides_touched = logics.collision.sides_touched(idx);
+                    self.ball_vel.set_y(-self.ball_vel.y());
                     if sides_touched.y() < 0.0 {
-                        self.ball_vel.set_y(-self.ball_vel.y());
                         self.change_angle();
                     } else if sides_touched.x() != 0.0 {
                         self.ball_vel.set_x(-self.ball_vel.x());
-                        self.ball_vel.set_y(-self.ball_vel.y());
                     }
                     self.ball_vel *= 1.1;
                 }
@@ -236,17 +236,20 @@ impl World {
                     }
                 },
                 (CollisionID::Ball, CollisionID::Block(i, j)) => {
-                    let sides_touched = logics.collision.sides_touched(idx);
-                    if sides_touched.x() != 0.0 {
-                        self.ball_vel.set_x(-self.ball_vel.x());
-                    } else if sides_touched.y() != 0.0 {
-                        self.ball_vel.set_y(-self.ball_vel.y());
+                    if !block_broken {
+                        let sides_touched = logics.collision.sides_touched(idx);
+                        if sides_touched.x() != 0.0 {
+                            self.ball_vel.set_x(-self.ball_vel.x());
+                        } else if sides_touched.y() != 0.0 {
+                            self.ball_vel.set_y(-self.ball_vel.y());
+                        }
+                        self.blocks[i][j].visible = false;
+                        logics
+                            .resources
+                            .transactions
+                            .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
+                        block_broken = true;
                     }
-                    self.blocks[i][j].visible = false;
-                    logics
-                        .resources
-                        .transactions
-                        .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
                 }
                 _ => {}
             }
@@ -263,6 +266,10 @@ impl World {
                         PoolID::Points => {
                             print!("current score: {}\r", self.score);
                             io::stdout().flush().unwrap();
+                            if self.score >= 40 {
+                                println!("\nyou win!");
+                                self.reset();
+                            }
                         }
                     }
                 }
