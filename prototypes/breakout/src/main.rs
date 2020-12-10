@@ -22,12 +22,6 @@ enum ActionID {
     Quit,
 }
 
-impl Default for ActionID {
-    fn default() -> Self {
-        Self::Serve
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
 enum CollisionID {
     Paddle,
