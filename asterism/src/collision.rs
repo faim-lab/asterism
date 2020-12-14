@@ -239,7 +239,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
             }
         }
 
-        for i in remove.iter() {
+        for i in remove.iter().rev() {
             self.contacts.remove(*i);
         }
 

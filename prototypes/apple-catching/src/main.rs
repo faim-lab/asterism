@@ -2,7 +2,6 @@
 use asterism::{
     collision::AabbCollision,
     control::{KeyboardControl, MacroQuadKeyboardControl},
-    entity_state::FlatEntityState,
     physics::PointPhysics,
     resources::QueuedResources,
     resources::Transaction,
@@ -24,7 +23,7 @@ enum ActionID {
     Quit,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum CollisionID {
     Basket,
     Floor,
@@ -43,7 +42,7 @@ enum PoolID {
     Points,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
 enum StateID {
     AppleFalling,
     AppleBouncing,
@@ -69,7 +68,6 @@ struct Logics {
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
-    entity_state: FlatEntityState<StateID>,
 }
 
 struct World {
@@ -160,7 +158,6 @@ impl Logics {
                 resources.items.insert(PoolID::Points, 0.0);
                 resources
             },
-            entity_state: FlatEntityState::new(),
         }
     }
 }
@@ -177,7 +174,7 @@ impl World {
     }
 
     fn update(&mut self, logics: &mut Logics) -> Result<bool, ()> {
-        // this should probably go into a time logic but i dont want to write it
+        // this should probably go into a temporal matching? or chance logic but i dont want to write it
         if get_time() - self.time > self.interval {
             self.apples.push(Apple::new());
             self.time = get_time();
@@ -211,11 +208,21 @@ impl World {
                     if logics.collision.sides_touched(idx).y() < 0.0 {
                         if i < self.apples.len() {
                             self.apples.remove(i);
+                            logics
+                                .resources
+                                .transactions
+                                .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
                         }
-                        logics
-                            .resources
-                            .transactions
-                            .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
+                    }
+                }
+                (CollisionID::Apple(i), CollisionID::Floor)
+                | (CollisionID::Apple(i), CollisionID::Apple(_)) => {
+                    if i >= self.apples.len() {
+                        continue;
+                    }
+                    if logics.collision.sides_touched(idx).y() < 0.0 {
+                        let y = self.apples[i].vel.y_mut();
+                        *y = -*y * 0.6;
                     }
                 }
                 (CollisionID::Apple(i), CollisionID::Wall) => {
@@ -226,10 +233,6 @@ impl World {
                 _ => {}
             }
         }
-
-        self.project_entity_state(&mut logics.entity_state, &logics.collision);
-        logics.entity_state.update();
-        self.unproject_entity_state(&logics.entity_state);
 
         self.project_resources(&mut logics.resources);
         logics.resources.update();
@@ -325,73 +328,15 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        for (i, apple) in self.apples.iter_mut().enumerate() {
+        let mut idx = 0;
+        for apple in self.apples.iter_mut() {
             apple
                 .pos
-                .set_x(collision.centers[5 + i].x() - collision.half_sizes[5 + i].x());
+                .set_x(collision.centers[5 + idx].x() - collision.half_sizes[5 + idx].x());
             apple
                 .pos
-                .set_y(collision.centers[5 + i].y() - collision.half_sizes[5 + i].y());
-        }
-    }
-
-    fn project_entity_state(
-        &self,
-        entity_state: &mut FlatEntityState<StateID>,
-        collision: &AabbCollision<CollisionID, Vec2>,
-    ) {
-        entity_state
-            .maps
-            .resize_with(self.apples.len(), || asterism::entity_state::StateMap {
-                states: vec![
-                    asterism::entity_state::State {
-                        id: StateID::AppleFalling,
-                        edges: vec![1],
-                    },
-                    asterism::entity_state::State {
-                        id: StateID::AppleBouncing,
-                        edges: vec![0],
-                    },
-                ],
-            });
-        entity_state.conditions.resize_with(self.apples.len(), || {
-            let mut conditions = Vec::new();
-            conditions.resize(2, false);
-            conditions
-        });
-        entity_state.states.resize(self.apples.len(), 0);
-        entity_state.add_state_map(
-            0,
-            vec![
-                (StateID::AppleFalling, vec![1]),
-                (StateID::AppleBouncing, vec![0]),
-            ],
-        );
-        for contact in collision.contacts.iter() {
-            match collision.metadata[contact.i].id {
-                CollisionID::Apple(i) => match collision.metadata[contact.j].id {
-                    CollisionID::Floor => entity_state.conditions[i][1] = true,
-                    _ => entity_state.conditions[i][0] = true,
-                },
-                _ => {}
-            }
-        }
-    }
-
-    fn unproject_entity_state(&mut self, entity_state: &FlatEntityState<StateID>) {
-        for (i, (map, state)) in entity_state
-            .maps
-            .iter()
-            .zip(entity_state.states.iter())
-            .enumerate()
-        {
-            match map.states[*state].id {
-                StateID::AppleBouncing => {
-                    let y = self.apples[i].vel.y_mut();
-                    *y = -*y;
-                }
-                _ => {}
-            }
+                .set_y(collision.centers[5 + idx].y() - collision.half_sizes[5 + idx].y());
+            idx += 1;
         }
     }
 
