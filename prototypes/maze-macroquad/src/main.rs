@@ -1,0 +1,465 @@
+use asterism::{
+    collision::AabbCollision,
+    control::{KeyboardControl, MacroQuadKeyboardControl},
+    linking::GraphedLinking,
+    resources::{QueuedResources, Transaction},
+};
+use macroquad::prelude::*;
+
+const WIDTH: u32 = 320;
+const HEIGHT: u32 = 240;
+const BOX_SIZE: i16 = 20;
+const ITEM_SIZE: i8 = 10;
+const PORTAL_SIZE: i8 = 14;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CollisionID {
+    Player,
+    Wall,
+    Item,
+    Portal(usize, usize),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+enum PoolID {
+    Points,
+}
+
+impl Default for CollisionID {
+    fn default() -> Self {
+        Self::Player
+    }
+}
+
+struct World {
+    x: i16,
+    y: i16,
+    score: u8,
+    walls: Vec<Wall>,
+    items: Vec<Collectible>,
+    portals: Vec<Portal>,
+    just_teleported: bool,
+}
+
+struct Wall {
+    x: i16,
+    y: i16,
+    w: i16,
+    h: i16,
+}
+
+impl Wall {
+    fn new(x: i16, y: i16, w: i16, h: i16) -> Wall {
+        Wall { x, y, w, h }
+    }
+}
+
+struct Collectible {
+    x: i16,
+    y: i16,
+}
+
+impl Collectible {
+    fn new(x: i16, y: i16) -> Self {
+        Self { x, y }
+    }
+}
+
+struct Portal {
+    x: i16,
+    y: i16,
+    to: usize,
+    color: Color,
+}
+
+impl Portal {
+    fn new(x: i16, y: i16, to: usize, color: Color) -> Self {
+        Self { x, y, to, color }
+    }
+}
+
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+enum ActionID {
+    Move(Direction),
+    Quit,
+}
+
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+struct Logics {
+    control: MacroQuadKeyboardControl<ActionID>,
+    collision: AabbCollision<CollisionID, Vec2>,
+    linking: GraphedLinking,
+    resources: QueuedResources<PoolID>,
+}
+
+impl Logics {
+    fn new(walls: &Vec<Wall>, portals: &Vec<Portal>) -> Self {
+        Self {
+            control: {
+                let mut control = MacroQuadKeyboardControl::new();
+                control.add_key_map(0, KeyCode::Up, ActionID::Move(Direction::Up));
+                control.add_key_map(0, KeyCode::Down, ActionID::Move(Direction::Down));
+                control.add_key_map(0, KeyCode::Right, ActionID::Move(Direction::Right));
+                control.add_key_map(0, KeyCode::Left, ActionID::Move(Direction::Left));
+                control.add_key_map(0, KeyCode::Escape, ActionID::Quit);
+                control
+            },
+            collision: {
+                let mut collision = AabbCollision::new();
+                for wall in walls.iter() {
+                    collision.add_entity_as_xywh(
+                        wall.x as f32,
+                        wall.y as f32,
+                        wall.w as f32,
+                        wall.h as f32,
+                        Vec2::new(0.0, 0.0),
+                        true,
+                        true,
+                        CollisionID::Wall,
+                    );
+                }
+                for (i, portal) in portals.iter().enumerate() {
+                    collision.add_entity_as_xywh(
+                        portal.x as f32,
+                        portal.y as f32,
+                        PORTAL_SIZE as f32,
+                        PORTAL_SIZE as f32,
+                        Vec2::new(0.0, 0.0),
+                        false,
+                        true,
+                        CollisionID::Portal(portal.to, i),
+                    );
+                }
+                collision
+            },
+            linking: GraphedLinking::new(),
+            resources: {
+                let mut resources = QueuedResources::new();
+                resources.items.insert(PoolID::Points, 0.0);
+                resources
+            },
+        }
+    }
+}
+
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "".to_owned(),
+        window_width: WIDTH as i32,
+        window_height: HEIGHT as i32,
+        fullscreen: false,
+        ..Default::default()
+    }
+}
+
+#[macroquad::main(window_conf)]
+async fn main() {
+    let mut world = World::new();
+    let mut logics = Logics::new(&world.walls, &world.portals);
+
+    loop {
+        if let Ok(cont) = world.update(&mut logics) {
+            if !cont {
+                break;
+            }
+        }
+        world.draw();
+        next_frame().await;
+    }
+}
+
+impl World {
+    fn new() -> Self {
+        Self {
+            x: 110,
+            y: 100,
+            score: 0,
+            walls: {
+                vec![
+                    // horizontal walls
+                    Wall::new(8, 11, 43, 3),
+                    // test wall for flipped sign of displacement
+                    Wall::new(47, 14, 3, 3),
+                    Wall::new(94, 11, 218, 3),
+                    Wall::new(94, 54, 46, 3),
+                    Wall::new(180, 54, 86, 3),
+                    Wall::new(223, 97, 43, 3),
+                    Wall::new(8, 140, 46, 3),
+                    Wall::new(266, 140, 46, 3),
+                    Wall::new(51, 183, 132, 3),
+                    Wall::new(223, 183, 43, 3),
+                    Wall::new(8, 226, 218, 3),
+                    Wall::new(266, 226, 46, 3),
+                    // vertical walls
+                    Wall::new(8, 11, 3, 218),
+                    Wall::new(51, 54, 3, 89),
+                    Wall::new(94, 54, 3, 132),
+                    Wall::new(137, 54, 3, 89),
+                    Wall::new(180, 11, 3, 175),
+                    Wall::new(223, 97, 3, 132),
+                    Wall::new(309, 11, 3, 218),
+                    // borders
+                    Wall::new(-1, -1, 322, 1),
+                    Wall::new(-1, 240, 322, 1),
+                    Wall::new(-1, -1, 1, 242),
+                    Wall::new(320, -1, 1, 242),
+                ]
+            },
+            items: {
+                vec![
+                    Collectible::new(154, 29),
+                    Collectible::new(26, 198),
+                    Collectible::new(195, 198),
+                    Collectible::new(281, 198),
+                ]
+            },
+            portals: {
+                vec![
+                    Portal::new(110, 70, 1, SKYBLUE), // blue portal 0
+                    Portal::new(280, 27, 0, ORANGE),  // orange portal 1
+                ]
+            },
+            just_teleported: false,
+        }
+    }
+
+    fn update(&mut self, logics: &mut Logics) -> Result<bool, ()> {
+        self.project_collision(&mut logics.collision, &logics.control);
+        logics.collision.update();
+        self.unproject_collision(&logics.collision);
+
+        let mut touching_portal = false;
+
+        for contact in logics.collision.contacts.iter() {
+            match (
+                logics.collision.metadata[contact.i].id,
+                logics.collision.metadata[contact.j].id,
+            ) {
+                (CollisionID::Portal(_, _), CollisionID::Player) => touching_portal = true,
+                (CollisionID::Item, CollisionID::Player) => {
+                    // add to score and remove touched item from game state
+                    logics
+                        .resources
+                        .transactions
+                        .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
+                    self.items
+                        .remove(contact.i - self.walls.len() - self.portals.len());
+                }
+                _ => {}
+            }
+        }
+
+        if !touching_portal {
+            self.just_teleported = false;
+        }
+
+        self.project_linking(&mut logics.linking, &logics.collision);
+        logics.linking.update();
+        self.unproject_linking(&logics.linking);
+
+        self.project_resources(&mut logics.resources);
+        logics.resources.update();
+        self.unproject_resources(&logics.resources);
+
+        for (completed, item_types) in logics.resources.completed.iter() {
+            if *completed {
+                for item_type in item_types {
+                    match item_type {
+                        PoolID::Points => {
+                            println!("You scored! Current points: {}", self.score);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(true)
+    }
+
+    fn project_collision(
+        &self,
+        collision: &mut AabbCollision<CollisionID, Vec2>,
+        control: &MacroQuadKeyboardControl<ActionID>,
+    ) {
+        collision
+            .centers
+            .resize_with(self.walls.len() + self.portals.len(), Vec2::default);
+        collision
+            .half_sizes
+            .resize_with(self.walls.len() + self.portals.len(), Vec2::default);
+        collision
+            .velocities
+            .resize_with(self.walls.len() + self.portals.len(), Default::default);
+        collision
+            .metadata
+            .resize_with(self.walls.len() + self.portals.len(), Default::default);
+
+        // create collider for items
+        for item in &self.items {
+            collision.add_entity_as_xywh(
+                item.x as f32,
+                item.y as f32,
+                ITEM_SIZE as f32,
+                ITEM_SIZE as f32,
+                Vec2::new(0.0, 0.0),
+                false,
+                true,
+                CollisionID::Item,
+            );
+        }
+
+        // create collider for player
+        collision.add_entity_as_xywh(
+            self.x as f32,
+            self.y as f32,
+            BOX_SIZE as f32,
+            BOX_SIZE as f32,
+            Vec2::new(
+                control
+                    .get_action(ActionID::Move(Direction::Right))
+                    .unwrap()
+                    .0
+                    + control
+                        .get_action(ActionID::Move(Direction::Left))
+                        .unwrap()
+                        .0,
+                control.get_action(ActionID::Move(Direction::Up)).unwrap().0
+                    + control
+                        .get_action(ActionID::Move(Direction::Down))
+                        .unwrap()
+                        .0,
+            ),
+            true,
+            false,
+            CollisionID::Player,
+        );
+    }
+
+    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
+        self.x = (collision.centers[collision.centers.len() - 1].x() - BOX_SIZE as f32 / 2.0)
+            .trunc() as i16;
+        self.y = (collision.centers[collision.centers.len() - 1].y() - BOX_SIZE as f32 / 2.0)
+            .trunc() as i16;
+    }
+
+    // node 0: teleport to orange; node 1: teleport to blue; node 2: no teleporting
+    fn project_linking(
+        &self,
+        linking: &mut GraphedLinking,
+        collision: &AabbCollision<CollisionID, Vec2>,
+    ) {
+        let mut touched_portal = false;
+        for contact in collision.contacts.iter() {
+            match (
+                collision.metadata[contact.i].id,
+                collision.metadata[contact.j].id,
+            ) {
+                (CollisionID::Portal(to, from), CollisionID::Player) => {
+                    if !self.just_teleported {
+                        touched_portal = true;
+                        linking.add_link_map(from, {
+                            let mut map = Vec::new();
+                            map.push(vec![1]);
+                            map.push(vec![0]);
+                            map
+                        });
+                        linking.conditions[0][to] = true;
+                        linking.positions[0] = from;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !touched_portal {
+            linking.maps.clear();
+            linking.conditions.clear();
+            linking.positions.clear();
+        }
+    }
+
+    fn unproject_linking(&mut self, linking: &GraphedLinking) {
+        for (_, position) in linking.maps.iter().zip(linking.positions.iter()) {
+            match position {
+                1 => {
+                    // teleport to orange portal
+                    self.x = 277;
+                    self.y = 24;
+                }
+                0 => {
+                    // teleport to blue portal
+                    self.x = 107;
+                    self.y = 67;
+                }
+                _ => {}
+            }
+            self.just_teleported = true;
+        }
+    }
+
+    fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
+        if !resources.items.contains_key(&PoolID::Points) {
+            resources.items.insert(PoolID::Points, 0.0);
+        }
+    }
+
+    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
+        for (completed, item_types) in resources.completed.iter() {
+            if *completed {
+                for item_type in item_types {
+                    let value = resources.get_value_by_itemtype(item_type).min(255.0) as u8;
+                    match item_type {
+                        PoolID::Points => self.score = value,
+                    }
+                }
+            }
+        }
+    }
+
+    fn draw(&self) {
+        clear_background(BLUE);
+
+        for wall in self.walls.iter() {
+            draw_rectangle(
+                wall.x as f32,
+                wall.y as f32,
+                wall.w as f32,
+                wall.h as f32,
+                WHITE,
+            );
+        }
+
+        for item in self.items.iter() {
+            draw_rectangle(
+                item.x as f32,
+                item.y as f32,
+                ITEM_SIZE as f32,
+                ITEM_SIZE as f32,
+                GREEN,
+            );
+        }
+
+        for portal in self.portals.iter() {
+            draw_rectangle(
+                portal.x as f32,
+                portal.y as f32,
+                PORTAL_SIZE as f32,
+                PORTAL_SIZE as f32,
+                portal.color,
+            );
+        }
+
+        draw_rectangle(
+            self.x as f32,
+            self.y as f32,
+            BOX_SIZE as f32,
+            BOX_SIZE as f32,
+            YELLOW,
+        );
+    }
+}

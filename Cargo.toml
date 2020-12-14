@@ -10,6 +10,7 @@ members = [
     "prototypes/paddles-macroquad",
     "prototypes/air_hockey",
     "prototypes/breakout",
-    "prototypes/apple-catching"
+    "prototypes/apple-catching",
+    "prototypes/maze-macroquad"
 ]
 
