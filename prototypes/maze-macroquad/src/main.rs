@@ -32,8 +32,8 @@ impl Default for CollisionID {
 }
 
 struct World {
-    x: i16,
-    y: i16,
+    x: f32,
+    y: f32,
     score: u8,
     walls: Vec<Wall>,
     items: Vec<Collectible>,
@@ -165,10 +165,13 @@ async fn main() {
     let mut logics = Logics::new(&world.walls, &world.portals);
 
     loop {
-        if let Ok(cont) = world.update(&mut logics) {
-            if !cont {
-                break;
+        match world.update(&mut logics) {
+            Ok(cont) => {
+                if !cont {
+                    break;
+                }
             }
+            Err(message) => panic!("{}", message),
         }
         world.draw();
         next_frame().await;
@@ -178,8 +181,8 @@ async fn main() {
 impl World {
     fn new() -> Self {
         Self {
-            x: 110,
-            y: 100,
+            x: 110.0,
+            y: 100.0,
             score: 0,
             walls: {
                 vec![
@@ -222,15 +225,28 @@ impl World {
             },
             portals: {
                 vec![
-                    Portal::new(110, 70, 1, SKYBLUE), // blue portal 0
-                    Portal::new(280, 27, 0, ORANGE),  // orange portal 1
+                    Portal::new(110, 70, 1, BLUE),   // blue portal 0
+                    Portal::new(280, 27, 0, ORANGE), // orange portal 1
                 ]
             },
             just_teleported: false,
         }
     }
 
-    fn update(&mut self, logics: &mut Logics) -> Result<bool, ()> {
+    fn update(&mut self, logics: &mut Logics) -> Result<bool, &'static str> {
+        self.project_control(&mut logics.control);
+        logics.control.update(&());
+        match self.unproject_control(&logics.control) {
+            Ok(_) => {}
+            Err("quit game") => return Ok(false),
+            Err("no quit keybind") => {
+                logics
+                    .control
+                    .add_key_map(0, KeyCode::Escape, ActionID::Quit)
+            }
+            Err(_) => return Err("control: an unknown error occurred"),
+        }
+
         self.project_collision(&mut logics.collision, &logics.control);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
@@ -280,6 +296,41 @@ impl World {
             }
         }
         Ok(true)
+    }
+
+    fn project_control(&self, control: &mut MacroQuadKeyboardControl<ActionID>) {
+        for map in control.mapping[0].iter_mut() {
+            map.is_valid = true;
+        }
+    }
+
+    fn unproject_control(
+        &mut self,
+        control: &MacroQuadKeyboardControl<ActionID>,
+    ) -> Result<(), &'static str> {
+        self.x += control
+            .get_action(ActionID::Move(Direction::Right))
+            .unwrap()
+            .0
+            - control
+                .get_action(ActionID::Move(Direction::Left))
+                .unwrap()
+                .0;
+        self.y += control
+            .get_action(ActionID::Move(Direction::Down))
+            .unwrap()
+            .0
+            - control.get_action(ActionID::Move(Direction::Up)).unwrap().0;
+
+        if let Some(values) = control.get_action(ActionID::Quit) {
+            if values.0 != 0.0 {
+                Err("quit game")
+            } else {
+                Ok(())
+            }
+        } else {
+            Err("no quit keybind")
+        }
     }
 
     fn project_collision(
@@ -342,10 +393,8 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        self.x = (collision.centers[collision.centers.len() - 1].x() - BOX_SIZE as f32 / 2.0)
-            .trunc() as i16;
-        self.y = (collision.centers[collision.centers.len() - 1].y() - BOX_SIZE as f32 / 2.0)
-            .trunc() as i16;
+        self.x = collision.centers[collision.centers.len() - 1].x() - BOX_SIZE as f32 / 2.0;
+        self.y = collision.centers[collision.centers.len() - 1].y() - BOX_SIZE as f32 / 2.0;
     }
 
     // node 0: teleport to orange; node 1: teleport to blue; node 2: no teleporting
@@ -388,13 +437,13 @@ impl World {
             match position {
                 1 => {
                     // teleport to orange portal
-                    self.x = 277;
-                    self.y = 24;
+                    self.x = 277.0;
+                    self.y = 24.0;
                 }
                 0 => {
                     // teleport to blue portal
-                    self.x = 107;
-                    self.y = 67;
+                    self.x = 107.0;
+                    self.y = 67.0;
                 }
                 _ => {}
             }
@@ -422,7 +471,7 @@ impl World {
     }
 
     fn draw(&self) {
-        clear_background(BLUE);
+        clear_background(SKYBLUE);
 
         for wall in self.walls.iter() {
             draw_rectangle(
@@ -459,7 +508,7 @@ impl World {
             self.y as f32,
             BOX_SIZE as f32,
             BOX_SIZE as f32,
-            YELLOW,
+            PURPLE,
         );
     }
 }
