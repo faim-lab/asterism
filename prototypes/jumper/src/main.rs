@@ -186,10 +186,10 @@ struct Entity {
 impl Entity {
     fn new(x: u8, y: u8, w: u8, h: u8) -> Self {
         Self {
-            x: x,
-            y: y,
-            w: w,
-            h: h,
+            x,
+            y,
+            w,
+            h,
             vel: Vec2::new(0.0, 0.0),
             err: Vec2::new(0.0, 0.0),
             acc: Vec2::new(0.0, 0.03),
@@ -286,7 +286,7 @@ impl World {
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Player(..), CollisionID::MovingPlatform) => {
+                (CollisionID::Player(_), CollisionID::MovingPlatform) => {
                     if logics.collision.sides_touched(idx).y == -1.0 {
                         self.player.x = (self.player.x as f32 + self.platform.vel.x).trunc() as u8;
                     }
@@ -536,8 +536,8 @@ impl World {
                 StateID::PlayerJump | StateID::PlayerFall => {}
                 StateID::EnemyLeft => self.enemy.vel.x = -1.0,
                 StateID::EnemyRight => self.enemy.vel.x = 1.0,
-                StateID::EnemyGrounded => self.enemy.acc.y = 0.0,
-                StateID::EnemyNotGrounded => self.enemy.acc.y = 0.03,
+                StateID::EnemyGrounded => self.enemy.vel.y = 0.0,
+                StateID::EnemyNotGrounded => {}
             }
         }
     }

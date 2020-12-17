@@ -1,17 +1,16 @@
-#![allow(dead_code)]
 use asterism::{
     collision::AabbCollision,
     control::{KeyboardControl, MacroQuadKeyboardControl},
+    entity_state::FlatEntityState,
     physics::PointPhysics,
-    resources::QueuedResources,
-    resources::Transaction,
+    resources::{QueuedResources, Transaction},
 };
 use macroquad::prelude::*;
 use std::io::{self, Write};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
-const BASKET_OFF: u8 = 200;
+const BASKET_OFF: u8 = 223;
 const BASKET_WIDTH: u8 = 48;
 const BASKET_HEIGHT: u8 = 32;
 const APPLE_SIZE: u8 = 24;
@@ -38,14 +37,15 @@ impl Default for CollisionID {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-enum PoolID {
-    Points,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
 enum StateID {
     AppleFalling,
     AppleBouncing,
+    AppleResting,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+enum PoolID {
+    Points,
 }
 
 struct Apple {
@@ -65,6 +65,7 @@ fn window_conf() -> Conf {
 
 struct Logics {
     control: MacroQuadKeyboardControl<ActionID>,
+    entity_state: FlatEntityState<StateID>,
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
@@ -158,6 +159,7 @@ impl Logics {
                 resources.items.insert(PoolID::Points, 0.0);
                 resources
             },
+            entity_state: FlatEntityState::new(),
         }
     }
 }
@@ -174,7 +176,7 @@ impl World {
     }
 
     fn update(&mut self, logics: &mut Logics) -> Result<bool, ()> {
-        // this should probably go into a temporal matching? or chance logic but i dont want to write it
+        // this should probably go into a temporal matching? or chance logic but i dont want to write it right now
         if get_time() - self.time > self.interval {
             self.apples.push(Apple::new());
             self.time = get_time();
@@ -187,6 +189,8 @@ impl World {
         logics.control.update(&());
         self.unproject_control(&logics.control);
 
+        // this should probably go in unproject_control, see maze-macroquad for
+        // example
         if logics.control.values[0][2].value != 0.0 {
             return Ok(false);
         }
@@ -198,6 +202,10 @@ impl World {
         self.project_collision(&mut logics.collision, &logics.control);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
+
+        self.project_entity_state(&mut logics.entity_state, &logics.collision);
+        logics.entity_state.update();
+        self.unproject_entity_state(&logics.entity_state);
 
         for (idx, contact) in logics.collision.contacts.iter().enumerate() {
             match (
@@ -213,16 +221,6 @@ impl World {
                                 .transactions
                                 .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
                         }
-                    }
-                }
-                (CollisionID::Apple(i), CollisionID::Floor)
-                | (CollisionID::Apple(i), CollisionID::Apple(_)) => {
-                    if i >= self.apples.len() {
-                        continue;
-                    }
-                    if logics.collision.sides_touched(idx).y() < 0.0 {
-                        let y = self.apples[i].vel.y_mut();
-                        *y = -*y * 0.6;
                     }
                 }
                 (CollisionID::Apple(i), CollisionID::Wall) => {
@@ -337,6 +335,66 @@ impl World {
                 .pos
                 .set_y(collision.centers[5 + idx].y() - collision.half_sizes[5 + idx].y());
             idx += 1;
+        }
+    }
+
+    fn project_entity_state(
+        &self,
+        entity_state: &mut FlatEntityState<StateID>,
+        collision: &AabbCollision<CollisionID, Vec2>,
+    ) {
+        entity_state.maps.clear();
+        entity_state.conditions.clear();
+        entity_state.states.clear();
+        for _ in self.apples.iter() {
+            entity_state.add_state_map(
+                0,
+                vec![
+                    (StateID::AppleFalling, vec![1, 2]),
+                    (StateID::AppleBouncing, vec![0]),
+                    (StateID::AppleResting, vec![0]),
+                ],
+            );
+        }
+
+        let mut bounce = Vec::new();
+        for (idx, contact) in collision.contacts.iter().enumerate() {
+            match (
+                collision.metadata[contact.i].id,
+                collision.metadata[contact.j].id,
+            ) {
+                (CollisionID::Apple(i), CollisionID::Floor)
+                | (CollisionID::Apple(i), CollisionID::Apple(_)) => {
+                    if collision.sides_touched(idx).y() < 0.0 {
+                        if self.apples[i].vel.y() < 1.0 {
+                            entity_state.conditions[i][2] = true;
+                        } else {
+                            entity_state.conditions[i][1] = true;
+                            bounce.push(i);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        for idx in bounce.iter() {
+            entity_state.conditions[*idx][0] = true;
+        }
+    }
+
+    fn unproject_entity_state(&mut self, entity_state: &FlatEntityState<StateID>) {
+        for (i, state) in entity_state.states.iter().enumerate() {
+            match entity_state.maps[i].states[*state].id {
+                StateID::AppleBouncing => {
+                    let y = self.apples[i].vel.y_mut();
+                    *y = -*y * 0.6;
+                }
+                StateID::AppleFalling => {}
+                StateID::AppleResting => {
+                    self.apples[i].vel.set_y(0.0);
+                }
+            }
         }
     }
 
