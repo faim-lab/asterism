@@ -14,4 +14,4 @@ For rendering, the collision logic can be configured to map its provided communi
 
 As another example, consider the control logic which is initialized with appropriate input devices and configured to map these onto the specific game's abstract inputs ("move the player character in the X direction", "confirm a menu option", etc).  Later the values to which the user has controlled these abstract inputs can be queried to e.g. effect changes in the velocities of bodies in the physics logic.
 
-
+For notes/TODOs, see [[file:./notes.md][notes.md]].
