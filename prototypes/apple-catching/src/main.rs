@@ -51,11 +51,12 @@ enum PoolID {
 struct Apple {
     pos: Vec2,
     vel: Vec2,
+    color: Color,
 }
 
 fn window_conf() -> Conf {
     Conf {
-        window_title: "".to_owned(),
+        window_title: "apple catching".to_owned(),
         window_width: WIDTH as i32,
         window_height: HEIGHT as i32,
         fullscreen: false,
@@ -72,9 +73,10 @@ struct Logics {
 }
 
 struct World {
-    basket: u8,
+    basket: Vec2,
+    basket_vel: Vec2,
     apples: Vec<Apple>,
-    score: u8,
+    score: u32,
     time: f64,
     interval: f64,
 }
@@ -167,11 +169,12 @@ impl Logics {
 impl World {
     fn new() -> Self {
         Self {
-            basket: WIDTH / 2 - BASKET_WIDTH / 2,
+            basket: Vec2::new((WIDTH / 2 - BASKET_WIDTH / 2) as f32, BASKET_OFF as f32),
+            basket_vel: Vec2::new(0.0, 0.0),
             apples: Vec::new(),
             score: 0,
             time: 0.0,
-            interval: 2.0,
+            interval: 1.0,
         }
     }
 
@@ -199,7 +202,7 @@ impl World {
         logics.physics.update();
         self.unproject_physics(&logics.physics);
 
-        self.project_collision(&mut logics.collision, &logics.control);
+        self.project_collision(&mut logics.collision);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
@@ -213,8 +216,8 @@ impl World {
                 logics.collision.metadata[contact.j].id,
             ) {
                 (CollisionID::Apple(i), CollisionID::Basket) => {
-                    if logics.collision.sides_touched(idx).y() < 0.0 {
-                        if i < self.apples.len() {
+                    if i < self.apples.len() {
+                        if logics.collision.sides_touched(idx).y() < 0.0 {
                             self.apples.remove(i);
                             logics
                                 .resources
@@ -243,10 +246,6 @@ impl World {
                         PoolID::Points => {
                             print!("current score: {}\r", self.score);
                             io::stdout().flush().unwrap();
-                            if self.score == 255 {
-                                self.score = 0;
-                                logics.resources.items.clear();
-                            }
                         }
                     }
                 }
@@ -263,10 +262,10 @@ impl World {
     }
 
     fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
-        self.basket = ((self.basket as i16 + control.values[0][0].value as i16 * 2
-            - control.values[0][1].value as i16 * 2)
-            .max(0) as u8)
-            .min(WIDTH - BASKET_WIDTH);
+        self.basket_vel.set_x(
+            -control.get_action(ActionID::MoveLeft).unwrap().0
+                + control.get_action(ActionID::MoveRight).unwrap().0,
+        );
     }
 
     fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
@@ -276,6 +275,11 @@ impl World {
         for apple in self.apples.iter() {
             physics.add_physics_entity(apple.pos, apple.vel, Vec2::new(0.0, 0.04));
         }
+        physics.add_physics_entity(
+            self.basket,
+            Vec2::new(self.basket_vel.x(), 0.0),
+            Vec2::new(0.0, 0.04),
+        );
     }
 
     fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
@@ -284,28 +288,29 @@ impl World {
             .iter_mut()
             .zip(physics.positions.iter())
             .zip(physics.velocities.iter())
+        // since the basket physics is at the end of the vec, it won't be included in this
+        // iteration because .zip() will truncate when it's done iterating through
+        // self.apples, which is shorter
         {
             apple.pos = *pos;
             apple.vel = *vel;
         }
+        self.basket = physics.positions[self.apples.len()];
+        self.basket_vel = physics.velocities[self.apples.len()];
     }
 
-    fn project_collision(
-        &self,
-        collision: &mut AabbCollision<CollisionID, Vec2>,
-        control: &MacroQuadKeyboardControl<ActionID>,
-    ) {
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID, Vec2>) {
         collision.centers.resize_with(4, Default::default);
         collision.half_sizes.resize_with(4, Default::default);
         collision.velocities.resize_with(4, Default::default);
         collision.metadata.resize_with(4, Default::default);
 
         collision.add_entity_as_xywh(
-            self.basket as f32,
-            BASKET_OFF as f32,
+            self.basket.x(),
+            self.basket.y(),
             BASKET_WIDTH as f32,
             BASKET_HEIGHT as f32,
-            Vec2::new(0.0, control.values[0][1].value - control.values[0][0].value),
+            self.basket_vel,
             true,
             false,
             CollisionID::Basket,
@@ -326,15 +331,15 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        let mut idx = 0;
-        for apple in self.apples.iter_mut() {
-            apple
-                .pos
-                .set_x(collision.centers[5 + idx].x() - collision.half_sizes[5 + idx].x());
-            apple
-                .pos
-                .set_y(collision.centers[5 + idx].y() - collision.half_sizes[5 + idx].y());
-            idx += 1;
+        let (basket_center, basket_hs) = collision
+            .get_position_for_entity(CollisionID::Basket)
+            .unwrap();
+        self.basket = basket_center - basket_hs;
+        for (i, apple) in self.apples.iter_mut().enumerate() {
+            let (center, hs) = collision
+                .get_position_for_entity(CollisionID::Apple(i))
+                .unwrap();
+            apple.pos = center - hs;
         }
     }
 
@@ -408,9 +413,9 @@ impl World {
         for (completed, item_types) in resources.completed.iter() {
             if *completed {
                 for item_type in item_types {
-                    let value = resources.get_value_by_itemtype(item_type) as u8;
+                    let value = resources.get_value_by_itemtype(item_type);
                     match item_type {
-                        PoolID::Points => self.score = value,
+                        PoolID::Points => self.score = value as u32,
                     }
                 }
             }
@@ -420,19 +425,20 @@ impl World {
     fn draw(&self) {
         clear_background(Color::new(0., 0., 0.5, 1.));
         draw_rectangle(
-            self.basket as f32,
-            BASKET_OFF as f32,
+            self.basket.x(),
+            self.basket.y(),
             BASKET_WIDTH as f32,
             BASKET_HEIGHT as f32,
             WHITE,
         );
 
         for apple in self.apples.iter() {
-            draw_circle(
-                apple.pos.x() + APPLE_SIZE as f32 / 2.0,
-                apple.pos.y() + APPLE_SIZE as f32 / 2.0,
-                (APPLE_SIZE / 2) as f32,
-                RED,
+            draw_rectangle(
+                apple.pos.x(),
+                apple.pos.y(),
+                APPLE_SIZE as f32,
+                APPLE_SIZE as f32,
+                apple.color,
             );
         }
     }
@@ -443,6 +449,7 @@ impl Apple {
         Self {
             pos: Vec2::new(rand::gen_range(0.1, (WIDTH - BASKET_WIDTH) as f32), 0.1),
             vel: Vec2::new(0.0, 0.0),
+            color: Color::from_hsl(0.0, 1.0, rand::gen_range(0.3, 0.7)),
         }
     }
 }

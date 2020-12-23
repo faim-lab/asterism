@@ -3,6 +3,8 @@
 //! Collision logics offer an illusion of physical space is provided by the fact that some game
 //! objects occlude the movement of others. They detect overlaps between subsets of entities and/or
 //! regions of space, and automatically trigger reactions when such overlaps occur.
+//!
+//! Note: Collision is hard and may be broken.
 
 use glam::Vec2 as GlamVec2;
 use std::cmp::Ordering;
@@ -59,6 +61,7 @@ impl Vec2 for GlamVec2 {
 }
 
 /// Information for each contact.
+#[derive(Debug)]
 pub struct Contact<V2: Vec2> {
     /// The index of the first contact in `centers`, `half_sizes`, `velocities`, `metadata`, and
     /// `displacements`.
@@ -248,7 +251,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         }
     }
 
-    fn find_displacement(&self, i: usize, j: usize) -> V2 {
+    pub fn find_displacement(&self, i: usize, j: usize) -> V2 {
         let (ci, cj) = (self.centers[i], self.centers[j]);
         let (hsi, hsj) = (self.half_sizes[i], self.half_sizes[j]);
         let displ_abs = V2::new(
@@ -271,20 +274,29 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
     /// I think this is mostly ripped from this tutorial:
     /// https://gamedevelopment.tutsplus.com/series/basic-2d-platformer-physics--cms-998
     fn get_speed_ratio(&self, i: usize, j: usize) -> V2 {
-        let (vxi, vyi) = (self.velocities[i].x(), self.velocities[i].y());
-        let (vxj, vyj) = (self.velocities[j].x(), self.velocities[j].y());
-
-        let speed_sum = V2::new(vxi.abs() + vxj.abs(), vyi.abs() + vyj.abs());
         if !self.metadata[j].fixed {
-            if speed_sum.x() == 0.0 && speed_sum.y() == 0.0 {
+            let (vxi, vyi) = (self.velocities[i].x().abs(), self.velocities[i].y().abs());
+            let (vxj, vyj) = (self.velocities[j].x().abs(), self.velocities[j].y().abs());
+
+            let speed_sum = V2::new(vxi + vxj, vyi + vyj);
+            let mut speed_ratio = if speed_sum.x() == 0.0 && speed_sum.y() == 0.0 {
                 V2::new(0.5, 0.5)
             } else if speed_sum.x() == 0.0 {
-                V2::new(0.5, vyi.abs() / speed_sum.y())
+                V2::new(0.5, vyi / speed_sum.y())
             } else if speed_sum.y() == 0.0 {
-                V2::new(0.5, vxi.abs() / speed_sum.x())
+                V2::new(vxi / speed_sum.x(), 0.5)
             } else {
-                V2::new(vxi.abs() / speed_sum.x(), vyi.abs() / speed_sum.y())
+                V2::new(vxi / speed_sum.x(), vyi / speed_sum.y())
+            };
+
+            if speed_ratio.x() == 0.0 {
+                speed_ratio.set_x(1.0);
             }
+            if speed_ratio.y() == 0.0 {
+                speed_ratio.set_y(1.0);
+            }
+
+            speed_ratio
         } else {
             V2::new(1.0, 1.0)
         }
@@ -361,6 +373,16 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
             }
         };
         V2::new(x, y)
+    }
+
+    /// Gets the position for the entity given its CollisionID, if it exists. The first field is
+    /// the center of the entity, and the second is half its width/height.
+    pub fn get_position_for_entity(&self, id: ID) -> Option<(V2, V2)> {
+        if let Some(i) = self.metadata.iter().position(|metadata| metadata.id == id) {
+            Some((self.centers[i], self.half_sizes[i]))
+        } else {
+            None
+        }
     }
 
     fn intersects(&self, i: usize, j: usize) -> bool {
