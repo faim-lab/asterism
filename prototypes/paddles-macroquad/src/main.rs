@@ -292,21 +292,38 @@ impl World {
     }
 
     fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
-        self.paddles.0 = ((self.paddles.0 as i16 - control.values[0][0].value as i16
-            + control.values[0][1].value as i16)
+        self.paddles.0 = ((self.paddles.0 as i16
+            - control
+                .get_action_in_set(0, ActionID::MoveUp(Player::P1))
+                .unwrap()
+                .value as i16
+            + control
+                .get_action_in_set(0, ActionID::MoveDown(Player::P1))
+                .unwrap()
+                .value as i16)
             .max(0) as u8)
             .min(255 - PADDLE_HEIGHT);
-        self.paddles.1 = ((self.paddles.1 as i16 - control.values[1][0].value as i16
-            + control.values[1][1].value as i16)
+        self.paddles.1 = ((self.paddles.1 as i16
+            - control
+                .get_action_in_set(1, ActionID::MoveUp(Player::P2))
+                .unwrap()
+                .value as i16
+            + control
+                .get_action_in_set(1, ActionID::MoveDown(Player::P2))
+                .unwrap()
+                .value as i16)
             .max(0) as u8)
             .min(255 - PADDLE_HEIGHT);
-        if (self.ball_vel.x(), self.ball_vel.y()) == (0.0, 0.0) {
+
+        if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
             match self.serving {
                 Some(Player::P1) => {
-                    let values = &control.values[0][2];
+                    let values = control
+                        .get_action_in_set(0, ActionID::Serve(Player::P1))
+                        .unwrap();
                     if values.changed_by == 1.0 && values.value != 0.0 {
-                        self.ball_vel.set_x(1.0);
-                        self.ball_vel.set_y(1.0);
+                        self.ball_vel.x = 1.0;
+                        self.ball_vel.y = 1.0;
                     }
                 }
                 Some(Player::P2) => {

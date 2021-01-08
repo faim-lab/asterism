@@ -61,7 +61,6 @@ impl Vec2 for GlamVec2 {
 }
 
 /// Information for each contact.
-#[derive(Debug)]
 pub struct Contact<V2: Vec2> {
     /// The index of the first contact in `centers`, `half_sizes`, `velocities`, `metadata`, and
     /// `displacements`.

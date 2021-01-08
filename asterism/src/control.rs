@@ -19,7 +19,10 @@ trait Input {
 }
 
 /// Trait for generic keyboard control.
-pub trait KeyboardControl<ID: Copy + Eq + Ord, KeyCode, InputHandler> {
+pub trait KeyboardControl<ID, KeyCode, InputHandler>
+where
+    ID: Copy + Eq + Ord,
+{
     fn new() -> Self;
 
     /// Checks and updates what inputs are being pressed every frame.
@@ -30,25 +33,23 @@ pub trait KeyboardControl<ID: Copy + Eq + Ord, KeyCode, InputHandler> {
     fn values(&self) -> &Vec<Vec<Values>>;
     fn values_mut(&mut self) -> &mut Vec<Vec<Values>>;
 
-    /// Returns the values of value and changed_by for the first action with the given ID.
-    fn get_action(&self, id: ID) -> Option<(f32, f32)> {
+    /// Returns the [Values] for the first action in the mapping with the given ID.
+    fn get_action(&self, id: ID) -> Option<Values> {
         for (i, ..) in self.mapping().iter().enumerate() {
-            return self.get_action_in_set(i, id);
+            if let Some(values) = self.get_action_in_set(i, id) {
+                return Some(values);
+            }
         }
         None
     }
 
-    /// Returns the value of value and changed_by for the action with the given ID in the given
-    /// set of mappings.
-    fn get_action_in_set(&self, action_set: usize, id: ID) -> Option<(f32, f32)> {
+    /// Returns the [Values] for the action with the given ID in the given set of mappings.
+    fn get_action_in_set(&self, action_set: usize, id: ID) -> Option<Values> {
         if let Some(i) = self.mapping()[action_set]
             .iter()
             .position(|act| act.id == id)
         {
-            return Some((
-                self.values()[action_set][i].value,
-                self.values()[action_set][i].changed_by,
-            ));
+            return Some(self.values()[action_set][i]);
         }
         None
     }
@@ -96,6 +97,7 @@ pub enum InputType {
     Digital,
 }
 
+#[derive(Copy, Clone)]
 pub struct Values {
     /// How much the value of the input was changed last frame.
     pub changed_by: f32,
@@ -145,8 +147,9 @@ pub struct MacroQuadKeyboardControl<ID: Copy + Eq + Ord> {
     this_frame_inputs: Vec<MqKeyCode>,
 }
 
-impl<ID: Copy + Eq + Ord> KeyboardControl<ID, VirtualKeyCode, WinitInputHelper>
-    for WinitKeyboardControl<ID>
+impl<ID> KeyboardControl<ID, VirtualKeyCode, WinitInputHelper> for WinitKeyboardControl<ID>
+where
+    ID: Copy + Eq + Ord,
 {
     fn new() -> Self {
         Self {
@@ -224,8 +227,9 @@ impl<ID: Copy + Eq + Ord> KeyboardControl<ID, VirtualKeyCode, WinitInputHelper>
     }
 }
 
-impl<ID: Copy + Eq + Ord> KeyboardControl<ID, BevyKeyCode, BevyInput<BevyKeyCode>>
-    for BevyKeyboardControl<ID>
+impl<ID> KeyboardControl<ID, BevyKeyCode, BevyInput<BevyKeyCode>> for BevyKeyboardControl<ID>
+where
+    ID: Copy + Eq + Ord,
 {
     fn new() -> Self {
         Self {
@@ -304,7 +308,10 @@ impl<ID: Copy + Eq + Ord> KeyboardControl<ID, BevyKeyCode, BevyInput<BevyKeyCode
 }
 
 /// Macroquad doesn't have a keyboard handler type, so use the unit type.
-impl<ID: Copy + Eq + Ord> KeyboardControl<ID, MqKeyCode, ()> for MacroQuadKeyboardControl<ID> {
+impl<ID> KeyboardControl<ID, MqKeyCode, ()> for MacroQuadKeyboardControl<ID>
+where
+    ID: Copy + Eq + Ord,
+{
     fn new() -> Self {
         Self {
             mapping: Vec::new(),

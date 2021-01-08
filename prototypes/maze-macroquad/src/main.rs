@@ -238,13 +238,7 @@ impl World {
         logics.control.update(&());
         match self.unproject_control(&logics.control) {
             Ok(_) => {}
-            Err("quit game") => return Ok(false),
-            Err("no quit keybind") => {
-                logics
-                    .control
-                    .add_key_map(0, KeyCode::Escape, ActionID::Quit)
-            }
-            Err(_) => return Err("control: an unknown error occurred"),
+            Err(_) => return Ok(false),
         }
 
         self.project_collision(&mut logics.collision, &logics.control);
@@ -307,29 +301,28 @@ impl World {
     fn unproject_control(
         &mut self,
         control: &MacroQuadKeyboardControl<ActionID>,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), ()> {
         self.x += control
             .get_action(ActionID::Move(Direction::Right))
             .unwrap()
-            .0
+            .value
             - control
                 .get_action(ActionID::Move(Direction::Left))
                 .unwrap()
-                .0;
+                .value;
         self.y += control
             .get_action(ActionID::Move(Direction::Down))
             .unwrap()
-            .0
-            - control.get_action(ActionID::Move(Direction::Up)).unwrap().0;
+            .value
+            - control
+                .get_action(ActionID::Move(Direction::Up))
+                .unwrap()
+                .value;
 
-        if let Some(values) = control.get_action(ActionID::Quit) {
-            if values.0 != 0.0 {
-                Err("quit game")
-            } else {
-                Ok(())
-            }
+        if control.get_action(ActionID::Quit).unwrap().value != 0.0 {
+            Err(())
         } else {
-            Err("no quit keybind")
+            Ok(())
         }
     }
 
@@ -375,16 +368,19 @@ impl World {
                 control
                     .get_action(ActionID::Move(Direction::Right))
                     .unwrap()
-                    .0
+                    .value
                     + control
                         .get_action(ActionID::Move(Direction::Left))
                         .unwrap()
-                        .0,
-                control.get_action(ActionID::Move(Direction::Up)).unwrap().0
+                        .value,
+                control
+                    .get_action(ActionID::Move(Direction::Up))
+                    .unwrap()
+                    .value
                     + control
                         .get_action(ActionID::Move(Direction::Down))
                         .unwrap()
-                        .0,
+                        .value,
             ),
             true,
             false,

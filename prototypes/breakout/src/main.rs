@@ -283,8 +283,9 @@ impl World {
     }
 
     fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
-        self.paddle = ((self.paddle as i16 + control.values[0][0].value as i16 * 2
-            - control.values[0][1].value as i16 * 2)
+        self.paddle = ((self.paddle as i16
+            + control.get_action(ActionID::MoveRight).unwrap().value as i16
+            - control.get_action(ActionID::MoveLeft).unwrap().value as i16)
             .max(0) as u8)
             .min(WIDTH - PADDLE_WIDTH);
 
