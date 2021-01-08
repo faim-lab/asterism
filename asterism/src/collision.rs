@@ -47,16 +47,16 @@ impl Vec2 for GlamVec2 {
         GlamVec2::new(x, y)
     }
     fn x(&self) -> f32 {
-        GlamVec2::x(*self)
+        self.x
     }
     fn y(&self) -> f32 {
-        GlamVec2::y(*self)
+        self.y
     }
     fn set_x(&mut self, x: f32) {
-        GlamVec2::set_x(&mut *self, x)
+        self.x = x;
     }
     fn set_y(&mut self, y: f32) {
-        GlamVec2::set_y(&mut *self, y)
+        self.y = y;
     }
 }
 

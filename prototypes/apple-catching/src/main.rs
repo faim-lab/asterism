@@ -217,7 +217,7 @@ impl World {
             ) {
                 (CollisionID::Apple(i), CollisionID::Basket) => {
                     if i < self.apples.len() {
-                        if logics.collision.sides_touched(idx).y() < 0.0 {
+                        if logics.collision.sides_touched(idx).y < 0.0 {
                             self.apples.remove(i);
                             logics
                                 .resources
@@ -262,10 +262,8 @@ impl World {
     }
 
     fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
-        self.basket_vel.set_x(
-            -control.get_action(ActionID::MoveLeft).unwrap().0
-                + control.get_action(ActionID::MoveRight).unwrap().0,
-        );
+        self.basket_vel.x = -control.get_action(ActionID::MoveLeft).unwrap().value
+            + control.get_action(ActionID::MoveRight).unwrap().value;
     }
 
     fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
@@ -277,7 +275,7 @@ impl World {
         }
         physics.add_physics_entity(
             self.basket,
-            Vec2::new(self.basket_vel.x(), 0.0),
+            Vec2::new(self.basket_vel.x, 0.0),
             Vec2::new(0.0, 0.04),
         );
     }
@@ -306,8 +304,8 @@ impl World {
         collision.metadata.resize_with(4, Default::default);
 
         collision.add_entity_as_xywh(
-            self.basket.x(),
-            self.basket.y(),
+            self.basket.x,
+            self.basket.y,
             BASKET_WIDTH as f32,
             BASKET_HEIGHT as f32,
             self.basket_vel,
@@ -318,8 +316,8 @@ impl World {
 
         for (i, apple) in self.apples.iter().enumerate() {
             collision.add_entity_as_xywh(
-                apple.pos.x() as f32,
-                apple.pos.y() as f32,
+                apple.pos.x as f32,
+                apple.pos.y as f32,
                 APPLE_SIZE as f32,
                 APPLE_SIZE as f32,
                 apple.vel,
@@ -370,8 +368,8 @@ impl World {
             ) {
                 (CollisionID::Apple(i), CollisionID::Floor)
                 | (CollisionID::Apple(i), CollisionID::Apple(_)) => {
-                    if collision.sides_touched(idx).y() < 0.0 {
-                        if self.apples[i].vel.y() < 1.0 {
+                    if collision.sides_touched(idx).y < 0.0 {
+                        if self.apples[i].vel.y < 1.0 {
                             entity_state.conditions[i][2] = true;
                         } else {
                             entity_state.conditions[i][1] = true;
@@ -392,12 +390,11 @@ impl World {
         for (i, state) in entity_state.states.iter().enumerate() {
             match entity_state.maps[i].states[*state].id {
                 StateID::AppleBouncing => {
-                    let y = self.apples[i].vel.y_mut();
-                    *y = -*y * 0.6;
+                    self.apples[i].vel.y *= -0.6;
                 }
                 StateID::AppleFalling => {}
                 StateID::AppleResting => {
-                    self.apples[i].vel.set_y(0.0);
+                    self.apples[i].vel.y = 0.0;
                 }
             }
         }
@@ -425,19 +422,18 @@ impl World {
     fn draw(&self) {
         clear_background(Color::new(0., 0., 0.5, 1.));
         draw_rectangle(
-            self.basket.x(),
-            self.basket.y(),
+            self.basket.x,
+            self.basket.y,
             BASKET_WIDTH as f32,
             BASKET_HEIGHT as f32,
             WHITE,
         );
 
         for apple in self.apples.iter() {
-            draw_rectangle(
-                apple.pos.x(),
-                apple.pos.y(),
-                APPLE_SIZE as f32,
-                APPLE_SIZE as f32,
+            draw_circle(
+                apple.pos.x + APPLE_SIZE as f32 / 2.0,
+                apple.pos.y + APPLE_SIZE as f32 / 2.0,
+                APPLE_SIZE as f32 / 2.0,
                 apple.color,
             );
         }
@@ -449,7 +445,7 @@ impl Apple {
         Self {
             pos: Vec2::new(rand::gen_range(0.1, (WIDTH - BASKET_WIDTH) as f32), 0.1),
             vel: Vec2::new(0.0, 0.0),
-            color: Color::from_hsl(0.0, 1.0, rand::gen_range(0.3, 0.7)),
+            color: Color::new(1.0, 0.0, 0.0, 1.0), // draw as rectangle (for debug, since collision bodies are rectangles :P) then differentiate colors: macroquad::color::hsl_to_rgb(0.0, 1.0, rand::gen_range(0.3, 0.7)),
         }
     }
 }

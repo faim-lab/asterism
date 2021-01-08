@@ -213,29 +213,29 @@ impl World {
                 }
                 (CollisionID::Ball, CollisionID::Paddle) => {
                     let sides_touched = logics.collision.sides_touched(idx);
-                    self.ball_vel.set_y(-self.ball_vel.y());
-                    if sides_touched.y() < 0.0 {
+                    self.ball_vel.y *= -1.0;
+                    if sides_touched.y < 0.0 {
                         self.change_angle();
-                    } else if sides_touched.x() != 0.0 {
-                        self.ball_vel.set_x(-self.ball_vel.x());
+                    } else if sides_touched.x != 0.0 {
+                        self.ball_vel.x *= -1.0;
                     }
                     self.ball_vel *= 1.1;
                 }
                 (CollisionID::Ball, CollisionID::Wall(side)) => match side {
                     Side::Right | Side::Left => {
-                        self.ball_vel.set_x(-self.ball_vel.x());
+                        self.ball_vel.x *= -1.0;
                     }
                     Side::Top => {
-                        self.ball_vel.set_y(-self.ball_vel.y());
+                        self.ball_vel.y *= -1.0;
                     }
                 },
                 (CollisionID::Ball, CollisionID::Block(i, j)) => {
                     if !block_broken {
                         let sides_touched = logics.collision.sides_touched(idx);
-                        if sides_touched.x() != 0.0 {
-                            self.ball_vel.set_x(-self.ball_vel.x());
-                        } else if sides_touched.y() != 0.0 {
-                            self.ball_vel.set_y(-self.ball_vel.y());
+                        if sides_touched.x != 0.0 {
+                            self.ball_vel.x *= -1.0;
+                        } else if sides_touched.y != 0.0 {
+                            self.ball_vel.y *= -1.0;
                         }
                         self.blocks[i][j].visible = false;
                         logics
@@ -276,7 +276,7 @@ impl World {
     fn project_control(&self, control: &mut MacroQuadKeyboardControl<ActionID>) {
         control.mapping[0][0].is_valid = true;
         control.mapping[0][1].is_valid = true;
-        if self.ball_vel.x() == 0.0 && self.ball_vel.y() == 0.0 {
+        if self.ball_vel.x == 0.0 && self.ball_vel.y == 0.0 {
             control.mapping[0][2].is_valid = true;
         }
         control.mapping[0][3].is_valid = true;
@@ -288,7 +288,7 @@ impl World {
             .max(0) as u8)
             .min(WIDTH - PADDLE_WIDTH);
 
-        if self.ball_vel.x() == 0.0 && self.ball_vel.y() == 0.0 {
+        if self.ball_vel.x == 0.0 && self.ball_vel.y == 0.0 {
             let values = &control.values[0][2];
             if values.changed_by == 1.0 && values.value != 0.0 {
                 self.ball_vel = Vec2::new(1.0, 1.0);
@@ -304,18 +304,14 @@ impl World {
     }
 
     fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
-        self.ball.set_x(
-            physics.positions[0]
-                .x()
-                .max(0.0)
-                .min((WIDTH - BALL_SIZE) as f32),
-        );
-        self.ball.set_y(
-            physics.positions[0]
-                .y()
-                .max(0.0)
-                .min((HEIGHT - BALL_SIZE) as f32),
-        );
+        self.ball.x = physics.positions[0]
+            .x
+            .max(0.0)
+            .min((WIDTH - BALL_SIZE) as f32);
+        self.ball.y = physics.positions[0]
+            .y
+            .max(0.0)
+            .min((HEIGHT - BALL_SIZE) as f32);
         self.ball_vel = physics.velocities[0];
     }
 
@@ -330,8 +326,8 @@ impl World {
         collision.metadata.resize_with(4, Default::default);
 
         collision.add_entity_as_xywh(
-            self.ball.x(),
-            self.ball.y(),
+            self.ball.x,
+            self.ball.y,
             BALL_SIZE as f32,
             BALL_SIZE as f32,
             self.ball_vel,
@@ -370,27 +366,25 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        self.ball
-            .set_x(collision.centers[4].x() - collision.half_sizes[4].x());
-        self.ball
-            .set_y(collision.centers[4].y() - collision.half_sizes[4].y());
+        let (pos, hs) = collision
+            .get_position_for_entity(CollisionID::Ball)
+            .unwrap();
+        self.ball = pos - hs;
     }
 
     fn change_angle(&mut self) {
         let paddle_center = (self.paddle + PADDLE_WIDTH / 2) as f32;
-        let angle: f32 = (((self.ball.x() + (BALL_SIZE / 2) as f32) - paddle_center)
+        let angle: f32 = (((self.ball.x + (BALL_SIZE / 2) as f32) - paddle_center)
             .max(-((PADDLE_WIDTH / 2) as f32))
             .min((PADDLE_WIDTH / 2) as f32)
             / (PADDLE_WIDTH / 2) as f32)
             .abs()
             * 70.0;
-        let magnitude = f32::sqrt(self.ball_vel.x().powi(2) + self.ball_vel.y().powi(2));
-        self.ball_vel.set_x(
-            angle.to_radians().sin() * magnitude * if self.ball_vel.x() < 0.0 { -1.0 } else { 1.0 },
-        );
-        self.ball_vel.set_y(
-            angle.to_radians().cos() * magnitude * if self.ball_vel.y() < 0.0 { -1.0 } else { 1.0 },
-        );
+        let magnitude = f32::sqrt(self.ball_vel.x.powi(2) + self.ball_vel.y.powi(2));
+        self.ball_vel.x =
+            angle.to_radians().sin() * magnitude * if self.ball_vel.x < 0.0 { -1.0 } else { 1.0 };
+        self.ball_vel.y =
+            angle.to_radians().cos() * magnitude * if self.ball_vel.y < 0.0 { -1.0 } else { 1.0 };
     }
 
     fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
@@ -435,8 +429,8 @@ impl World {
             WHITE,
         );
         draw_rectangle(
-            self.ball.x(),
-            self.ball.y(),
+            self.ball.x,
+            self.ball.y,
             BALL_SIZE as f32,
             BALL_SIZE as f32,
             Color::new(1., 0.75, 0., 1.),

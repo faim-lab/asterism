@@ -230,17 +230,17 @@ impl World {
 
                 (CollisionID::TopWall, CollisionID::Ball)
                 | (CollisionID::BottomWall, CollisionID::Ball) => {
-                    self.ball_vel.set_y(self.ball_vel.y() * -1.0);
+                    self.ball_vel.y *= -1.0;
                 }
 
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
                     if match player {
-                        Player::P1 => logics.collision.sides_touched(idx).x() == 1.0,
-                        Player::P2 => logics.collision.sides_touched(idx).x() == -1.0,
+                        Player::P1 => logics.collision.sides_touched(idx).x == 1.0,
+                        Player::P2 => logics.collision.sides_touched(idx).x == -1.0,
                     } {
-                        self.ball_vel.set_x(self.ball_vel.x() * -1.0);
+                        self.ball_vel.x *= -1.0;
                     } else {
-                        self.ball_vel.set_y(self.ball_vel.y() * -1.0);
+                        self.ball_vel.y *= -1.0;
                     }
                     self.change_angle(player);
                 }
@@ -279,7 +279,7 @@ impl World {
         control.mapping[1][1].is_valid = true;
         control.mapping[2][0].is_valid = true;
 
-        if (self.ball_vel.x(), self.ball_vel.y()) == (0.0, 0.0) {
+        if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
             match self.serving {
                 Some(Player::P1) => control.mapping[0][2].is_valid = true,
                 Some(Player::P2) => control.mapping[1][2].is_valid = true,
@@ -310,10 +310,12 @@ impl World {
                     }
                 }
                 Some(Player::P2) => {
-                    let values = &control.values[1][2];
+                    let values = control
+                        .get_action_in_set(1, ActionID::Serve(Player::P2))
+                        .unwrap();
                     if values.changed_by == 1.0 && values.value != 0.0 {
-                        self.ball_vel.set_x(-1.0);
-                        self.ball_vel.set_y(-1.0);
+                        self.ball_vel.x = -1.0;
+                        self.ball_vel.y = -1.0;
                     }
                 }
                 None => {}
@@ -329,18 +331,14 @@ impl World {
     }
 
     fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
-        self.ball.set_x(
-            physics.positions[0]
-                .x()
-                .max(0.0)
-                .min((WIDTH - BALL_SIZE) as f32),
-        );
-        self.ball.set_y(
-            physics.positions[0]
-                .y()
-                .max(0.0)
-                .min((HEIGHT - BALL_SIZE) as f32),
-        );
+        self.ball.x = physics.positions[0]
+            .x
+            .max(0.0)
+            .min((WIDTH - BALL_SIZE) as f32);
+        self.ball.y = physics.positions[0]
+            .y
+            .max(0.0)
+            .min((HEIGHT - BALL_SIZE) as f32);
         self.ball_vel = physics.velocities[0];
     }
 
@@ -355,8 +353,8 @@ impl World {
         collision.metadata.resize_with(4, Default::default);
 
         collision.add_entity_as_xywh(
-            self.ball.x(),
-            self.ball.y(),
+            self.ball.x,
+            self.ball.y,
             BALL_SIZE as f32,
             BALL_SIZE as f32,
             self.ball_vel,
@@ -389,10 +387,10 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        self.ball
-            .set_x(collision.centers[4].x() - collision.half_sizes[4].x());
-        self.ball
-            .set_y(collision.centers[4].y() - collision.half_sizes[4].y());
+        let (pos, hs) = collision
+            .get_position_for_entity(CollisionID::Ball)
+            .unwrap();
+        self.ball = pos - hs;
     }
 
     fn change_angle(&mut self, player: Player) {
@@ -400,19 +398,17 @@ impl World {
             Player::P1 => self.paddles.0 + PADDLE_HEIGHT / 2,
             Player::P2 => self.paddles.1 + PADDLE_HEIGHT / 2,
         } as f32;
-        let angle: f32 = (((self.ball.y() + (BALL_SIZE / 2) as f32) - paddle_center)
+        let angle: f32 = (((self.ball.y + (BALL_SIZE / 2) as f32) - paddle_center)
             .max(-(PADDLE_HEIGHT as f32) / 2.0)
             .min(PADDLE_HEIGHT as f32 / 2.0)
             / PADDLE_HEIGHT as f32)
             .abs()
             * 80.0;
-        let magnitude = f32::sqrt(self.ball_vel.x().powi(2) + self.ball_vel.y().powi(2));
-        self.ball_vel.set_x(
-            angle.to_radians().cos() * magnitude * if self.ball_vel.x() < 0.0 { -1.0 } else { 1.0 },
-        );
-        self.ball_vel.set_y(
-            angle.to_radians().sin() * magnitude * if self.ball_vel.y() < 0.0 { -1.0 } else { 1.0 },
-        );
+        let magnitude = f32::sqrt(self.ball_vel.x.powi(2) + self.ball_vel.y.powi(2));
+        self.ball_vel.x =
+            angle.to_radians().cos() * magnitude * if self.ball_vel.x < 0.0 { -1.0 } else { 1.0 };
+        self.ball_vel.y =
+            angle.to_radians().sin() * magnitude * if self.ball_vel.y < 0.0 { -1.0 } else { 1.0 };
         if magnitude < 5.0 {
             self.ball_vel *= 1.1;
         }
@@ -460,8 +456,8 @@ impl World {
             WHITE,
         );
         draw_rectangle(
-            self.ball.x(),
-            self.ball.y(),
+            self.ball.x,
+            self.ball.y,
             BALL_SIZE as f32,
             BALL_SIZE as f32,
             Color::new(1., 0.75, 0., 1.),
