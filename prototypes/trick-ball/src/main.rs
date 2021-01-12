@@ -1,3 +1,4 @@
+/// Ball speed slows down after colliding with paddles. Speedup after colliding with walls
 use asterism::{
     collision::{AabbCollision, Vec2 as AstVec2},
     control::{KeyboardControl, MacroQuadKeyboardControl},
@@ -142,7 +143,7 @@ struct World {
 
 fn window_conf() -> Conf {
     Conf {
-        window_title: "paddles".to_owned(),
+        window_title: "trick ball".to_owned(),
         window_width: WIDTH as i32,
         window_height: HEIGHT as i32,
         fullscreen: false,
@@ -231,6 +232,9 @@ impl World {
 
                 (CollisionID::BounceWall, CollisionID::Ball) => {
                     self.ball_vel.y *= -1.0;
+                    if self.ball_vel.magnitude() < 5.0 {
+                        self.ball_vel *= 1.1;
+                    }
                 }
 
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
@@ -243,8 +247,8 @@ impl World {
                         self.ball_vel.y *= -1.0;
                     }
                     self.change_angle(player);
-                    if self.ball_vel.magnitude() < 5.0 {
-                        self.ball_vel *= 1.1;
+                    if self.ball_vel.magnitude() > 0.5 {
+                        self.ball_vel *= 0.9;
                     }
                 }
 
@@ -296,23 +300,23 @@ impl World {
 
     fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
         self.paddles.0 = ((self.paddles.0 as i16
-            - control
-                .get_action_in_set(0, ActionID::MoveUp(Player::P1))
-                .unwrap()
-                .value as i16
             + control
                 .get_action_in_set(0, ActionID::MoveDown(Player::P1))
+                .unwrap()
+                .value as i16
+            - control
+                .get_action_in_set(0, ActionID::MoveUp(Player::P1))
                 .unwrap()
                 .value as i16)
             .max(0) as u8)
             .min(255 - PADDLE_HEIGHT);
         self.paddles.1 = ((self.paddles.1 as i16
-            - control
-                .get_action_in_set(1, ActionID::MoveUp(Player::P2))
-                .unwrap()
-                .value as i16
             + control
                 .get_action_in_set(1, ActionID::MoveDown(Player::P2))
+                .unwrap()
+                .value as i16
+            - control
+                .get_action_in_set(1, ActionID::MoveUp(Player::P2))
                 .unwrap()
                 .value as i16)
             .max(0) as u8)

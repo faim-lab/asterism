@@ -11,6 +11,11 @@ members = [
     "prototypes/air_hockey",
     "prototypes/breakout",
     "prototypes/apple-catching",
-    "prototypes/maze-macroquad"
+    "prototypes/maze-macroquad",
+    "prototypes/trick-ball",
+    "prototypes/trick-paddle",
+    "prototypes/wall-breaker",
+    "prototypes/pinball",
+    "prototypes/paddle-ball-mania"
 ]
 
