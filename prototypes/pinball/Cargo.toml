@@ -1,0 +1,11 @@
+[package]
+name = "pinball"
+version = "0.1.0"
+authors = ["cynthia <cxla2018@mymail.pomona.edu>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+asterism = { path = "../../asterism" }
+macroquad = { git = "https://github.com/not-fl3/macroquad", rev = "b3fc6aa8f9a66e32a401b00864af8c99fbfc26e2" }
