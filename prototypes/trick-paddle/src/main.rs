@@ -203,7 +203,7 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
+        for contact in logics.collision.contacts.iter() {
             match (
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
@@ -239,7 +239,7 @@ impl World {
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
                     match player {
                         Player::P1 => {
-                            if logics.collision.sides_touched(idx).x == 1.0 {
+                            if logics.collision.sides_touched(contact).x == 1.0 {
                                 self.ball_vel.x *= -1.0;
                                 if self.paddle_vel.0 < 4.0 {
                                     self.paddle_vel.0 *= 1.2;
@@ -247,7 +247,7 @@ impl World {
                             }
                         }
                         Player::P2 => {
-                            if logics.collision.sides_touched(idx).x == -1.0 {
+                            if logics.collision.sides_touched(contact).x == -1.0 {
                                 self.ball_vel.x *= -1.0;
                                 if self.paddle_vel.1 < 4.0 {
                                     self.paddle_vel.1 *= 1.2;
@@ -255,7 +255,7 @@ impl World {
                             }
                         }
                     }
-                    if logics.collision.sides_touched(idx).y != 0.0 {
+                    if logics.collision.sides_touched(contact).y != 0.0 {
                         self.ball_vel.y *= -1.0;
                     }
                     self.change_angle(player);
@@ -422,10 +422,7 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        let (pos, hs) = collision
-            .get_position_for_entity(CollisionID::Ball)
-            .unwrap();
-        self.ball = pos - hs;
+        self.ball = collision.get_xy_pos_for_entity(CollisionID::Ball).unwrap();
     }
 
     fn change_angle(&mut self, player: Player) {

@@ -201,7 +201,7 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
+        for contact in logics.collision.contacts.iter() {
             match (
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
@@ -239,8 +239,8 @@ impl World {
 
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
                     if match player {
-                        Player::P1 => logics.collision.sides_touched(idx).x == 1.0,
-                        Player::P2 => logics.collision.sides_touched(idx).x == -1.0,
+                        Player::P1 => logics.collision.sides_touched(contact).x == 1.0,
+                        Player::P2 => logics.collision.sides_touched(contact).x == -1.0,
                     } {
                         self.ball_vel.x *= -1.0;
                     } else {
@@ -411,10 +411,7 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        let (pos, hs) = collision
-            .get_position_for_entity(CollisionID::Ball)
-            .unwrap();
-        self.ball = pos - hs;
+        self.ball = collision.get_xy_pos_for_entity(CollisionID::Ball).unwrap();
     }
 
     fn change_angle(&mut self, player: Player) {

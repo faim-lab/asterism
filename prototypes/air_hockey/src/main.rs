@@ -237,7 +237,7 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
+        for contact in logics.collision.contacts.iter() {
             match (
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
@@ -306,7 +306,7 @@ impl World {
                     let Vec2 {
                         x: touch_x,
                         y: touch_y,
-                    } = logics.collision.sides_touched(idx);
+                    } = logics.collision.sides_touched(contact);
                     if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
                         if touch_y == 1.0 {
                             self.ball_vel = Vec2::new(1.0, 1.0);

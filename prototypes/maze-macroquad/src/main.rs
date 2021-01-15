@@ -389,11 +389,11 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        let (pos, hs) = collision
-            .get_position_for_entity(CollisionID::Player)
+        let pos = collision
+            .get_xy_pos_for_entity(CollisionID::Player)
             .unwrap();
-        self.x = pos.x - hs.x;
-        self.y = pos.y - hs.y;
+        self.x = pos.x;
+        self.y = pos.y;
     }
 
     // node 0: teleport to orange; node 1: teleport to blue; node 2: no teleporting

@@ -69,9 +69,9 @@ pub struct Contact<V2: Vec2> {
     /// `displacements`.
     pub j: usize,
     /// The projected displacement of each contact---not actual restituted displacement. If both
-    /// colliding bodies are fixed, or one of them is **not** solid, defaults to a `Vec2` with a
-    /// magnitude of 0.
-    displacement: V2,
+    /// colliding bodies are fixed, or one of them is **not** solid, defaults to a `Vec2` with
+    /// a magnitude of 0.0.
+    pub displacement: V2,
 }
 
 impl<V2: Vec2> PartialEq for Contact<V2> {
@@ -170,7 +170,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
     ///    involved entity to the contact displacement, displace the correct entity the correct
     ///    "remaining" amount (which might be 0) and add that to the vec of (3).
     ///
-    /// Explanation lightly modified from direct messages with Prof Osborn.
+    /// Explanation lightly modified from a message by Prof Osborn.
     pub fn update(&mut self) {
         self.contacts.clear();
         self.displacements.clear();
@@ -320,7 +320,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         self.metadata.push(CollisionData { solid, fixed, id });
     }
 
-    /// Adds a collision entity to the logic, taking the x, y, width, and height of the AABB as
+    /// Adds a collision entity to the logic, taking the x and y positions, width, and height of the AABB as
     /// well as its velocity and some metadata. See
     /// [add_collision_entity][AabbCollision::add_collision_entity] for details on what the other
     /// fields represent.
@@ -336,8 +336,8 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         id: ID,
     ) {
         self.add_collision_entity(
-            Vec2::new(x + w / 2.0, y + h / 2.0),
-            Vec2::new(w / 2.0, h / 2.0),
+            V2::new(x + w / 2.0, y + h / 2.0),
+            V2::new(w / 2.0, h / 2.0),
             vel,
             solid,
             fixed,
@@ -345,40 +345,68 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         );
     }
 
-    /// Returns unit vector of normal of displacement for the `i` entity in the contact. `idx` is
-    /// the contact's index in the contacts vec.
-    ///
-    /// I.e., if a contact is moved in a positive x direction after restitution _because of_ the
+    /// Returns unit vector of normal of displacement for the `i` entity in the contact. I.e.,
+    /// if a contact is moved in a positive x direction after restitution _because of_ the
     /// other entity involved in collision, `sides_touched` will return `V2::new(1.0, 0.0)`.
-    pub fn sides_touched(&self, idx: usize) -> V2 {
-        let contact = &self.contacts[idx];
-        let displaced = contact.get_restitution();
-        let x = {
-            if displaced.x() < 0.0 {
-                -1.0
-            } else if displaced.x() > 0.0 {
-                1.0
-            } else {
-                0.0
-            }
+    pub fn sides_touched(&self, contact: &Contact<V2>) -> V2 {
+        let restitution = contact.get_restitution();
+        let x = match restitution.x().partial_cmp(&0.0).unwrap() {
+            Ordering::Equal => 0.0,
+            Ordering::Less => -1.0,
+            Ordering::Greater => 1.0,
         };
-        let y = {
-            if displaced.y() < 0.0 {
-                -1.0
-            } else if displaced.y() > 0.0 {
-                1.0
-            } else {
-                0.0
-            }
+        let y = match restitution.y().partial_cmp(&0.0).unwrap() {
+            Ordering::Equal => 0.0,
+            Ordering::Less => -1.0,
+            Ordering::Greater => 1.0,
         };
-        V2::new(x, y)
+        let mut unit = V2::new(x, y);
+
+        if unit.magnitude() == 0.0 {
+            // if unit.magnitude() == 0, that means either the x or y value of displ
+            // = 0.0
+            let displ = contact.displacement;
+            let center_displ = V2::new(
+                self.centers[contact.i].x() - self.centers[contact.j].x(),
+                self.centers[contact.i].y() - self.centers[contact.j].y(),
+            );
+            if displ.x() == 0.0 {
+                match center_displ.x().partial_cmp(&0.0).unwrap() {
+                    Ordering::Equal => {}
+                    Ordering::Less => unit.set_x(-1.0),
+                    Ordering::Greater => unit.set_x(1.0),
+                }
+            }
+            if displ.y() == 0.0 {
+                match center_displ.y().partial_cmp(&0.0).unwrap() {
+                    Ordering::Equal => {}
+                    Ordering::Less => unit.set_y(-1.0),
+                    Ordering::Greater => unit.set_y(1.0),
+                }
+            }
+        }
+        unit
     }
 
-    /// Gets the position for the entity given its CollisionID, if it exists. The first field is
-    /// the center of the entity, and the second is half its width/height.
-    pub fn get_position_for_entity(&self, id: ID) -> Option<(V2, V2)> {
+    /// Gets the center for the entity given its CollisionID, if it exists.
+    pub fn get_center_for_entity(&self, id: ID) -> Option<V2> {
         if let Some(i) = self.metadata.iter().position(|metadata| metadata.id == id) {
-            Some((self.centers[i], self.half_sizes[i]))
+            Some(self.centers[i])
+        } else {
+            None
+        }
+    }
+
+    /// Gets the (x, y) position for the entity given its CollisionID, if it exists: (center -
+    /// half_size). Matches with [add_entity_as_xywh].
+    pub fn get_xy_pos_for_entity(&self, id: ID) -> Option<V2> {
+        if let Some(i) = self.metadata.iter().position(|metadata| metadata.id == id) {
+            let center = self.centers[i];
+            let half_size = self.half_sizes[i];
+            Some(V2::new(
+                center.x() - half_size.x(),
+                center.y() - half_size.y(),
+            ))
         } else {
             None
         }

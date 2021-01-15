@@ -210,14 +210,14 @@ impl World {
         logics.entity_state.update();
         self.unproject_entity_state(&logics.entity_state);
 
-        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
+        for contact in logics.collision.contacts.iter() {
             match (
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
                 (CollisionID::Apple(i), CollisionID::Basket) => {
                     if i < self.apples.len() {
-                        if logics.collision.sides_touched(idx).y < 0.0 {
+                        if logics.collision.sides_touched(contact).y < 0.0 {
                             self.apples.remove(i);
                             logics
                                 .resources
@@ -329,15 +329,13 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        let (basket_center, basket_hs) = collision
-            .get_position_for_entity(CollisionID::Basket)
+        self.basket = collision
+            .get_xy_pos_for_entity(CollisionID::Basket)
             .unwrap();
-        self.basket = basket_center - basket_hs;
         for (i, apple) in self.apples.iter_mut().enumerate() {
-            let (center, hs) = collision
-                .get_position_for_entity(CollisionID::Apple(i))
+            apple.pos = collision
+                .get_xy_pos_for_entity(CollisionID::Apple(i))
                 .unwrap();
-            apple.pos = center - hs;
         }
     }
 
@@ -361,14 +359,14 @@ impl World {
         }
 
         let mut bounce = Vec::new();
-        for (idx, contact) in collision.contacts.iter().enumerate() {
+        for contact in collision.contacts.iter() {
             match (
                 collision.metadata[contact.i].id,
                 collision.metadata[contact.j].id,
             ) {
                 (CollisionID::Apple(i), CollisionID::Floor)
                 | (CollisionID::Apple(i), CollisionID::Apple(_)) => {
-                    if collision.sides_touched(idx).y < 0.0 {
+                    if collision.sides_touched(contact).y < 0.0 {
                         if self.apples[i].vel.y < 1.0 {
                             entity_state.conditions[i][2] = true;
                         } else {

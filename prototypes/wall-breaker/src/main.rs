@@ -182,7 +182,7 @@ impl World {
                 (HEIGHT / 2 - BALL_SIZE / 2) as f32,
             ),
             ball_vel: Vec2::new(0.0, 0.0),
-            serving: Some(Player::P1),
+            serving: Some(Player::P2),
             score: (0, 0),
             walls: vec![
                 (Vec2::new(86.0, 62.0), wall_size),
@@ -208,7 +208,7 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
+        for contact in logics.collision.contacts.iter() {
             match (
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
@@ -244,24 +244,24 @@ impl World {
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
                     match player {
                         Player::P1 => {
-                            if logics.collision.sides_touched(idx).x == 1.0 {
+                            if logics.collision.sides_touched(contact).x == 1.0 {
                                 self.ball_vel.x *= -1.0;
                             }
                         }
                         Player::P2 => {
-                            if logics.collision.sides_touched(idx).x == -1.0 {
+                            if logics.collision.sides_touched(contact).x == -1.0 {
                                 self.ball_vel.x *= -1.0;
                             }
                         }
                     }
-                    if logics.collision.sides_touched(idx).y != 0.0 {
+                    if logics.collision.sides_touched(contact).y != 0.0 {
                         self.ball_vel.y *= -1.0;
                     }
                     self.change_angle(player);
                 }
 
                 (CollisionID::Ball, CollisionID::BreakWall(i)) => {
-                    let sides = logics.collision.sides_touched(idx);
+                    let sides = logics.collision.sides_touched(contact);
                     if sides.x != 0.0 {
                         self.ball_vel.x *= -1.0;
                     }
@@ -445,10 +445,7 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        let (pos, hs) = collision
-            .get_position_for_entity(CollisionID::Ball)
-            .unwrap();
-        self.ball = pos - hs;
+        self.ball = collision.get_xy_pos_for_entity(CollisionID::Ball).unwrap();
     }
 
     fn change_angle(&mut self, player: Player) {

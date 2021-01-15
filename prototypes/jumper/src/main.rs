@@ -281,13 +281,13 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
+        for contact in logics.collision.contacts.iter() {
             match (
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
                 (CollisionID::Player(_), CollisionID::MovingPlatform) => {
-                    if logics.collision.sides_touched(idx).y == -1.0 {
+                    if logics.collision.sides_touched(contact).y == -1.0 {
                         self.player.x = (self.player.x as f32 + self.platform.vel.x).trunc() as u8;
                     }
                 }
@@ -497,11 +497,11 @@ impl World {
             entity_state.conditions[1][3] = true;
         }
         entity_state.conditions[2][1] = true;
-        for (idx, contact) in collision.contacts.iter().enumerate() {
+        for contact in collision.contacts.iter() {
             match collision.metadata[contact.i].id {
                 CollisionID::Player(..) => match collision.metadata[contact.j].id {
                     CollisionID::Ground | CollisionID::MovingPlatform => {
-                        if collision.sides_touched(idx).y == -1.0 {
+                        if collision.sides_touched(contact).y == -1.0 {
                             if self.player.vel.x == 0.0 {
                                 entity_state.conditions[1][0] = true;
                             } else {
@@ -515,7 +515,7 @@ impl World {
                 },
                 CollisionID::Enemy => match collision.metadata[contact.j].id {
                     CollisionID::Ground | CollisionID::MovingPlatform => {
-                        if collision.sides_touched(idx).y == -1.0 {
+                        if collision.sides_touched(contact).y == -1.0 {
                             entity_state.conditions[2][0] = true;
                             entity_state.conditions[2][1] = false;
                         }
