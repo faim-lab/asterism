@@ -1,4 +1,4 @@
-/// Ball speed slows down after colliding with paddles. Speedup after colliding with walls
+/// trick ball: Ball speed slows down after colliding with paddles. Speedup after colliding with walls
 use asterism::{
     collision::{AabbCollision, Vec2 as AstVec2},
     control::{KeyboardControl, MacroQuadKeyboardControl},

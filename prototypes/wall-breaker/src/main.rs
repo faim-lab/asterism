@@ -1,4 +1,4 @@
-/// There are multiple walls distributed through the screen. When the ball hits a inner wall, the wall breaks and the ball bounces off
+/// wall-breaker: There are multiple walls distributed through the screen. When the ball hits a inner wall, the wall breaks and the ball bounces off
 use asterism::{
     collision::{AabbCollision, Vec2 as AstVec2},
     control::{KeyboardControl, MacroQuadKeyboardControl},

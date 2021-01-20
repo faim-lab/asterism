@@ -1,4 +1,4 @@
-/// Paddle speeds up after colliding with ball
+/// trick paddle: Paddle speeds up after colliding with ball
 use asterism::{
     collision::{AabbCollision, Vec2 as AstVec2},
     control::{KeyboardControl, MacroQuadKeyboardControl},

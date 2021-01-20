@@ -1,6 +1,9 @@
+/// pinball: There are multiple walls distributed through the screen. When the ball hits any wall it bounces off
 use asterism::{
-    collision::AabbCollision, control::KeyboardControl, control::MacroQuadKeyboardControl,
-    physics::PointPhysics, resources::QueuedResources, resources::Transaction,
+    collision::{AabbCollision, Vec2 as AstVec2},
+    control::{KeyboardControl, MacroQuadKeyboardControl},
+    physics::PointPhysics,
+    resources::{QueuedResources, Transaction},
 };
 use macroquad::prelude::*;
 
@@ -29,9 +32,9 @@ impl Default for ActionID {
 enum CollisionID {
     Paddle(Player),
     Ball,
-    TopWall,
-    BottomWall,
-    SideWall(Player),
+    BounceWall,
+    BreakWall,
+    ScoreWall(Player),
 }
 
 impl Default for CollisionID {
@@ -78,7 +81,7 @@ impl Logics {
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
-                    CollisionID::SideWall(Player::P1),
+                    CollisionID::ScoreWall(Player::P1),
                 );
                 // right
                 collision.add_entity_as_xywh(
@@ -89,7 +92,7 @@ impl Logics {
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
-                    CollisionID::SideWall(Player::P2),
+                    CollisionID::ScoreWall(Player::P2),
                 );
                 // top
                 collision.add_entity_as_xywh(
@@ -100,7 +103,7 @@ impl Logics {
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
-                    CollisionID::TopWall,
+                    CollisionID::BounceWall,
                 );
                 // bottom
                 collision.add_entity_as_xywh(
@@ -111,7 +114,7 @@ impl Logics {
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
-                    CollisionID::BottomWall,
+                    CollisionID::BounceWall,
                 );
                 collision
             },
@@ -137,11 +140,12 @@ struct World {
     ball_vel: Vec2,
     serving: Option<Player>,
     score: (u8, u8),
+    walls: Vec<(Vec2, Vec2)>, // (position, size)
 }
 
 fn window_conf() -> Conf {
     Conf {
-        window_title: "paddles".to_owned(),
+        window_title: "trick paddle".to_owned(),
         window_width: WIDTH as i32,
         window_height: HEIGHT as i32,
         fullscreen: false,
@@ -167,6 +171,7 @@ async fn main() {
 
 impl World {
     fn new() -> Self {
+        let wall_size = Vec2::new(8.0, 30.0);
         Self {
             paddles: (
                 HEIGHT / 2 - PADDLE_HEIGHT / 2,
@@ -177,8 +182,12 @@ impl World {
                 (HEIGHT / 2 - BALL_SIZE / 2) as f32,
             ),
             ball_vel: Vec2::new(0.0, 0.0),
-            serving: Some(Player::P1),
+            serving: Some(Player::P2),
             score: (0, 0),
+            walls: vec![
+                (Vec2::new(86.0, 62.0), wall_size),
+                (Vec2::new(130.0, 160.0), wall_size),
+            ],
         }
     }
 
@@ -204,7 +213,7 @@ impl World {
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::SideWall(player), CollisionID::Ball) => {
+                (CollisionID::ScoreWall(player), CollisionID::Ball) => {
                     self.ball_vel = Vec2::new(0.0, 0.0);
                     self.ball = Vec2::new(
                         (WIDTH / 2 - BALL_SIZE / 2) as f32,
@@ -228,21 +237,37 @@ impl World {
                     }
                 }
 
-                (CollisionID::TopWall, CollisionID::Ball)
-                | (CollisionID::BottomWall, CollisionID::Ball) => {
+                (CollisionID::BounceWall, CollisionID::Ball) => {
                     self.ball_vel.y *= -1.0;
                 }
 
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
-                    if match player {
-                        Player::P1 => logics.collision.sides_touched(contact).x == 1.0,
-                        Player::P2 => logics.collision.sides_touched(contact).x == -1.0,
-                    } {
-                        self.ball_vel.x *= -1.0;
-                    } else {
+                    match player {
+                        Player::P1 => {
+                            if logics.collision.sides_touched(contact).x == 1.0 {
+                                self.ball_vel.x *= -1.0;
+                            }
+                        }
+                        Player::P2 => {
+                            if logics.collision.sides_touched(contact).x == -1.0 {
+                                self.ball_vel.x *= -1.0;
+                            }
+                        }
+                    }
+                    if logics.collision.sides_touched(contact).y != 0.0 {
                         self.ball_vel.y *= -1.0;
                     }
                     self.change_angle(player);
+                }
+
+                (CollisionID::Ball, CollisionID::BreakWall) => {
+                    let sides = logics.collision.sides_touched(contact);
+                    if sides.x != 0.0 {
+                        self.ball_vel.x *= -1.0;
+                    }
+                    if sides.y != 0.0 {
+                        self.ball_vel.y *= -1.0;
+                    }
                 }
 
                 _ => {}
@@ -293,23 +318,23 @@ impl World {
 
     fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
         self.paddles.0 = ((self.paddles.0 as i16
-            - control
-                .get_action_in_set(0, ActionID::MoveUp(Player::P1))
-                .unwrap()
-                .value as i16
             + control
                 .get_action_in_set(0, ActionID::MoveDown(Player::P1))
+                .unwrap()
+                .value as i16
+            - control
+                .get_action_in_set(0, ActionID::MoveUp(Player::P1))
                 .unwrap()
                 .value as i16)
             .max(0) as u8)
             .min(255 - PADDLE_HEIGHT);
         self.paddles.1 = ((self.paddles.1 as i16
-            - control
-                .get_action_in_set(1, ActionID::MoveUp(Player::P2))
-                .unwrap()
-                .value as i16
             + control
                 .get_action_in_set(1, ActionID::MoveDown(Player::P2))
+                .unwrap()
+                .value as i16
+            - control
+                .get_action_in_set(1, ActionID::MoveUp(Player::P2))
                 .unwrap()
                 .value as i16)
             .max(0) as u8)
@@ -401,6 +426,19 @@ impl World {
             true,
             CollisionID::Paddle(Player::P2),
         );
+
+        for (pos, size) in self.walls.iter() {
+            let half_size = *size / 2.0;
+            let center = *pos + half_size;
+            collision.add_collision_entity(
+                center,
+                half_size,
+                Vec2::zero(),
+                true,
+                true,
+                CollisionID::BreakWall,
+            );
+        }
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
@@ -418,14 +456,11 @@ impl World {
             / PADDLE_HEIGHT as f32)
             .abs()
             * 80.0;
-        let magnitude = f32::sqrt(self.ball_vel.x.powi(2) + self.ball_vel.y.powi(2));
+        let magnitude = self.ball_vel.magnitude();
         self.ball_vel.x =
             angle.to_radians().cos() * magnitude * if self.ball_vel.x < 0.0 { -1.0 } else { 1.0 };
         self.ball_vel.y =
             angle.to_radians().sin() * magnitude * if self.ball_vel.y < 0.0 { -1.0 } else { 1.0 };
-        if magnitude < 5.0 {
-            self.ball_vel *= 1.1;
-        }
     }
 
     fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
@@ -476,5 +511,8 @@ impl World {
             BALL_SIZE as f32,
             Color::new(1., 0.75, 0., 1.),
         );
+        for (pos, size) in self.walls.iter() {
+            draw_rectangle(pos.x, pos.y, size.x, size.y, GRAY);
+        }
     }
 }

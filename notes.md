@@ -1,13 +1,25 @@
 # notes/TODOs
 
 - i wonder if we should have stronger opinions about how (un)projection happens, since it can be easy to miss changes. having better functions to move between the game state and logics would help, i think
+- how expensive is stuff like `get_action`/`get_pos_for_entity`? since worst case it has to iterate through the entire array
+    - iterators for unprojection?
+- searching through `last_frame_keys` is probably expensive as well
 
 collision/physics:
 
+- change restitution so that each contact is only in the contacts vec once
+- we keep track of three kinds of entities:
+    + non-solid: penetrable, can't be restituted
+    + solid and fixed: non-penetrable, can't be restituted
+    + solid and unfixed: non-penetrable, can be restituted
+
+    and i wonder if we should differentiate between them somehow
+- only add each contact once to the contacts struct? make the nested loop when checking intersections `self.positions[i..].iter()` &c
 - look into rapier
 - combine physics and collision...? considering how `apple-catching` deals with bouncing apples currently, this makes sense
 - `get_position_for_entity` except for physics positions/velocities/accelerations?
 - should velocity be stored in the game state or in the physics logic
+- have a field for `collided_last_frame`...? similar to `last_frame_keys`
 
 resource:
 
