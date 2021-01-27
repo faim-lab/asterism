@@ -143,7 +143,15 @@ pub struct AabbCollision<ID: Copy + Eq, V2: Vec2> {
     /// A vector of how much each entity is displaced overall.
     ///
     /// Indices _do_ run parallel with other vectors in the struct other than `contacts`.
-    displacements: Vec<V2>,
+    pub displacements: Vec<V2>,
+}
+
+pub struct ContactCollisionID<ID: Copy + Eq>(ID, ID);
+
+impl<ID: Copy + Eq> PartialEq for ContactCollisionID<ID> {
+    fn eq(&self, other: &Self) -> bool {
+        (self.0 == other.0 && self.1 == other.1) || (self.0 == other.1 && self.1 == other.0)
+    }
 }
 
 impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
@@ -179,12 +187,22 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
 
         // check contacts
         for i in 0..self.centers.len() {
-            for j in 0..self.centers.len() {
-                if i != j && self.intersects(i, j) {
-                    let displacement = if self.metadata[i].solid
-                        && self.metadata[j].solid
-                        && !self.metadata[i].fixed
-                    {
+            for j in i + 1..self.centers.len() {
+                // if i is fixed and other is unfixed, swap places
+                let temp_i = i;
+                let i = if self.metadata[i].fixed && !self.metadata[j].fixed {
+                    j
+                } else {
+                    i
+                };
+                let j = if self.metadata[temp_i].fixed && !self.metadata[j].fixed {
+                    temp_i
+                } else {
+                    j
+                };
+
+                if self.intersects(i, j) {
+                    let displacement = if self.metadata[i].solid && self.metadata[j].solid {
                         let displ = self.find_displacement(i, j);
                         let speed_ratio = self.get_speed_ratio(i, j);
                         V2::new(displ.x() * speed_ratio.x(), displ.y() * speed_ratio.y())
@@ -202,42 +220,77 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         let remove = &mut Vec::<usize>::new();
 
         // sorted by magnitude of displ.
+        // if both unfixed, need to displace both
         for (idx, contact) in self.contacts.iter().enumerate() {
             let Contact {
                 i,
-                displacement: displ,
+                j,
+                displacement: displ_i,
                 ..
             } = *contact;
 
-            let already_moved = &mut self.displacements[i];
-
-            let remaining_displ =
-                V2::new(displ.x() - already_moved.x(), displ.y() - already_moved.y());
-
-            if remaining_displ.x() == 0.0 || remaining_displ.y() == 0.0 {
-                continue;
-            }
-
-            let flipped = {
+            let already_moved_i = self.displacements[i];
+            let remaining_displ_i = V2::new(
+                displ_i.x() - already_moved_i.x(),
+                displ_i.y() - already_moved_i.y(),
+            );
+            let flipped_i = {
                 if {
-                    already_moved.x().abs() > displ.x().abs()
-                        || already_moved.y().abs() > displ.y().abs()
+                    already_moved_i.x().abs() > displ_i.x().abs()
+                        || already_moved_i.y().abs() > displ_i.y().abs()
                 } {
                     true
                 } else {
                     false
                 }
             };
-
-            if flipped {
+            if flipped_i {
                 remove.push(idx);
-                continue;
             }
 
-            if displ.x().abs() < displ.y().abs() {
-                already_moved.set_x(remaining_displ.x());
-            } else if displ.y().abs() < displ.x().abs() {
-                already_moved.set_y(remaining_displ.y());
+            if !(remaining_displ_i.x() == 0.0 || remaining_displ_i.y() == 0.0 || flipped_i) {
+                if displ_i.x().abs() < displ_i.y().abs() {
+                    self.displacements[i].set_x(remaining_displ_i.x());
+                } else if displ_i.y().abs() < displ_i.x().abs() {
+                    self.displacements[i].set_y(remaining_displ_i.y());
+                }
+            }
+
+            if !self.metadata[j].fixed {
+                let already_moved_j = self.displacements[j];
+                let displ_j = {
+                    let displ_full = self.find_displacement(j, i);
+                    let speed_ratio = self.get_speed_ratio(j, i);
+                    V2::new(
+                        displ_full.x() * speed_ratio.x(),
+                        displ_full.y() * speed_ratio.y(),
+                    )
+                };
+                let remaining_displ_j = V2::new(
+                    displ_j.x() - already_moved_j.x(),
+                    displ_j.y() - already_moved_j.y(),
+                );
+                let flipped_j = {
+                    if {
+                        already_moved_j.x().abs() > displ_j.x().abs()
+                            || already_moved_j.y().abs() > displ_j.y().abs()
+                    } {
+                        true
+                    } else {
+                        false
+                    }
+                };
+                if flipped_j && (remove.len() > 0 && remove[remove.len() - 1] != idx) {
+                    remove.push(idx);
+                }
+
+                if !(remaining_displ_j.x() == 0.0 || remaining_displ_j.y() == 0.0 || flipped_j) {
+                    if displ_j.x().abs() < displ_j.y().abs() {
+                        self.displacements[j].set_x(remaining_displ_j.x());
+                    } else if displ_j.y().abs() < displ_j.x().abs() {
+                        self.displacements[j].set_y(remaining_displ_j.y());
+                    }
+                }
             }
         }
 
@@ -410,6 +463,11 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         } else {
             None
         }
+    }
+
+    pub fn get_ids_for_contact(&self, contact: &Contact<V2>) -> ContactCollisionID<ID> {
+        let Contact { i, j, .. } = *contact;
+        ContactCollisionID(self.metadata[i].id, self.metadata[j].id)
     }
 
     fn intersects(&self, i: usize, j: usize) -> bool {

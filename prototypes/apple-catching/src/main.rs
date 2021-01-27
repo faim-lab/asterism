@@ -215,9 +215,16 @@ impl World {
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Apple(i), CollisionID::Basket) => {
+                /* (CollisionID::Basket, CollisionID::Apple(_)) => {
+                    panic!(
+                        "{:?}, {:?}",
+                        logics.collision.displacements[contact.i],
+                        logics.collision.displacements[contact.j]
+                    );
+                } */
+                (CollisionID::Basket, CollisionID::Apple(i)) => {
                     if i < self.apples.len() {
-                        if logics.collision.sides_touched(contact).y < 0.0 {
+                        if logics.collision.sides_touched(contact).y > 0.0 {
                             self.apples.remove(i);
                             logics
                                 .resources
@@ -364,14 +371,30 @@ impl World {
                 collision.metadata[contact.i].id,
                 collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Apple(i), CollisionID::Floor)
-                | (CollisionID::Apple(i), CollisionID::Apple(_)) => {
+                (CollisionID::Apple(i), CollisionID::Floor) => {
                     if collision.sides_touched(contact).y < 0.0 {
                         if self.apples[i].vel.y < 1.0 {
                             entity_state.conditions[i][2] = true;
                         } else {
                             entity_state.conditions[i][1] = true;
                             bounce.push(i);
+                        }
+                    }
+                }
+                (CollisionID::Apple(i), CollisionID::Apple(j)) => {
+                    if collision.sides_touched(contact).y < 0.0 {
+                        if self.apples[i].vel.y < 1.0 {
+                            entity_state.conditions[i][2] = true;
+                        } else {
+                            entity_state.conditions[i][1] = true;
+                            bounce.push(i);
+                        }
+                    } else if collision.sides_touched(contact).y > 0.0 {
+                        if self.apples[j].vel.y < 1.0 {
+                            entity_state.conditions[j][2] = true;
+                        } else {
+                            entity_state.conditions[j][1] = true;
+                            bounce.push(j);
                         }
                     }
                 }
