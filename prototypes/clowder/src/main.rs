@@ -38,6 +38,7 @@ enum CollisionID {
     Goal(Player),
 }
 
+#[derive(Clone, Copy)]
 struct Ball {
     pos: Vec2,
     vel: Vec2,
@@ -233,7 +234,7 @@ impl World {
                    logics.collision.metadata[contact.j].id) {
 		
                 (CollisionID::Goal(_player), CollisionID::Ball(i)) => {
-		    if logics.collision.sides_touched(collison).y > 0.0 {
+		    if logics.collision.sides_touched(idx).y > 0.0 {
 			self.balls.remove(i);
 		    }
 		    println!("goal");
@@ -281,7 +282,7 @@ impl World {
 			}
 		    }
 		    
-                    self.change_angle(player, self.balls[i]);
+                    self.change_angle(player, i);
 		},
 		    _ => {}
 		
@@ -382,14 +383,15 @@ impl World {
 
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID,Vec2>) {
-	for ball in self.balls.iter(){
+	for ball in self.balls.iter_mut(){
 	   ball.pos.x = (collision.centers[4].x - collision.half_sizes[4].x).trunc(); 
 		ball.pos.y = (collision.centers[4].y - collision.half_sizes[4].y).trunc();
 	}
 	
     }
 
-    fn change_angle(&mut self, player: Player, ball: Ball) {
+    fn change_angle(&mut self, player: Player, ball_index: usize) {
+	let ball = &mut self.balls[ball_index];
         let Vec2{x, y} = &mut ball.vel;
         let paddle_center = match player {
             Player::P1 => self.paddles.0.x + (PADDLE_WIDTH / 2) as f32
