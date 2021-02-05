@@ -11,16 +11,16 @@ use std::collections::BTreeMap;
 /// A resource logic that queues transactions, then applies them all at once when updating.
 pub struct QueuedResources<ID: Copy + Ord> {
     /// The items involved, and their values.
-    pub items: BTreeMap<ID, f32>,
+    pub items: BTreeMap<ID, f64>,
     /// Each transaction is a list of items involved in the transaction and the amount they're
     /// being changed.
     pub transactions: Vec<Vec<(ID, Transaction)>>,
     /// If the transaction was able to be completed or not. `completed[i].1` is the list of changes
     /// that could be successfully completed for the transaction.
-    pub completed: Vec<(bool, Vec<ID>)>,
+    pub completed: Vec<(Result<(), ResourceError>, Vec<ID>)>,
 }
 
-impl<ID: Copy + Ord> QueuedResources<ID> {
+impl<ID: Copy + Ord + PoolInfo> QueuedResources<ID> {
     pub fn new() -> Self {
         Self {
             items: BTreeMap::new(),
@@ -36,59 +36,79 @@ impl<ID: Copy + Ord> QueuedResources<ID> {
     pub fn update(&mut self) {
         self.completed.clear();
         'exchange: for exchange in self.transactions.iter() {
-            let mut snapshot: BTreeMap<ID, f32> = BTreeMap::new();
+            let mut snapshot = BTreeMap::new();
             for (item_type, ..) in exchange {
                 snapshot.insert(*item_type, *self.items.get(&item_type).unwrap());
             }
 
             let mut item_types = Vec::new();
             for (item_type, change) in exchange.iter() {
-                if !self.is_possible(item_type, change) {
-                    self.completed.push((false, item_types));
-                    for (item_type, val) in snapshot.iter() {
-                        *self.items.get_mut(&item_type).unwrap() = *val;
+                match self.is_possible(item_type, change) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        self.completed.push((Err(err), item_types));
+                        for (item_type, val) in snapshot.iter() {
+                            *self.items.get_mut(&item_type).unwrap() = *val;
+                        }
+                        continue 'exchange;
                     }
-                    continue 'exchange;
                 }
                 match change {
                     Transaction::Change(amt) => {
-                        *self.items.get_mut(&item_type).unwrap() += *amt as f32;
+                        *self.items.get_mut(&item_type).unwrap() += *amt as f64;
                         item_types.push(*item_type);
                     }
                 }
             }
-            self.completed.push((true, item_types));
+            self.completed.push((Ok(()), item_types));
         }
         self.transactions.clear();
     }
 
-    /// Checks if the transaction is possible or not, assuming that the value of the resource
-    /// cannot be less than zero.
-    fn is_possible(&self, item_type: &ID, transaction: &Transaction) -> bool {
-        if !self.items.contains_key(item_type) {
-            false
-        } else {
-            let value = self.items.get(item_type);
+    /// Checks if the transaction is possible or not
+    fn is_possible(&self, item_type: &ID, transaction: &Transaction) -> Result<(), ResourceError> {
+        if let Some(value) = self.items.get(item_type) {
             match transaction {
                 Transaction::Change(amt) => {
-                    if value.unwrap() + *amt as f32 >= 0.0 {
-                        true
+                    if *value + *amt > item_type.max_value() {
+                        Err(ResourceError::TooBig)
+                    } else if *value + *amt < item_type.min_value() {
+                        Err(ResourceError::TooBig)
                     } else {
-                        false
+                        Ok(())
                     }
                 }
             }
+        } else {
+            Err(ResourceError::PoolNotFound)
         }
     }
 
     /// Gets the value of the item based on its ID.
-    pub fn get_value_by_itemtype(&self, item_type: &ID) -> f32 {
-        *self.items.get(item_type).unwrap()
+    pub fn get_value_by_itemtype(&self, item_type: &ID) -> Option<f64> {
+        self.items.get(item_type).and_then(|value| Some(*value))
     }
 }
 
 /// A transaction holding the amount the value should change by.
 #[derive(Clone, Copy)]
 pub enum Transaction {
-    Change(f32),
+    Change(f64),
+}
+
+/// information for the min/max values the entities in this pool can take, inclusive (I think)
+pub trait PoolInfo {
+    fn min_value(&self) -> f64 {
+        std::f64::MIN
+    }
+    fn max_value(&self) -> f64 {
+        std::f64::MAX
+    }
+}
+
+/// errors possible when trying to complete a transaction
+pub enum ResourceError {
+    PoolNotFound,
+    TooBig,
+    TooSmall,
 }

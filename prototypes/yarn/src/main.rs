@@ -1,4 +1,7 @@
-use asterism::{linking::GraphedLinking, resources::QueuedResources, resources::Transaction};
+use asterism::{
+    linking::GraphedLinking,
+    resources::{PoolInfo, QueuedResources, ResourceError, Transaction},
+};
 use rand::prelude::*;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader, Error, ErrorKind};
@@ -7,6 +10,19 @@ use std::io::{self, prelude::*, BufReader, Error, ErrorKind};
 enum PoolID {
     Energy,
     NumSleep,
+}
+
+impl PoolInfo for PoolID {
+    fn min_value(&self) -> f64 {
+        0.0
+    }
+
+    fn max_value(&self) -> f64 {
+        match self {
+            Self::Energy => 100.0,
+            Self::NumSleep => 3.0,
+        }
+    }
 }
 
 struct World {
@@ -181,19 +197,29 @@ impl World {
 
     fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
         for (completed, item_types) in resources.completed.iter() {
-            if *completed {
-                for item_type in item_types {
-                    let value = resources.get_value_by_itemtype(item_type).min(255.0) as u8;
-                    match item_type {
-                        PoolID::NumSleep => self.numsleep = value,
-                        PoolID::Energy => self.energy = value,
+            match completed {
+                Ok(_) => {
+                    for item_type in item_types {
+                        let value = resources
+                            .get_value_by_itemtype(item_type)
+                            .unwrap()
+                            .min(item_type.max_value()) as u8;
+                        match item_type {
+                            PoolID::NumSleep => self.numsleep = value,
+                            PoolID::Energy => self.energy = value,
+                        }
                     }
                 }
-            } else {
-                let last_item_idx = item_types.len() - 1;
-                match item_types[last_item_idx] {
-                    PoolID::Energy => self.energy = 0,
-                    _ => {}
+                Err(err) => {
+                    let last_item_idx = item_types.len() - 1;
+                    match item_types[last_item_idx] {
+                        PoolID::Energy => match err {
+                            ResourceError::TooSmall => self.energy = 0,
+                            ResourceError::TooBig => self.energy = 0,
+                            _ => {}
+                        },
+                        _ => {}
+                    }
                 }
             }
         }
