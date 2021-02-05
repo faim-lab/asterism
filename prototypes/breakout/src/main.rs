@@ -26,16 +26,10 @@ enum ActionID {
 enum CollisionID {
     Paddle,
     Ball,
-    End,
-    Wall(Side),
+    EndWall,
+    TopWall,
+    SideWall,
     Block(usize, usize),
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
-enum Side {
-    Top,
-    Left,
-    Right,
 }
 
 impl Default for CollisionID {
@@ -119,7 +113,7 @@ impl Logics {
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
-                    CollisionID::Wall(Side::Left),
+                    CollisionID::SideWall,
                 );
                 // right
                 collision.add_entity_as_xywh(
@@ -130,7 +124,7 @@ impl Logics {
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
-                    CollisionID::Wall(Side::Right),
+                    CollisionID::SideWall,
                 );
                 // top
                 collision.add_entity_as_xywh(
@@ -141,7 +135,7 @@ impl Logics {
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
-                    CollisionID::Wall(Side::Top),
+                    CollisionID::TopWall,
                 );
                 // bottom
                 collision.add_entity_as_xywh(
@@ -152,7 +146,7 @@ impl Logics {
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
-                    CollisionID::End,
+                    CollisionID::EndWall,
                 );
                 collision
             },
@@ -205,14 +199,14 @@ impl World {
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Ball, CollisionID::End) => {
+                (CollisionID::Ball, CollisionID::EndWall) => {
                     println!("\ngame over");
                     self.reset();
                     // i don't know if i like this
                     logics.resources.items.clear();
                 }
                 (CollisionID::Ball, CollisionID::Paddle) => {
-                    let sides_touched = logics.collision.sides_touched(contact);
+                    let sides_touched = logics.collision.sides_touched(contact, &CollisionID::Ball);
                     self.ball_vel.y *= -1.0;
                     if sides_touched.y < 0.0 {
                         self.change_angle();
@@ -221,17 +215,14 @@ impl World {
                     }
                     self.ball_vel *= 1.1;
                 }
-                (CollisionID::Ball, CollisionID::Wall(side)) => match side {
-                    Side::Right | Side::Left => {
-                        self.ball_vel.x *= -1.0;
-                    }
-                    Side::Top => {
-                        self.ball_vel.y *= -1.0;
-                    }
-                },
+                (CollisionID::Ball, CollisionID::SideWall) => {
+                    self.ball_vel.x *= -1.0;
+                }
+                (CollisionID::Ball, CollisionID::TopWall) => self.ball_vel.y *= -1.0,
                 (CollisionID::Ball, CollisionID::Block(i, j)) => {
                     if !block_broken {
-                        let sides_touched = logics.collision.sides_touched(contact);
+                        let sides_touched =
+                            logics.collision.sides_touched(contact, &CollisionID::Ball);
                         if sides_touched.x != 0.0 {
                             self.ball_vel.x *= -1.0;
                         } else if sides_touched.y != 0.0 {
@@ -290,7 +281,7 @@ impl World {
             .min(WIDTH - PADDLE_WIDTH);
 
         if self.ball_vel.x == 0.0 && self.ball_vel.y == 0.0 {
-            let values = &control.values[0][2];
+            let values = control.get_action(ActionID::Serve).unwrap();
             if values.changed_by == 1.0 && values.value != 0.0 {
                 self.ball_vel = Vec2::new(1.0, 1.0);
             }
@@ -305,14 +296,8 @@ impl World {
     }
 
     fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
-        self.ball.x = physics.positions[0]
-            .x
-            .max(0.0)
-            .min((WIDTH - BALL_SIZE) as f32);
-        self.ball.y = physics.positions[0]
-            .y
-            .max(0.0)
-            .min((HEIGHT - BALL_SIZE) as f32);
+        self.ball.x = physics.positions[0].x;
+        self.ball.y = physics.positions[0].y;
         self.ball_vel = physics.velocities[0];
     }
 

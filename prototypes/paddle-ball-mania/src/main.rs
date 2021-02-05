@@ -220,7 +220,8 @@ impl World {
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::ScoreWall(player), CollisionID::Ball(i)) => {
+                (CollisionID::Ball(i), CollisionID::ScoreWall(player))
+                | (CollisionID::ScoreWall(player), CollisionID::Ball(i)) => {
                     self.balls[i].vel = Vec2::zero();
                     self.balls[i].pos = self.balls[i].starting_pos;
                     match player {
@@ -239,15 +240,15 @@ impl World {
                     }
                 }
 
-                (CollisionID::BounceWall, CollisionID::Ball(i)) => {
+                (CollisionID::BounceWall, CollisionID::Ball(i))
+                | (CollisionID::Ball(i), CollisionID::BounceWall) => {
                     self.balls[i].vel.y *= -1.0;
                 }
 
                 (CollisionID::Ball(i), CollisionID::Ball(j)) => {
-                    if i < j {
-                        continue;
-                    }
-                    let sides_touched = logics.collision.sides_touched(contact);
+                    let sides_touched = logics
+                        .collision
+                        .sides_touched(contact, &CollisionID::Ball(i));
                     if sides_touched.x != 0.0 {
                         // restituted left/right
                         self.balls[i].vel.x *= -1.0;
@@ -260,10 +261,23 @@ impl World {
                     }
                 }
 
-                (CollisionID::Ball(i), CollisionID::Paddle(player)) => {
+                (CollisionID::Paddle(player), CollisionID::Ball(i))
+                | (CollisionID::Ball(i), CollisionID::Paddle(player)) => {
                     if match player {
-                        Player::P1 => logics.collision.sides_touched(contact).x == 1.0,
-                        Player::P2 => logics.collision.sides_touched(contact).x == -1.0,
+                        Player::P1 => {
+                            logics
+                                .collision
+                                .sides_touched(contact, &CollisionID::Ball(i))
+                                .x
+                                == 1.0
+                        }
+                        Player::P2 => {
+                            logics
+                                .collision
+                                .sides_touched(contact, &CollisionID::Ball(i))
+                                .x
+                                == -1.0
+                        }
                     } {
                         self.balls[i].vel.x *= -1.0;
                     } else {

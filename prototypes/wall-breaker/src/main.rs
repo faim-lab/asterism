@@ -213,7 +213,7 @@ impl World {
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::ScoreWall(player), CollisionID::Ball) => {
+                (CollisionID::Ball, CollisionID::ScoreWall(player)) => {
                     self.ball_vel = Vec2::new(0.0, 0.0);
                     self.ball = Vec2::new(
                         (WIDTH / 2 - BALL_SIZE / 2) as f32,
@@ -237,38 +237,39 @@ impl World {
                     }
                 }
 
-                (CollisionID::BounceWall, CollisionID::Ball) => {
+                (CollisionID::Ball, CollisionID::BounceWall) => {
                     self.ball_vel.y *= -1.0;
                 }
 
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
+                    let sides_touched = logics.collision.sides_touched(contact, &CollisionID::Ball);
                     match player {
                         Player::P1 => {
-                            if logics.collision.sides_touched(contact).x == 1.0 {
+                            if sides_touched.x == 1.0 {
                                 self.ball_vel.x *= -1.0;
                             }
                         }
                         Player::P2 => {
-                            if logics.collision.sides_touched(contact).x == -1.0 {
+                            if sides_touched.x == -1.0 {
                                 self.ball_vel.x *= -1.0;
                             }
                         }
                     }
-                    if logics.collision.sides_touched(contact).y != 0.0 {
+                    if sides_touched.y != 0.0 {
                         self.ball_vel.y *= -1.0;
                     }
                     self.change_angle(player);
                 }
 
                 (CollisionID::Ball, CollisionID::BreakWall(i)) => {
-                    let sides = logics.collision.sides_touched(contact);
-                    if sides.x != 0.0 {
+                    let sides_touched = logics.collision.sides_touched(contact, &CollisionID::Ball);
+                    if sides_touched.x != 0.0 {
                         self.ball_vel.x *= -1.0;
                     }
-                    if sides.y != 0.0 {
+                    if sides_touched.y != 0.0 {
                         self.ball_vel.y *= -1.0;
                     }
-                    if i < self.walls.len() && sides.magnitude() > 0.0 {
+                    if i < self.walls.len() && sides_touched.magnitude() > 0.0 {
                         self.walls.remove(i);
                     }
                 }

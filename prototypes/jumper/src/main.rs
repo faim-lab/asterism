@@ -17,26 +17,21 @@ const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-enum Player {
-    P1,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum ActionID {
-    MoveLeft(Player),
-    MoveRight(Player),
-    Jump(Player),
+    MoveLeft,
+    MoveRight,
+    Jump,
 }
 
 impl Default for ActionID {
     fn default() -> Self {
-        Self::MoveLeft(Player::P1)
+        Self::MoveLeft
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum CollisionID {
-    Player(Player),
+    Player,
     TopWall,
     BottomWall,
     LeftWall,
@@ -78,9 +73,9 @@ impl Logics {
         Self {
             control: {
                 let mut control = WinitKeyboardControl::new();
-                control.add_key_map(0, VirtualKeyCode::Left, ActionID::MoveLeft(Player::P1));
-                control.add_key_map(0, VirtualKeyCode::Right, ActionID::MoveRight(Player::P1));
-                control.add_key_map(0, VirtualKeyCode::Space, ActionID::Jump(Player::P1));
+                control.add_key_map(0, VirtualKeyCode::Left, ActionID::MoveLeft);
+                control.add_key_map(0, VirtualKeyCode::Right, ActionID::MoveRight);
+                control.add_key_map(0, VirtualKeyCode::Space, ActionID::Jump);
                 control
             },
             physics: PointPhysics::new(),
@@ -209,7 +204,6 @@ fn main() -> Result<(), Error> {
             .build(&event_loop)
             .unwrap()
     };
-    let mut hidpi_factor = window.scale_factor();
 
     let mut pixels = {
         let surface = Surface::create(&window);
@@ -239,11 +233,6 @@ fn main() -> Result<(), Error> {
             if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
                 *control_flow = ControlFlow::Exit;
                 return;
-            }
-
-            // Adjust high DPI factor
-            if let Some(factor) = input.scale_factor_changed() {
-                hidpi_factor = factor;
             }
 
             // Resize the window
@@ -286,8 +275,14 @@ impl World {
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Player(_), CollisionID::MovingPlatform) => {
-                    if logics.collision.sides_touched(contact).y == -1.0 {
+                (CollisionID::Player, CollisionID::MovingPlatform)
+                | (CollisionID::MovingPlatform, CollisionID::Player) => {
+                    if logics
+                        .collision
+                        .sides_touched(contact, &CollisionID::Player)
+                        .y
+                        == -1.0
+                    {
                         self.player.x = (self.player.x as f32 + self.platform.vel.x).trunc() as u8;
                     }
                 }
@@ -418,7 +413,7 @@ impl World {
             self.player.vel,
             true,
             false,
-            CollisionID::Player(Player::P1),
+            CollisionID::Player,
         );
         collision.add_entity_as_xywh(
             self.ground.x as f32,
@@ -499,9 +494,9 @@ impl World {
         entity_state.conditions[2][1] = true;
         for contact in collision.contacts.iter() {
             match collision.metadata[contact.i].id {
-                CollisionID::Player(..) => match collision.metadata[contact.j].id {
+                CollisionID::Player => match collision.metadata[contact.j].id {
                     CollisionID::Ground | CollisionID::MovingPlatform => {
-                        if collision.sides_touched(contact).y == -1.0 {
+                        if collision.sides_touched(contact, &CollisionID::Player).y == -1.0 {
                             if self.player.vel.x == 0.0 {
                                 entity_state.conditions[1][0] = true;
                             } else {
@@ -515,7 +510,7 @@ impl World {
                 },
                 CollisionID::Enemy => match collision.metadata[contact.j].id {
                     CollisionID::Ground | CollisionID::MovingPlatform => {
-                        if collision.sides_touched(contact).y == -1.0 {
+                        if collision.sides_touched(contact, &CollisionID::Enemy).y == -1.0 {
                             entity_state.conditions[2][0] = true;
                             entity_state.conditions[2][1] = false;
                         }

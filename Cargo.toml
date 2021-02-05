@@ -15,7 +15,6 @@ members = [
     "prototypes/trick-ball",
     "prototypes/trick-paddle",
     "prototypes/wall-breaker",
-    "prototypes/pinball",
     "prototypes/paddle-ball-mania"
 ]
 

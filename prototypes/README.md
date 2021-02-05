@@ -9,11 +9,13 @@ These are some prototypes of games made with `asterism`.
     - Control and physics aren't currently implemented with Asterism.
 - `quest`, `archer_game`: Games made with WGPU graphics. These don't use Asterism (yet?).
 
+<!-- some of the text here for earlier prototypes is originally from a writeup for a demo from Summer 2020, by Cynthia Li and Julie Ye: https://pom-itb-gitlab01.campus.pomona.edu/cxla2018/asterism-demo. -->
+
 ## Paddles Variations
 - `paddles-macroquad`: Paddles rewrite with Macroquad for rendering to move away from framebuffer graphics.
 - `air_hockey`: Paddles, but flipped 180 degrees and with both horizontal and vertical movement
 - `apple-catching`: you control a basket that's catching apples that fall from the sky. Logics used: control, physics, collision, entity state, resource.
-- `breakout`: remake of Atari Breakout. Trans rights! :)
+- `breakout`: remake of Atari Breakout. Trans rights :)
 - `trick-ball`: when the ball hits a paddle, it slows down, and when it hits the top and bottom walls, it speeds up.
 - `trick-paddle`: when the ball hits a paddle, the paddle speeds up.
 - `pinball`: there are also a bunch of walls between the paddles that you can bounce off.
@@ -21,4 +23,3 @@ These are some prototypes of games made with `asterism`.
 - `paddle-ball-mania`: multiple balls are in play at all times.
 - `maze-macroquad`: rewrite of `maze-minigame` to use Macroquad + Asterism controls and physics. Logics: collision, resource, linking, physics, control.
 
-<!-- some of the text here for earlier prototypes is originally from a writeup for a demo from Summer 2020, by Cynthia Li and Julie Ye: https://pom-itb-gitlab01.campus.pomona.edu/cxla2018/asterism-demo. -->

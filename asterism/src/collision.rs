@@ -60,7 +60,9 @@ impl Vec2 for GlamVec2 {
     }
 }
 
-/// Information for each contact.
+/// Information for each contact. If the entities at the indices `i` and `j` are both unfixed or
+/// both fixed, then `i < j`. If one is unfixed and the other is fixed, `i` will be the index of
+/// the unfixed entity.
 pub struct Contact<V2: Vec2> {
     /// The index of the first contact in `centers`, `half_sizes`, `velocities`, `metadata`, and
     /// `displacements`.
@@ -146,14 +148,6 @@ pub struct AabbCollision<ID: Copy + Eq, V2: Vec2> {
     pub displacements: Vec<V2>,
 }
 
-pub struct ContactCollisionID<ID: Copy + Eq>(ID, ID);
-
-impl<ID: Copy + Eq> PartialEq for ContactCollisionID<ID> {
-    fn eq(&self, other: &Self) -> bool {
-        (self.0 == other.0 && self.1 == other.1) || (self.0 == other.1 && self.1 == other.0)
-    }
-}
-
 impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
     pub fn new() -> Self {
         Self {
@@ -178,7 +172,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
     ///    involved entity to the contact displacement, displace the correct entity the correct
     ///    "remaining" amount (which might be 0) and add that to the vec of (3).
     ///
-    /// Explanation lightly modified from a message by Prof Osborn.
+    /// Explanation of algorithm lightly modified from a message by Prof Osborn.
     pub fn update(&mut self) {
         self.contacts.clear();
         self.displacements.clear();
@@ -202,7 +196,10 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
                 };
 
                 if self.intersects(i, j) {
-                    let displacement = if self.metadata[i].solid && self.metadata[j].solid {
+                    let displacement = if self.metadata[i].solid
+                        && self.metadata[j].solid
+                        && !self.metadata[i].fixed
+                    {
                         let displ = self.find_displacement(i, j);
                         let speed_ratio = self.get_speed_ratio(i, j);
                         V2::new(displ.x() * speed_ratio.x(), displ.y() * speed_ratio.y())
@@ -398,10 +395,13 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         );
     }
 
-    /// Returns unit vector of normal of displacement for the `i` entity in the contact. I.e.,
-    /// if a contact is moved in a positive x direction after restitution _because of_ the
-    /// other entity involved in collision, `sides_touched` will return `V2::new(1.0, 0.0)`.
-    pub fn sides_touched(&self, contact: &Contact<V2>) -> V2 {
+    /// Returns unit vector of normal of displacement for the entity of the given ID in the
+    /// given contact. I.e., if a contact is moved in a positive x direction after restitution
+    /// _because of_ the other entity involved in collision, `sides_touched` will return
+    /// `V2::new(1.0, 0.0)`. Panics if the given EntityID isn't that of either entity in the
+    /// contact.
+    pub fn sides_touched(&self, contact: &Contact<V2>, id: &ID) -> V2 {
+        assert!(*id == self.metadata[contact.i].id || *id == self.metadata[contact.j].id);
         let restitution = contact.get_restitution();
         let x = match restitution.x().partial_cmp(&0.0).unwrap() {
             Ordering::Equal => 0.0,
@@ -438,6 +438,10 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
                 }
             }
         }
+        if *id == self.metadata[contact.j].id {
+            unit.set_x(unit.x() * -1.0);
+            unit.set_y(unit.y() * -1.0);
+        }
         unit
     }
 
@@ -463,11 +467,6 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         } else {
             None
         }
-    }
-
-    pub fn get_ids_for_contact(&self, contact: &Contact<V2>) -> ContactCollisionID<ID> {
-        let Contact { i, j, .. } = *contact;
-        ContactCollisionID(self.metadata[i].id, self.metadata[j].id)
     }
 
     fn intersects(&self, i: usize, j: usize) -> bool {

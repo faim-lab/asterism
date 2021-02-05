@@ -252,15 +252,17 @@ impl World {
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Portal(_, _), CollisionID::Player) => touching_portal = true,
-                (CollisionID::Item, CollisionID::Player) => {
+                (CollisionID::Portal(..), CollisionID::Player)
+                | (CollisionID::Player, CollisionID::Portal(..)) => touching_portal = true,
+                (CollisionID::Item, CollisionID::Player)
+                | (CollisionID::Player, CollisionID::Item) => {
                     // add to score and remove touched item from game state
                     logics
                         .resources
                         .transactions
                         .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
                     self.items
-                        .remove(contact.i - self.walls.len() - self.portals.len());
+                        .remove(contact.i - self.walls.len() - self.portals.len() - 1);
                 }
                 _ => {}
             }
@@ -408,7 +410,8 @@ impl World {
                 collision.metadata[contact.i].id,
                 collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Portal(to, from), CollisionID::Player) => {
+                (CollisionID::Portal(to, from), CollisionID::Player)
+                | (CollisionID::Player, CollisionID::Portal(to, from)) => {
                     if !self.just_teleported {
                         touched_portal = true;
                         linking.add_link_map(from, {

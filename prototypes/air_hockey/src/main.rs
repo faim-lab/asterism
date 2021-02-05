@@ -242,7 +242,8 @@ impl World {
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::TopWall(player), CollisionID::Ball) => {
+                (CollisionID::TopWall(player), CollisionID::Ball)
+                | (CollisionID::Ball, CollisionID::TopWall(player)) => {
                     self.ball_vel = Vec2::new(0.0, 0.0);
                     self.ball = (WIDTH / 2 - BALL_SIZE / 2, PADDLE_OFF_Y + BALL_SIZE * 3);
                     self.paddles = (
@@ -267,7 +268,8 @@ impl World {
                         }
                     }
                 }
-                (CollisionID::BottomWall(player), CollisionID::Ball) => {
+                (CollisionID::BottomWall(player), CollisionID::Ball)
+                | (CollisionID::Ball, CollisionID::BottomWall(player)) => {
                     self.ball_vel = Vec2::new(0.0, 0.0);
                     self.ball = (
                         WIDTH / 2 - BALL_SIZE / 2,
@@ -297,16 +299,19 @@ impl World {
                         }
                     }
                 }
-                (CollisionID::LeftWall, CollisionID::Ball) => {
+                (CollisionID::LeftWall, CollisionID::Ball)
+                | (CollisionID::Ball, CollisionID::LeftWall) => {
                     self.ball_vel.x *= -1.0 //good canidtate for being combined
                 }
-                (CollisionID::RightWall, CollisionID::Ball) => self.ball_vel.x *= -1.0,
+                (CollisionID::RightWall, CollisionID::Ball)
+                | (CollisionID::Ball, CollisionID::RightWall) => self.ball_vel.x *= -1.0,
 
-                (CollisionID::Ball, CollisionID::Paddle(player)) => {
+                (CollisionID::Ball, CollisionID::Paddle(player))
+                | (CollisionID::Paddle(player), CollisionID::Ball) => {
                     let Vec2 {
                         x: touch_x,
                         y: touch_y,
-                    } = logics.collision.sides_touched(contact);
+                    } = logics.collision.sides_touched(contact, &CollisionID::Ball);
                     if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
                         if touch_y == 1.0 {
                             self.ball_vel = Vec2::new(1.0, 1.0);
