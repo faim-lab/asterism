@@ -7,6 +7,7 @@
 //! We're currently trying to consider analog as well as digital inputs, but we haven't implemented
 //! controller support, so some of these fields don't really make sense yet.
 
+#[cfg(feature = "asterism-bevy")]
 use bevy_input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
 use macroquad::prelude::{is_key_down, KeyCode as MqKeyCode};
 use winit::event::VirtualKeyCode;
@@ -131,6 +132,7 @@ pub struct WinitKeyboardControl<ID: Copy + Eq + Ord> {
 
 /// Implementation of keyboard control for Bevy's input handler. See [WinitKeyboardControl] for
 /// documentation of fields.
+#[cfg(feature = "asterism-bevy")]
 pub struct BevyKeyboardControl<ID: Copy + Eq + Ord> {
     pub mapping: Vec<Vec<Action<ID, BevyKeyCode>>>,
     pub values: Vec<Vec<Values>>,
@@ -227,6 +229,7 @@ where
     }
 }
 
+#[cfg(feature = "asterism-bevy")]
 impl<ID> KeyboardControl<ID, BevyKeyCode, BevyInput<BevyKeyCode>> for BevyKeyboardControl<ID>
 where
     ID: Copy + Eq + Ord,
