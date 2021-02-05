@@ -17,6 +17,7 @@ const PADDLE_OFF_Y: u8 = 24;
 const PADDLE_HEIGHT: u8 = 16;
 const PADDLE_WIDTH: u8 = 24;
 const BALL_SIZE: u8 = 8;
+const BALL_NUM: u8 = 3; 
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum ActionID {
@@ -164,6 +165,10 @@ fn main() -> Result<(), Error> {
     };
     let mut world = World::new();
     let mut logics = Logics::new();
+
+    for _i in 0..BALL_NUM {
+		world.balls.push(Ball::new());
+    }
 
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
