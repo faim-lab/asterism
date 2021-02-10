@@ -3,7 +3,7 @@ use asterism::{
     control::{KeyboardControl, MacroQuadKeyboardControl},
     entity_state::FlatEntityState,
     physics::PointPhysics,
-    resources::{QueuedResources, Transaction},
+    resources::{PoolInfo, QueuedResources, Transaction},
 };
 use macroquad::prelude::*;
 use std::io::{self, Write};
@@ -46,6 +46,20 @@ enum StateID {
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum PoolID {
     Points,
+}
+
+impl PoolInfo for PoolID {
+    fn max_value(&self) -> f64 {
+        match self {
+            Self::Points => std::u32::MAX as f64,
+        }
+    }
+
+    fn min_value(&self) -> f64 {
+        match self {
+            Self::Points => std::u32::MIN as f64,
+        }
+    }
 }
 
 struct Apple {
@@ -216,19 +230,18 @@ impl World {
                 logics.collision.metadata[contact.j].id,
             ) {
                 (CollisionID::Apple(i), CollisionID::Basket) => {
-                    if i < self.apples.len() {
-                        if logics
+                    if i < self.apples.len()
+                        && logics
                             .collision
                             .sides_touched(contact, &CollisionID::Apple(i))
                             .y
                             < 0.0
-                        {
-                            self.apples.remove(i);
-                            logics
-                                .resources
-                                .transactions
-                                .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
-                        }
+                    {
+                        self.apples.remove(i);
+                        logics
+                            .resources
+                            .transactions
+                            .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
                     }
                 }
                 (CollisionID::Apple(i), CollisionID::Wall) => {
@@ -244,16 +257,19 @@ impl World {
         logics.resources.update();
         self.unproject_resources(&logics.resources);
 
-        for (completed, item_types) in logics.resources.completed.iter() {
-            if *completed {
-                for item_type in item_types {
-                    match item_type {
-                        PoolID::Points => {
-                            print!("current score: {}\r", self.score);
-                            io::stdout().flush().unwrap();
+        for completed in logics.resources.completed.iter() {
+            match completed {
+                Ok(item_types) => {
+                    for item_type in item_types {
+                        match item_type {
+                            PoolID::Points => {
+                                print!("current score: {}\r", self.score);
+                                io::stdout().flush().unwrap();
+                            }
                         }
                     }
                 }
+                Err(_) => {}
             }
         }
 
@@ -281,7 +297,7 @@ impl World {
         physics.add_physics_entity(
             self.basket,
             Vec2::new(self.basket_vel.x, 0.0),
-            Vec2::new(0.0, 0.04),
+            Vec2::new(0.0, 0.0),
         );
     }
 
@@ -315,7 +331,7 @@ impl World {
             BASKET_HEIGHT as f32,
             self.basket_vel,
             true,
-            false,
+            true,
             CollisionID::Basket,
         );
 
@@ -334,9 +350,6 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        self.basket = collision
-            .get_xy_pos_for_entity(CollisionID::Basket)
-            .unwrap();
         for (i, apple) in self.apples.iter_mut().enumerate() {
             apple.pos = collision
                 .get_xy_pos_for_entity(CollisionID::Apple(i))
@@ -427,14 +440,17 @@ impl World {
     }
 
     fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
-        for (completed, item_types) in resources.completed.iter() {
-            if *completed {
-                for item_type in item_types {
-                    let value = resources.get_value_by_itemtype(item_type);
-                    match item_type {
-                        PoolID::Points => self.score = value as u32,
+        for completed in resources.completed.iter() {
+            match completed {
+                Ok(item_types) => {
+                    for item_type in item_types {
+                        let value = resources.get_value_by_itemtype(item_type).unwrap();
+                        match item_type {
+                            PoolID::Points => self.score = value as u32,
+                        }
                     }
                 }
+                Err(_) => {}
             }
         }
     }

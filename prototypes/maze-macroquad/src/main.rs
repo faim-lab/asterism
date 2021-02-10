@@ -2,7 +2,7 @@ use asterism::{
     collision::AabbCollision,
     control::{KeyboardControl, MacroQuadKeyboardControl},
     linking::GraphedLinking,
-    resources::{QueuedResources, Transaction},
+    resources::{PoolInfo, QueuedResources, Transaction},
 };
 use macroquad::prelude::*;
 
@@ -23,6 +23,20 @@ enum CollisionID {
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum PoolID {
     Points,
+}
+
+impl PoolInfo for PoolID {
+    fn max_value(&self) -> f64 {
+        match self {
+            Self::Points => std::u8::MAX as f64,
+        }
+    }
+
+    fn min_value(&self) -> f64 {
+        match self {
+            Self::Points => std::u8::MIN as f64,
+        }
+    }
 }
 
 impl Default for CollisionID {
@@ -280,15 +294,18 @@ impl World {
         logics.resources.update();
         self.unproject_resources(&logics.resources);
 
-        for (completed, item_types) in logics.resources.completed.iter() {
-            if *completed {
-                for item_type in item_types {
-                    match item_type {
-                        PoolID::Points => {
-                            println!("You scored! Current points: {}", self.score);
+        for completed in logics.resources.completed.iter() {
+            match completed {
+                Ok(item_types) => {
+                    for item_type in item_types {
+                        match item_type {
+                            PoolID::Points => {
+                                println!("You scored! Current points: {}", self.score);
+                            }
                         }
                     }
                 }
+                Err(_) => {}
             }
         }
         Ok(true)
@@ -460,14 +477,17 @@ impl World {
     }
 
     fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
-        for (completed, item_types) in resources.completed.iter() {
-            if *completed {
-                for item_type in item_types {
-                    let value = resources.get_value_by_itemtype(item_type).min(255.0) as u8;
-                    match item_type {
-                        PoolID::Points => self.score = value,
+        for completed in resources.completed.iter() {
+            match completed {
+                Ok(item_types) => {
+                    for item_type in item_types {
+                        let value = resources.get_value_by_itemtype(item_type).unwrap() as u8;
+                        match item_type {
+                            PoolID::Points => self.score = value,
+                        }
                     }
                 }
+                Err(_) => {}
             }
         }
     }

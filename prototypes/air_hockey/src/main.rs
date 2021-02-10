@@ -2,8 +2,10 @@
 #![forbid(unsafe_code)]
 
 use asterism::{
-    collision::AabbCollision, control::KeyboardControl, control::WinitKeyboardControl,
-    physics::PointPhysics, resources::QueuedResources, resources::Transaction,
+    collision::AabbCollision,
+    control::{KeyboardControl, WinitKeyboardControl},
+    physics::PointPhysics,
+    resources::{PoolInfo, QueuedResources, Transaction},
 };
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use ultraviolet::Vec2;
@@ -53,6 +55,20 @@ impl Default for CollisionID {
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum PoolID {
     Points(Player),
+}
+
+impl PoolInfo for PoolID {
+    fn max_value(&self) -> f64 {
+        match self {
+            Self::Points(_) => std::u8::MAX as f64,
+        }
+    }
+
+    fn min_value(&self) -> f64 {
+        match self {
+            Self::Points(_) => std::u8::MIN as f64,
+        }
+    }
 }
 
 struct Logics {
@@ -335,19 +351,22 @@ impl World {
         logics.resources.update();
         self.unproject_resources(&logics.resources);
 
-        for (completed, item_types) in logics.resources.completed.iter() {
-            if *completed {
-                for item_type in item_types {
-                    match item_type {
-                        PoolID::Points(player) => {
-                            match player {
-                                Player::P1 => print!("p1"),
-                                Player::P2 => print!("p2"),
+        for completed in logics.resources.completed.iter() {
+            match completed {
+                Ok(item_types) => {
+                    for item_type in item_types {
+                        match item_type {
+                            PoolID::Points(player) => {
+                                match player {
+                                    Player::P1 => print!("p1"),
+                                    Player::P2 => print!("p2"),
+                                }
+                                println!(" scores! p1: {}, p2: {}", self.score.0, self.score.1);
                             }
-                            println!(" scores! p1: {}, p2: {}", self.score.0, self.score.1);
                         }
                     }
                 }
+                Err(_) => {}
             }
         }
     }
@@ -492,17 +511,20 @@ impl World {
     }
 
     fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
-        for (completed, item_types) in resources.completed.iter() {
-            if *completed {
-                for item_type in item_types {
-                    let value = resources.get_value_by_itemtype(item_type).min(255.0) as u8;
-                    match item_type {
-                        PoolID::Points(player) => match player {
-                            Player::P1 => self.score.0 = value,
-                            Player::P2 => self.score.1 = value,
-                        },
+        for completed in resources.completed.iter() {
+            match completed {
+                Ok(item_types) => {
+                    for item_type in item_types {
+                        let value = resources.get_value_by_itemtype(item_type).unwrap() as u8;
+                        match item_type {
+                            PoolID::Points(player) => match player {
+                                Player::P1 => self.score.0 = value,
+                                Player::P2 => self.score.1 = value,
+                            },
+                        }
                     }
                 }
+                Err(_) => {}
             }
         }
     }

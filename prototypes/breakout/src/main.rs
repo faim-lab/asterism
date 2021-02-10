@@ -1,6 +1,9 @@
 use asterism::{
-    collision::AabbCollision, control::KeyboardControl, control::MacroQuadKeyboardControl,
-    physics::PointPhysics, resources::QueuedResources, resources::Transaction,
+    collision::AabbCollision,
+    control::KeyboardControl,
+    control::MacroQuadKeyboardControl,
+    physics::PointPhysics,
+    resources::{PoolInfo, QueuedResources, Transaction},
 };
 use macroquad::prelude::*;
 use std::io::{self, Write};
@@ -41,6 +44,20 @@ impl Default for CollisionID {
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum PoolID {
     Points,
+}
+
+impl PoolInfo for PoolID {
+    fn max_value(&self) -> f64 {
+        match self {
+            Self::Points => std::u8::MAX as f64,
+        }
+    }
+
+    fn min_value(&self) -> f64 {
+        match self {
+            Self::Points => std::u8::MIN as f64,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -244,20 +261,23 @@ impl World {
         logics.resources.update();
         self.unproject_resources(&logics.resources);
 
-        for (completed, item_types) in logics.resources.completed.iter() {
-            if *completed {
-                for item_type in item_types {
-                    match item_type {
-                        PoolID::Points => {
-                            print!("current score: {}\r", self.score);
-                            io::stdout().flush().unwrap();
-                            if self.score >= 40 {
-                                println!("\nyou win!");
-                                self.reset();
+        for completed in logics.resources.completed.iter() {
+            match completed {
+                Ok(item_types) => {
+                    for item_type in item_types {
+                        match item_type {
+                            PoolID::Points => {
+                                print!("current score: {}\r", self.score);
+                                io::stdout().flush().unwrap();
+                                if self.score >= 40 {
+                                    println!("\nyou win!");
+                                    self.reset();
+                                }
                             }
                         }
                     }
                 }
+                Err(_) => {}
             }
         }
 
@@ -377,14 +397,17 @@ impl World {
     }
 
     fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
-        for (completed, item_types) in resources.completed.iter() {
-            if *completed {
-                for item_type in item_types {
-                    let value = resources.get_value_by_itemtype(item_type) as u8;
-                    match item_type {
-                        PoolID::Points => self.score = value,
+        for completed in resources.completed.iter() {
+            match completed {
+                Ok(item_types) => {
+                    for item_type in item_types.iter() {
+                        let value = resources.get_value_by_itemtype(item_type).unwrap() as u8;
+                        match item_type {
+                            PoolID::Points => self.score = value,
+                        }
                     }
                 }
+                Err(_) => {}
             }
         }
     }
