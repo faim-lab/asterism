@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 /// A resource logic that queues transactions, then applies them all at once when updating.
-pub struct QueuedResources<ID: Copy + Ord> {
+pub struct QueuedResources<ID: PoolInfo> {
     /// The items involved, and their values.
     pub items: BTreeMap<ID, f64>,
     /// Each transaction is a list of items involved in the transaction and the amount they're
@@ -17,10 +17,10 @@ pub struct QueuedResources<ID: Copy + Ord> {
     pub transactions: Vec<Vec<(ID, Transaction)>>,
     /// If the transaction was able to be completed or not. `completed[i].1` is the list of changes
     /// that could be successfully completed for the transaction.
-    pub completed: Vec<(Result<(), ResourceError>, Vec<ID>)>,
+    pub completed: Vec<Result<Vec<ID>, ResourceError<ID>>>,
 }
 
-impl<ID: Copy + Ord + PoolInfo> QueuedResources<ID> {
+impl<ID: PoolInfo> QueuedResources<ID> {
     pub fn new() -> Self {
         Self {
             items: BTreeMap::new(),
@@ -46,7 +46,7 @@ impl<ID: Copy + Ord + PoolInfo> QueuedResources<ID> {
                 match self.is_possible(item_type, change) {
                     Ok(_) => {}
                     Err(err) => {
-                        self.completed.push((Err(err), item_types));
+                        self.completed.push(Err(err));
                         for (item_type, val) in snapshot.iter() {
                             *self.items.get_mut(&item_type).unwrap() = *val;
                         }
@@ -60,27 +60,31 @@ impl<ID: Copy + Ord + PoolInfo> QueuedResources<ID> {
                     }
                 }
             }
-            self.completed.push((Ok(()), item_types));
+            self.completed.push(Ok(item_types));
         }
         self.transactions.clear();
     }
 
     /// Checks if the transaction is possible or not
-    fn is_possible(&self, item_type: &ID, transaction: &Transaction) -> Result<(), ResourceError> {
+    fn is_possible(
+        &self,
+        item_type: &ID,
+        transaction: &Transaction,
+    ) -> Result<(), ResourceError<ID>> {
         if let Some(value) = self.items.get(item_type) {
             match transaction {
                 Transaction::Change(amt) => {
                     if *value + *amt > item_type.max_value() {
-                        Err(ResourceError::TooBig)
+                        Err(ResourceError::TooBig(*item_type))
                     } else if *value + *amt < item_type.min_value() {
-                        Err(ResourceError::TooBig)
+                        Err(ResourceError::TooSmall(*item_type))
                     } else {
                         Ok(())
                     }
                 }
             }
         } else {
-            Err(ResourceError::PoolNotFound)
+            Err(ResourceError::PoolNotFound(*item_type))
         }
     }
 
@@ -97,7 +101,7 @@ pub enum Transaction {
 }
 
 /// information for the min/max values the entities in this pool can take, inclusive (I think)
-pub trait PoolInfo {
+pub trait PoolInfo: Copy + Ord {
     fn min_value(&self) -> f64 {
         std::f64::MIN
     }
@@ -107,8 +111,9 @@ pub trait PoolInfo {
 }
 
 /// errors possible when trying to complete a transaction
-pub enum ResourceError {
-    PoolNotFound,
-    TooBig,
-    TooSmall,
+#[derive(Debug)]
+pub enum ResourceError<ID: PoolInfo> {
+    PoolNotFound(ID),
+    TooBig(ID),
+    TooSmall(ID),
 }
