@@ -189,9 +189,7 @@ fn main() -> Result<(), Error> {
     let mut logics = Logics::new();
 
     for _i in 0..BALL_NUM {
-        world
-            .balls
-            .push(Ball::new(Vec2::new((WIDTH / 2) as f32, 0.0)));
+        world.balls.push(Ball::new(Vec2::new(5.0, 7.0)));
     }
 
     event_loop.run(move |event, _, control_flow| {
@@ -416,7 +414,7 @@ impl World {
                 BALL_SIZE as f32,
                 ball.vel,
                 true,
-                true,
+                false,
                 CollisionID::Ball(i),
             );
         }
