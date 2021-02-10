@@ -15,8 +15,8 @@ pub struct QueuedResources<ID: PoolInfo> {
     /// Each transaction is a list of items involved in the transaction and the amount they're
     /// being changed.
     pub transactions: Vec<Vec<(ID, Transaction)>>,
-    /// If the transaction was able to be completed or not. `completed[i].1` is the list of changes
-    /// that could be successfully completed for the transaction.
+    /// A Vec of all transactions and if they were able to be completed or not. If yes, supply
+    /// a Vec of the IDs of successful transactions; if no, supply reason, see [ResourceError]
     pub completed: Vec<Result<Vec<ID>, ResourceError<ID>>>,
 }
 
@@ -110,7 +110,8 @@ pub trait PoolInfo: Copy + Ord {
     }
 }
 
-/// errors possible when trying to complete a transaction
+/// errors possible when trying to complete a transaction. The ID is that of the pool that caused
+/// the error.
 #[derive(Debug)]
 pub enum ResourceError<ID: PoolInfo> {
     PoolNotFound(ID),

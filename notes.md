@@ -14,16 +14,11 @@ collision/physics:
     + solid and unfixed: non-penetrable, can be restituted
 
     and i wonder if we should differentiate between them somehow
-- only add each contact once to the contacts struct? make the nested loop when checking intersections `self.positions[i..].iter()` &c
 - look into rapier
 - combine physics and collision...? considering how `apple-catching` deals with bouncing apples currently, this makes sense
 - `get_position_for_entity` except for physics positions/velocities/accelerations?
 - should velocity be stored in the game state or in the physics logic
-- have a field for `collided_last_frame`...? similar to `last_frame_keys`
-
-resource:
-
-- consider some way of setting the min and max values of a resource
+- have a field for `collided_last_frame`...? similar to `last_frame_keys`, or should that be in the game state
 
 entity state:
 
@@ -53,3 +48,5 @@ control:
 - [x] bump up the `macroquad`/`glam` version since they made `Vec2`s nicer
     - set the dependency to a git hash instead of a crates.io version
 - [x] use `where` keyword for types
+- [x] only add each contact once to the contacts struct? make the nested loop when checking intersections `self.positions[i..].iter()` &c
+- [x] consider some way of setting the min and max values of a resource
