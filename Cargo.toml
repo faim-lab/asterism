@@ -3,8 +3,6 @@
 members = [
     "prototypes/archer_game",
     "prototypes/jumper",
-    # "prototypes/maze-minigame",
-    # "prototypes/paddles",
     "prototypes/quest",
     "prototypes/yarn",
     "prototypes/paddles-macroquad",
@@ -15,6 +13,9 @@ members = [
     "prototypes/trick-ball",
     "prototypes/trick-paddle",
     "prototypes/wall-breaker",
-    "prototypes/paddle-ball-mania"
+    "prototypes/paddle-ball-mania",
+    "prototypes/all-paddles-variants"
+    # "prototypes/maze-minigame",
+    # "prototypes/paddles",
 ]
 
