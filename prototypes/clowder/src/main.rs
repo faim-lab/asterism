@@ -391,10 +391,10 @@ impl World {
         collision: &mut AabbCollision<CollisionID, Vec2>,
         control: &WinitKeyboardControl<ActionID>,
     ) {
-        collision.centers.resize_with(4, Default::default);
-        collision.half_sizes.resize_with(4, Default::default);
-        collision.velocities.resize_with(4, Default::default);
-        collision.metadata.resize_with(4, Default::default);
+        collision.centers.resize_with(6, Default::default);
+        collision.half_sizes.resize_with(6, Default::default);
+        collision.velocities.resize_with(6, Default::default);
+        collision.metadata.resize_with(6, Default::default);
 
         collision.add_entity_as_xywh(
             self.paddles.0.x as f32,
@@ -426,8 +426,8 @@ impl World {
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
         for (i, ball) in self.balls.iter_mut().enumerate() {
-            ball.pos.x = (collision.centers[i + 5].x - collision.half_sizes[i + 5].x).trunc();
-            ball.pos.y = (collision.centers[i + 5].y - collision.half_sizes[i + 5].y).trunc();
+            ball.pos.x = (collision.centers[i + 7].x - collision.half_sizes[i + 7].x).trunc();
+            ball.pos.y = (collision.centers[i + 7].y - collision.half_sizes[i + 7].y).trunc();
         }
     }
 
