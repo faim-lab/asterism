@@ -1,3 +1,4 @@
+/// wall-breaker: There are multiple walls distributed through the screen. When the ball hits a inner wall, the wall breaks and the ball bounces off
 use asterism::{
     collision::{AabbCollision, Vec2 as AstVec2},
     control::{KeyboardControl, MacroQuadKeyboardControl},
@@ -32,6 +33,7 @@ enum CollisionID {
     Paddle(Player),
     Ball,
     BounceWall,
+    BreakWall(usize),
     ScoreWall(Player),
 }
 
@@ -152,11 +154,12 @@ struct World {
     ball_vel: Vec2,
     serving: Option<Player>,
     score: (u8, u8),
+    walls: Vec<(Vec2, Vec2)>, // (position, size)
 }
 
 fn window_conf() -> Conf {
     Conf {
-        window_title: "paddles".to_owned(),
+        window_title: "trick paddle".to_owned(),
         window_width: WIDTH as i32,
         window_height: HEIGHT as i32,
         fullscreen: false,
@@ -182,6 +185,7 @@ async fn main() {
 
 impl World {
     fn new() -> Self {
+        let wall_size = Vec2::new(8.0, 30.0);
         Self {
             paddles: (
                 HEIGHT / 2 - PADDLE_HEIGHT / 2,
@@ -192,8 +196,12 @@ impl World {
                 (HEIGHT / 2 - BALL_SIZE / 2) as f32,
             ),
             ball_vel: Vec2::new(0.0, 0.0),
-            serving: Some(Player::P1),
+            serving: Some(Player::P2),
             score: (0, 0),
+            walls: vec![
+                (Vec2::new(86.0, 62.0), wall_size),
+                (Vec2::new(130.0, 160.0), wall_size),
+            ],
         }
     }
 
@@ -249,17 +257,34 @@ impl World {
 
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
                     let sides_touched = logics.collision.sides_touched(contact, &CollisionID::Ball);
-                    if match player {
-                        Player::P1 => sides_touched.x == 1.0,
-                        Player::P2 => sides_touched.x == -1.0,
-                    } {
-                        self.ball_vel.x *= -1.0;
-                    } else {
+                    match player {
+                        Player::P1 => {
+                            if sides_touched.x == 1.0 {
+                                self.ball_vel.x *= -1.0;
+                            }
+                        }
+                        Player::P2 => {
+                            if sides_touched.x == -1.0 {
+                                self.ball_vel.x *= -1.0;
+                            }
+                        }
+                    }
+                    if sides_touched.y != 0.0 {
                         self.ball_vel.y *= -1.0;
                     }
                     self.change_angle(player);
-                    if self.ball_vel.magnitude() < 5.0 {
-                        self.ball_vel *= 1.1;
+                }
+
+                (CollisionID::Ball, CollisionID::BreakWall(i)) => {
+                    let sides_touched = logics.collision.sides_touched(contact, &CollisionID::Ball);
+                    if sides_touched.x != 0.0 {
+                        self.ball_vel.x *= -1.0;
+                    }
+                    if sides_touched.y != 0.0 {
+                        self.ball_vel.y *= -1.0;
+                    }
+                    if i < self.walls.len() && sides_touched.magnitude() > 0.0 {
+                        self.walls.remove(i);
                     }
                 }
 
@@ -314,23 +339,23 @@ impl World {
 
     fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
         self.paddles.0 = ((self.paddles.0 as i16
-            - control
-                .get_action_in_set(0, ActionID::MoveUp(Player::P1))
-                .unwrap()
-                .value as i16
             + control
                 .get_action_in_set(0, ActionID::MoveDown(Player::P1))
+                .unwrap()
+                .value as i16
+            - control
+                .get_action_in_set(0, ActionID::MoveUp(Player::P1))
                 .unwrap()
                 .value as i16)
             .max(0) as u8)
             .min(255 - PADDLE_HEIGHT);
         self.paddles.1 = ((self.paddles.1 as i16
-            - control
-                .get_action_in_set(1, ActionID::MoveUp(Player::P2))
-                .unwrap()
-                .value as i16
             + control
                 .get_action_in_set(1, ActionID::MoveDown(Player::P2))
+                .unwrap()
+                .value as i16
+            - control
+                .get_action_in_set(1, ActionID::MoveUp(Player::P2))
                 .unwrap()
                 .value as i16)
             .max(0) as u8)
@@ -422,6 +447,19 @@ impl World {
             true,
             CollisionID::Paddle(Player::P2),
         );
+
+        for (i, (pos, size)) in self.walls.iter().enumerate() {
+            let half_size = *size / 2.0;
+            let center = *pos + half_size;
+            collision.add_collision_entity(
+                center,
+                half_size,
+                Vec2::zero(),
+                true,
+                true,
+                CollisionID::BreakWall(i),
+            );
+        }
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
@@ -497,5 +535,8 @@ impl World {
             BALL_SIZE as f32,
             Color::new(1., 0.75, 0., 1.),
         );
+        for (pos, size) in self.walls.iter() {
+            draw_rectangle(pos.x, pos.y, size.x, size.y, GRAY);
+        }
     }
 }

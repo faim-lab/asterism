@@ -1,5 +1,5 @@
 [package]
-name = "paddles-macroquad"
+name = "apple-catching"
 version = "0.1.0"
 authors = ["cynthia <cxla2018@mymail.pomona.edu>"]
 edition = "2018"

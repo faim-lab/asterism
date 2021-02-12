@@ -1,3 +1,4 @@
+/// trick paddle: Paddle speeds up after colliding with ball
 use asterism::{
     collision::{AabbCollision, Vec2 as AstVec2},
     control::{KeyboardControl, MacroQuadKeyboardControl},
@@ -152,11 +153,12 @@ struct World {
     ball_vel: Vec2,
     serving: Option<Player>,
     score: (u8, u8),
+    paddle_vel: (f32, f32),
 }
 
 fn window_conf() -> Conf {
     Conf {
-        window_title: "paddles".to_owned(),
+        window_title: "trick paddle".to_owned(),
         window_width: WIDTH as i32,
         window_height: HEIGHT as i32,
         fullscreen: false,
@@ -194,6 +196,7 @@ impl World {
             ball_vel: Vec2::new(0.0, 0.0),
             serving: Some(Player::P1),
             score: (0, 0),
+            paddle_vel: (1.0, 1.0),
         }
     }
 
@@ -249,18 +252,28 @@ impl World {
 
                 (CollisionID::Ball, CollisionID::Paddle(player)) => {
                     let sides_touched = logics.collision.sides_touched(contact, &CollisionID::Ball);
-                    if match player {
-                        Player::P1 => sides_touched.x == 1.0,
-                        Player::P2 => sides_touched.x == -1.0,
-                    } {
-                        self.ball_vel.x *= -1.0;
-                    } else {
+                    match player {
+                        Player::P1 => {
+                            if sides_touched.x == 1.0 {
+                                self.ball_vel.x *= -1.0;
+                                if self.paddle_vel.0 < 4.0 {
+                                    self.paddle_vel.0 *= 1.2;
+                                }
+                            }
+                        }
+                        Player::P2 => {
+                            if sides_touched.x == -1.0 {
+                                self.ball_vel.x *= -1.0;
+                                if self.paddle_vel.1 < 4.0 {
+                                    self.paddle_vel.1 *= 1.2;
+                                }
+                            }
+                        }
+                    }
+                    if sides_touched.y != 0.0 {
                         self.ball_vel.y *= -1.0;
                     }
                     self.change_angle(player);
-                    if self.ball_vel.magnitude() < 5.0 {
-                        self.ball_vel *= 1.1;
-                    }
                 }
 
                 _ => {}
@@ -314,25 +327,27 @@ impl World {
 
     fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
         self.paddles.0 = ((self.paddles.0 as i16
-            - control
-                .get_action_in_set(0, ActionID::MoveUp(Player::P1))
-                .unwrap()
-                .value as i16
-            + control
+            + ((control
                 .get_action_in_set(0, ActionID::MoveDown(Player::P1))
                 .unwrap()
-                .value as i16)
+                .value
+                - control
+                    .get_action_in_set(0, ActionID::MoveUp(Player::P1))
+                    .unwrap()
+                    .value)
+                * self.paddle_vel.0) as i16)
             .max(0) as u8)
             .min(255 - PADDLE_HEIGHT);
         self.paddles.1 = ((self.paddles.1 as i16
-            - control
-                .get_action_in_set(1, ActionID::MoveUp(Player::P2))
-                .unwrap()
-                .value as i16
-            + control
+            + ((control
                 .get_action_in_set(1, ActionID::MoveDown(Player::P2))
                 .unwrap()
-                .value as i16)
+                .value
+                - control
+                    .get_action_in_set(1, ActionID::MoveUp(Player::P2))
+                    .unwrap()
+                    .value)
+                * self.paddle_vel.1) as i16)
             .max(0) as u8)
             .min(255 - PADDLE_HEIGHT);
 

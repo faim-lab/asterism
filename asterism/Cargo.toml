@@ -9,7 +9,12 @@ edition = "2018"
 ultraviolet = "0.4.6"
 winit = "0.22.0"
 winit_input_helper = "0.7.0"
-bevy_input = "0.2.0"
-macroquad = "0.3.0-alpha.9"
-glam = "0.9.4"
+macroquad = { git = "https://github.com/not-fl3/macroquad", rev = "b3fc6aa8f9a66e32a401b00864af8c99fbfc26e2" }
+glam = "0.10"
 
+# bevy takes a long time to build and we're not actively using it currently, so making this a feature
+bevy_input = { version = "0.4.0", optional = true }
+
+[features]
+default = []
+asterism-bevy = ["bevy_input"]

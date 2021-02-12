@@ -2,7 +2,8 @@
 #![forbid(unsafe_code)]
 
 use asterism::{
-    AabbCollision, FlatEntityState, KeyboardControl, PointPhysics, WinitKeyboardControl,
+    collision::AabbCollision, control::KeyboardControl, control::WinitKeyboardControl,
+    entity_state::FlatEntityState, physics::PointPhysics,
 };
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use ultraviolet::Vec2;
@@ -16,26 +17,21 @@ const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-enum Player {
-    P1,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum ActionID {
-    MoveLeft(Player),
-    MoveRight(Player),
-    Jump(Player),
+    MoveLeft,
+    MoveRight,
+    Jump,
 }
 
 impl Default for ActionID {
     fn default() -> Self {
-        Self::MoveLeft(Player::P1)
+        Self::MoveLeft
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum CollisionID {
-    Player(Player),
+    Player,
     TopWall,
     BottomWall,
     LeftWall,
@@ -77,9 +73,9 @@ impl Logics {
         Self {
             control: {
                 let mut control = WinitKeyboardControl::new();
-                control.add_key_map(0, VirtualKeyCode::Left, ActionID::MoveLeft(Player::P1));
-                control.add_key_map(0, VirtualKeyCode::Right, ActionID::MoveRight(Player::P1));
-                control.add_key_map(0, VirtualKeyCode::Space, ActionID::Jump(Player::P1));
+                control.add_key_map(0, VirtualKeyCode::Left, ActionID::MoveLeft);
+                control.add_key_map(0, VirtualKeyCode::Right, ActionID::MoveRight);
+                control.add_key_map(0, VirtualKeyCode::Space, ActionID::Jump);
                 control
             },
             physics: PointPhysics::new(),
@@ -185,10 +181,10 @@ struct Entity {
 impl Entity {
     fn new(x: u8, y: u8, w: u8, h: u8) -> Self {
         Self {
-            x: x,
-            y: y,
-            w: w,
-            h: h,
+            x,
+            y,
+            w,
+            h,
             vel: Vec2::new(0.0, 0.0),
             err: Vec2::new(0.0, 0.0),
             acc: Vec2::new(0.0, 0.03),
@@ -208,7 +204,6 @@ fn main() -> Result<(), Error> {
             .build(&event_loop)
             .unwrap()
     };
-    let mut hidpi_factor = window.scale_factor();
 
     let mut pixels = {
         let surface = Surface::create(&window);
@@ -238,11 +233,6 @@ fn main() -> Result<(), Error> {
             if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
                 *control_flow = ControlFlow::Exit;
                 return;
-            }
-
-            // Adjust high DPI factor
-            if let Some(factor) = input.scale_factor_changed() {
-                hidpi_factor = factor;
             }
 
             // Resize the window
@@ -280,13 +270,19 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
+        for contact in logics.collision.contacts.iter() {
             match (
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Player(..), CollisionID::MovingPlatform) => {
-                    if logics.collision.sides_touched(idx).y == -1.0 {
+                (CollisionID::Player, CollisionID::MovingPlatform)
+                | (CollisionID::MovingPlatform, CollisionID::Player) => {
+                    if logics
+                        .collision
+                        .sides_touched(contact, &CollisionID::Player)
+                        .y
+                        == -1.0
+                    {
                         self.player.x = (self.player.x as f32 + self.platform.vel.x).trunc() as u8;
                     }
                 }
@@ -330,12 +326,11 @@ impl World {
     }
 
     fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
-        physics.accelerations.resize_with(3, Vec2::default);
-        physics.positions.resize_with(3, Vec2::default);
-        physics.velocities.resize_with(3, Vec2::default);
+        physics.accelerations.clear();
+        physics.positions.clear();
+        physics.velocities.clear();
 
         physics.add_physics_entity(
-            0,
             Vec2::new(
                 self.player.x as f32 + self.player.err.x,
                 self.player.y as f32 + self.player.err.y,
@@ -344,13 +339,11 @@ impl World {
             self.player.acc,
         );
         physics.add_physics_entity(
-            1,
             Vec2::new(self.platform.x as f32, self.platform.y as f32),
             self.platform.vel,
             Vec2::new(0.0, 0.0),
         );
         physics.add_physics_entity(
-            2,
             Vec2::new(
                 self.enemy.x as f32 + self.enemy.err.x,
                 self.enemy.y as f32 + self.enemy.err.y,
@@ -420,7 +413,7 @@ impl World {
             self.player.vel,
             true,
             false,
-            CollisionID::Player(Player::P1),
+            CollisionID::Player,
         );
         collision.add_entity_as_xywh(
             self.ground.x as f32,
@@ -499,11 +492,11 @@ impl World {
             entity_state.conditions[1][3] = true;
         }
         entity_state.conditions[2][1] = true;
-        for (idx, contact) in collision.contacts.iter().enumerate() {
+        for contact in collision.contacts.iter() {
             match collision.metadata[contact.i].id {
-                CollisionID::Player(..) => match collision.metadata[contact.j].id {
+                CollisionID::Player => match collision.metadata[contact.j].id {
                     CollisionID::Ground | CollisionID::MovingPlatform => {
-                        if collision.sides_touched(idx).y == -1.0 {
+                        if collision.sides_touched(contact, &CollisionID::Player).y == -1.0 {
                             if self.player.vel.x == 0.0 {
                                 entity_state.conditions[1][0] = true;
                             } else {
@@ -517,7 +510,7 @@ impl World {
                 },
                 CollisionID::Enemy => match collision.metadata[contact.j].id {
                     CollisionID::Ground | CollisionID::MovingPlatform => {
-                        if collision.sides_touched(idx).y == -1.0 {
+                        if collision.sides_touched(contact, &CollisionID::Enemy).y == -1.0 {
                             entity_state.conditions[2][0] = true;
                             entity_state.conditions[2][1] = false;
                         }
@@ -538,8 +531,8 @@ impl World {
                 StateID::PlayerJump | StateID::PlayerFall => {}
                 StateID::EnemyLeft => self.enemy.vel.x = -1.0,
                 StateID::EnemyRight => self.enemy.vel.x = 1.0,
-                StateID::EnemyGrounded => self.enemy.acc.y = 0.0,
-                StateID::EnemyNotGrounded => self.enemy.acc.y = 0.03,
+                StateID::EnemyGrounded => self.enemy.vel.y = 0.0,
+                StateID::EnemyNotGrounded => {}
             }
         }
     }
