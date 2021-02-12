@@ -20,7 +20,6 @@ Paddles and maze-minigame (the original versions using the Pixels crate) have be
 - `breakout`: remake of Atari Breakout. Trans rights :)
 - `trick-ball`: when the ball hits a paddle, it slows down, and when it hits the top and bottom walls, it speeds up.
 - `trick-paddle`: when the ball hits a paddle, the paddle speeds up.
-- `pinball`: there are also a bunch of walls between the paddles that you can bounce off.
 - `wall-breaker`: like Pinball, but you also break the walls when you hit them.
 - `paddle-ball-mania`: multiple balls are in play at all times.
 - `maze-macroquad`: rewrite of `maze-minigame` to use Macroquad + Asterism controls and physics. Logics: collision, resource, linking, physics, control.

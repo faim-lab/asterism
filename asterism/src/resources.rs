@@ -16,8 +16,9 @@ pub struct QueuedResources<ID: PoolInfo> {
     /// being changed.
     pub transactions: Vec<Vec<(ID, Transaction)>>,
     /// A Vec of all transactions and if they were able to be completed or not. If yes, supply
-    /// a Vec of the IDs of successful transactions; if no, supply reason, see [ResourceError]
-    pub completed: Vec<Result<Vec<ID>, ResourceError<ID>>>,
+    /// a Vec of the IDs of successful transactions; if no, supply the ID of the pool that
+    /// caused the error and a reason (see [ResourceError]).
+    pub completed: Vec<Result<Vec<ID>, (ID, ResourceError)>>,
 }
 
 impl<ID: PoolInfo> QueuedResources<ID> {
@@ -46,7 +47,7 @@ impl<ID: PoolInfo> QueuedResources<ID> {
                 match self.is_possible(item_type, change) {
                     Ok(_) => {}
                     Err(err) => {
-                        self.completed.push(Err(err));
+                        self.completed.push(Err((*item_type, err)));
                         for (item_type, val) in snapshot.iter() {
                             *self.items.get_mut(&item_type).unwrap() = *val;
                         }
@@ -66,25 +67,21 @@ impl<ID: PoolInfo> QueuedResources<ID> {
     }
 
     /// Checks if the transaction is possible or not
-    fn is_possible(
-        &self,
-        item_type: &ID,
-        transaction: &Transaction,
-    ) -> Result<(), ResourceError<ID>> {
+    fn is_possible(&self, item_type: &ID, transaction: &Transaction) -> Result<(), ResourceError> {
         if let Some(value) = self.items.get(item_type) {
             match transaction {
                 Transaction::Change(amt) => {
                     if *value + *amt > item_type.max_value() {
-                        Err(ResourceError::TooBig(*item_type))
+                        Err(ResourceError::TooBig)
                     } else if *value + *amt < item_type.min_value() {
-                        Err(ResourceError::TooSmall(*item_type))
+                        Err(ResourceError::TooSmall)
                     } else {
                         Ok(())
                     }
                 }
             }
         } else {
-            Err(ResourceError::PoolNotFound(*item_type))
+            Err(ResourceError::PoolNotFound)
         }
     }
 
@@ -110,11 +107,10 @@ pub trait PoolInfo: Copy + Ord {
     }
 }
 
-/// errors possible when trying to complete a transaction. The ID is that of the pool that caused
-/// the error.
+/// Errors possible when trying to complete a transaction.
 #[derive(Debug)]
-pub enum ResourceError<ID: PoolInfo> {
-    PoolNotFound(ID),
-    TooBig(ID),
-    TooSmall(ID),
+pub enum ResourceError {
+    PoolNotFound,
+    TooBig,
+    TooSmall,
 }

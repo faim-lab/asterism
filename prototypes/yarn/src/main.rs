@@ -208,15 +208,9 @@ impl World {
                         }
                     }
                 }
-                Err(err) => match err {
-                    ResourceError::TooSmall(pool) => match pool {
-                        PoolID::Energy => self.energy = 0,
-                        _ => {}
-                    },
-                    ResourceError::TooBig(pool) => match pool {
-                        PoolID::Energy => self.energy = 100,
-                        _ => {}
-                    },
+                Err((pool, err)) => match (pool, err) {
+                    (PoolID::Energy, ResourceError::TooSmall) => self.energy = 0,
+                    (PoolID::Energy, ResourceError::TooBig) => self.energy = 100,
                     _ => {}
                 },
             }
