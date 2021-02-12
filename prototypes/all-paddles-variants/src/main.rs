@@ -32,14 +32,14 @@ impl Default for ActionID {
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
 enum CollisionID {
     Paddle(Player),
-    Ball,
+    Ball(usize),
     BounceWall,
     ScoreWall(Player),
 }
 
 impl Default for CollisionID {
     fn default() -> Self {
-        Self::Ball
+        Self::Ball(0)
     }
 }
 
@@ -148,11 +148,26 @@ enum Player {
     P2,
 }
 
+struct Paddle {
+    pos: u8,
+    speed: f32,
+}
+
+struct Ball {
+    pos: Vec2,
+    vel: Vec2,
+}
+
+#[allow(dead_code)]
+struct Wall {
+    pos: Vec2,
+}
+
 struct World {
-    paddles: (u8, u8),
-    paddle_vel: (f32, f32),
-    ball: Vec2,
-    ball_vel: Vec2,
+    paddles: (Paddle, Paddle),
+    balls: Vec<Ball>,
+    #[allow(dead_code)]
+    walls: Vec<Wall>,
     serving: Option<Player>,
     score: (u8, u8),
     variant: Variant,
@@ -223,15 +238,25 @@ impl World {
     fn new(variant: Variant) -> Self {
         Self {
             paddles: (
-                HEIGHT / 2 - PADDLE_HEIGHT / 2,
-                HEIGHT / 2 - PADDLE_HEIGHT / 2,
+                Paddle {
+                    pos: HEIGHT / 2 - PADDLE_HEIGHT / 2,
+                    speed: 1.0,
+                },
+                Paddle {
+                    pos: HEIGHT / 2 - PADDLE_HEIGHT / 2,
+                    speed: 1.0,
+                },
             ),
-            paddle_vel: (1.0, 1.0),
-            ball: Vec2::new(
-                (WIDTH / 2 - BALL_SIZE / 2) as f32,
-                (HEIGHT / 2 - BALL_SIZE / 2) as f32,
-            ),
-            ball_vel: Vec2::new(0.0, 0.0),
+            balls: vec![Ball {
+                pos: Vec2::new(
+                    (WIDTH / 2 - BALL_SIZE / 2) as f32,
+                    (HEIGHT / 2 - BALL_SIZE / 2) as f32,
+                ),
+                vel: Vec2::zero(),
+            }],
+            walls: match variant {
+                _ => Vec::new(),
+            },
             serving: Some(Player::P1),
             score: (0, 0),
             variant,
@@ -251,7 +276,7 @@ impl World {
         logics.physics.update();
         self.unproject_physics(&logics.physics);
 
-        self.project_collision(&mut logics.collision, &logics.control);
+        self.project_collision(&mut logics.collision);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
@@ -260,12 +285,12 @@ impl World {
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Ball, CollisionID::ScoreWall(player)) => {
-                    self.ball_vel = Vec2::new(0.0, 0.0);
-                    self.ball = Vec2::new(
+                (CollisionID::Ball(i), CollisionID::ScoreWall(player)) => {
+                    self.balls[i].pos = Vec2::new(
                         (WIDTH / 2 - BALL_SIZE / 2) as f32,
                         (HEIGHT / 2 - BALL_SIZE / 2) as f32,
                     );
+                    self.balls[i].vel = Vec2::zero();
                     match player {
                         Player::P1 => {
                             logics
@@ -284,28 +309,30 @@ impl World {
                     }
                 }
 
-                (CollisionID::Ball, CollisionID::BounceWall) => {
-                    self.ball_vel.y *= -1.0;
+                (CollisionID::Ball(i), CollisionID::BounceWall) => {
+                    self.balls[i].vel.y *= -1.0;
                     match self.variant {
                         Variant::TrickBall => {
-                            if self.ball_vel.magnitude() < 5.0 {
-                                self.ball_vel *= 1.1;
+                            if self.balls[i].vel.magnitude() < 5.0 {
+                                self.balls[i].vel *= 1.1;
                             }
                         }
                         _ => {}
                     }
                 }
 
-                (CollisionID::Ball, CollisionID::Paddle(player)) => {
-                    let sides_touched = logics.collision.sides_touched(contact, &CollisionID::Ball);
+                (CollisionID::Ball(i), CollisionID::Paddle(player)) => {
+                    let sides_touched = logics
+                        .collision
+                        .sides_touched(contact, &CollisionID::Ball(i));
                     match player {
                         Player::P1 => {
                             if sides_touched.x == 1.0 {
-                                self.ball_vel.x *= -1.0;
+                                self.balls[i].vel.x *= -1.0;
                                 match self.variant {
                                     Variant::TrickPaddle => {
-                                        if self.paddle_vel.0 < 4.0 {
-                                            self.paddle_vel.0 *= 1.2;
+                                        if self.paddles.0.speed < 4.0 {
+                                            self.paddles.0.speed *= 1.2;
                                         }
                                     }
                                     _ => {}
@@ -314,11 +341,11 @@ impl World {
                         }
                         Player::P2 => {
                             if sides_touched.x == -1.0 {
-                                self.ball_vel.x *= -1.0;
+                                self.balls[i].vel.x *= -1.0;
                                 match self.variant {
                                     Variant::TrickPaddle => {
-                                        if self.paddle_vel.0 < 4.0 {
-                                            self.paddle_vel.0 *= 1.2;
+                                        if self.paddles.1.speed < 4.0 {
+                                            self.paddles.1.speed *= 1.2;
                                         }
                                     }
                                     _ => {}
@@ -327,14 +354,14 @@ impl World {
                         }
                     }
                     if sides_touched.y != 0.0 {
-                        self.ball_vel.y *= -1.0;
+                        self.balls[i].vel.y *= -1.0;
                     }
 
-                    self.change_angle(player);
-                    if self.ball_vel.magnitude() < 5.0 {
+                    self.change_angle(i, player);
+                    if self.balls[i].vel.magnitude() < 5.0 {
                         match self.variant {
-                            Variant::TrickBall => self.ball_vel *= 0.9,
-                            _ => self.ball_vel *= 1.1,
+                            Variant::TrickBall => self.balls[i].vel *= 0.9,
+                            _ => self.balls[i].vel *= 1.1,
                         }
                     }
                 }
@@ -376,20 +403,22 @@ impl World {
         control.mapping[1][1].is_valid = true;
         control.mapping[2][0].is_valid = true;
 
-        if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
-            match self.serving {
-                Some(Player::P1) => control.mapping[0][2].is_valid = true,
-                Some(Player::P2) => control.mapping[1][2].is_valid = true,
-                None => {}
+        for Ball { vel, .. } in self.balls.iter() {
+            if (vel.x, vel.y) == (0.0, 0.0) {
+                match self.serving {
+                    Some(Player::P1) => control.mapping[0][2].is_valid = true,
+                    Some(Player::P2) => control.mapping[1][2].is_valid = true,
+                    None => {}
+                }
+            } else {
+                control.mapping[0][2].is_valid = false;
+                control.mapping[1][2].is_valid = false;
             }
-        } else {
-            control.mapping[0][2].is_valid = false;
-            control.mapping[1][2].is_valid = false;
         }
     }
 
     fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
-        self.paddles.0 = ((self.paddles.0 as i16
+        self.paddles.0.pos = ((self.paddles.0.pos as i16
             + ((control
                 .get_action_in_set(0, ActionID::MoveDown(Player::P1))
                 .unwrap()
@@ -398,10 +427,10 @@ impl World {
                     .get_action_in_set(0, ActionID::MoveUp(Player::P1))
                     .unwrap()
                     .value)
-                * self.paddle_vel.0) as i16)
+                * self.paddles.0.speed) as i16)
             .max(0) as u8)
             .min(255 - PADDLE_HEIGHT);
-        self.paddles.1 = ((self.paddles.1 as i16
+        self.paddles.1.pos = ((self.paddles.1.pos as i16
             + ((control
                 .get_action_in_set(1, ActionID::MoveDown(Player::P2))
                 .unwrap()
@@ -410,31 +439,33 @@ impl World {
                     .get_action_in_set(1, ActionID::MoveUp(Player::P2))
                     .unwrap()
                     .value)
-                * self.paddle_vel.1) as i16)
+                * self.paddles.1.speed) as i16)
             .max(0) as u8)
             .min(255 - PADDLE_HEIGHT);
 
-        if (self.ball_vel.x, self.ball_vel.y) == (0.0, 0.0) {
-            match self.serving {
-                Some(Player::P1) => {
-                    let values = control
-                        .get_action_in_set(0, ActionID::Serve(Player::P1))
-                        .unwrap();
-                    if values.changed_by == 1.0 && values.value != 0.0 {
-                        self.ball_vel.x = 1.0;
-                        self.ball_vel.y = 1.0;
+        for Ball { vel, .. } in self.balls.iter_mut() {
+            if (vel.x, vel.y) == (0.0, 0.0) {
+                match self.serving {
+                    Some(Player::P1) => {
+                        let values = control
+                            .get_action_in_set(0, ActionID::Serve(Player::P1))
+                            .unwrap();
+                        if values.changed_by == 1.0 && values.value != 0.0 {
+                            vel.x = 1.0;
+                            vel.y = 1.0;
+                        }
                     }
-                }
-                Some(Player::P2) => {
-                    let values = control
-                        .get_action_in_set(1, ActionID::Serve(Player::P2))
-                        .unwrap();
-                    if values.changed_by == 1.0 && values.value != 0.0 {
-                        self.ball_vel.x = -1.0;
-                        self.ball_vel.y = -1.0;
+                    Some(Player::P2) => {
+                        let values = control
+                            .get_action_in_set(1, ActionID::Serve(Player::P2))
+                            .unwrap();
+                        if values.changed_by == 1.0 && values.value != 0.0 {
+                            vel.x = -1.0;
+                            vel.y = -1.0;
+                        }
                     }
+                    None => {}
                 }
-                None => {}
             }
         }
     }
@@ -443,48 +474,43 @@ impl World {
         physics.positions.clear();
         physics.velocities.clear();
         physics.accelerations.clear();
-        physics.add_physics_entity(self.ball, self.ball_vel, Vec2::new(0.0, 0.0));
+        for Ball { pos, vel } in self.balls.iter() {
+            physics.add_physics_entity(*pos, *vel, Vec2::new(0.0, 0.0));
+        }
     }
 
     fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
-        self.ball.x = physics.positions[0]
-            .x
-            .max(0.0)
-            .min((WIDTH - BALL_SIZE) as f32);
-        self.ball.y = physics.positions[0]
-            .y
-            .max(0.0)
-            .min((HEIGHT - BALL_SIZE) as f32);
-        self.ball_vel = physics.velocities[0];
+        for (i, Ball { pos, vel }) in self.balls.iter_mut().enumerate() {
+            *pos = physics.positions[i];
+            *vel = physics.velocities[i];
+        }
     }
 
-    fn project_collision(
-        &self,
-        collision: &mut AabbCollision<CollisionID, Vec2>,
-        control: &MacroQuadKeyboardControl<ActionID>,
-    ) {
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID, Vec2>) {
         collision.centers.resize_with(4, Default::default);
         collision.half_sizes.resize_with(4, Default::default);
         collision.velocities.resize_with(4, Default::default);
         collision.metadata.resize_with(4, Default::default);
 
-        collision.add_entity_as_xywh(
-            self.ball.x,
-            self.ball.y,
-            BALL_SIZE as f32,
-            BALL_SIZE as f32,
-            self.ball_vel,
-            true,
-            false,
-            CollisionID::Ball,
-        );
+        for (i, Ball { pos, vel }) in self.balls.iter().enumerate() {
+            collision.add_entity_as_xywh(
+                pos.x,
+                pos.y,
+                BALL_SIZE as f32,
+                BALL_SIZE as f32,
+                *vel,
+                true,
+                false,
+                CollisionID::Ball(i),
+            );
+        }
 
         collision.add_entity_as_xywh(
             PADDLE_OFF_X as f32,
-            self.paddles.0 as f32,
+            self.paddles.0.pos as f32,
             PADDLE_WIDTH as f32,
             PADDLE_HEIGHT as f32,
-            Vec2::new(0.0, control.values[0][1].value - control.values[0][0].value),
+            Vec2::new(0.0, self.paddles.0.speed),
             true,
             true,
             CollisionID::Paddle(Player::P1),
@@ -492,10 +518,10 @@ impl World {
 
         collision.add_entity_as_xywh(
             (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32,
-            self.paddles.1 as f32,
+            self.paddles.1.pos as f32,
             PADDLE_WIDTH as f32,
             PADDLE_HEIGHT as f32,
-            Vec2::new(0.0, control.values[1][1].value - control.values[1][0].value),
+            Vec2::new(0.0, self.paddles.1.speed),
             true,
             true,
             CollisionID::Paddle(Player::P2),
@@ -503,25 +529,30 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        self.ball = collision.get_xy_pos_for_entity(CollisionID::Ball).unwrap();
+        for (i, mut ball) in self.balls.iter_mut().enumerate() {
+            ball.pos = collision
+                .get_xy_pos_for_entity(CollisionID::Ball(i))
+                .unwrap();
+        }
     }
 
-    fn change_angle(&mut self, player: Player) {
+    fn change_angle(&mut self, ball_idx: usize, player: Player) {
+        let ball = &mut self.balls[ball_idx];
         let paddle_center = match player {
-            Player::P1 => self.paddles.0 + PADDLE_HEIGHT / 2,
-            Player::P2 => self.paddles.1 + PADDLE_HEIGHT / 2,
+            Player::P1 => self.paddles.0.pos + PADDLE_HEIGHT / 2,
+            Player::P2 => self.paddles.1.pos + PADDLE_HEIGHT / 2,
         } as f32;
-        let angle: f32 = (((self.ball.y + (BALL_SIZE / 2) as f32) - paddle_center)
+        let angle: f32 = (((ball.pos.y + (BALL_SIZE / 2) as f32) - paddle_center)
             .max(-(PADDLE_HEIGHT as f32) / 2.0)
             .min(PADDLE_HEIGHT as f32 / 2.0)
             / PADDLE_HEIGHT as f32)
             .abs()
             * 80.0;
-        let magnitude = self.ball_vel.magnitude();
-        self.ball_vel.x =
-            angle.to_radians().cos() * magnitude * if self.ball_vel.x < 0.0 { -1.0 } else { 1.0 };
-        self.ball_vel.y =
-            angle.to_radians().sin() * magnitude * if self.ball_vel.y < 0.0 { -1.0 } else { 1.0 };
+        let magnitude = ball.vel.magnitude();
+        ball.vel.x =
+            angle.to_radians().cos() * magnitude * if ball.vel.x < 0.0 { -1.0 } else { 1.0 };
+        ball.vel.y =
+            angle.to_radians().sin() * magnitude * if ball.vel.y < 0.0 { -1.0 } else { 1.0 };
     }
 
     fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
@@ -556,24 +587,26 @@ impl World {
         clear_background(Color::new(0., 0., 0.5, 1.));
         draw_rectangle(
             PADDLE_OFF_X as f32,
-            self.paddles.0 as f32,
+            self.paddles.0.pos as f32,
             PADDLE_WIDTH as f32,
             PADDLE_HEIGHT as f32,
             WHITE,
         );
         draw_rectangle(
             (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32,
-            self.paddles.1 as f32,
+            self.paddles.1.pos as f32,
             PADDLE_WIDTH as f32,
             PADDLE_HEIGHT as f32,
             WHITE,
         );
-        draw_rectangle(
-            self.ball.x,
-            self.ball.y,
-            BALL_SIZE as f32,
-            BALL_SIZE as f32,
-            Color::new(1., 0.75, 0., 1.),
-        );
+        for Ball { pos, .. } in self.balls.iter() {
+            draw_rectangle(
+                pos.x,
+                pos.y,
+                BALL_SIZE as f32,
+                BALL_SIZE as f32,
+                Color::new(1., 0.75, 0., 1.),
+            );
+        }
     }
 }
