@@ -2,8 +2,8 @@
 #![forbid(unsafe_code)]
 
 use asterism::{
-    resources::Transaction, AabbCollision, KeyboardControl, PointPhysics, QueuedResources,
-    WinitKeyboardControl,
+    collision::AabbCollision, control::KeyboardControl, control::WinitKeyboardControl,
+    physics::PointPhysics, resources::PoolInfo, resources::QueuedResources, resources::Transaction,
 };
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use rand::Rng;
@@ -59,6 +59,18 @@ impl Default for CollisionID {
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum PoolID {
     Points(Player),
+}
+impl PoolInfo for PoolID {
+    fn max_value(&self) -> f64 {
+        match self {
+            Self::Points(_) => std::u8::MAX as f64,
+        }
+    }
+    fn min_value(&self) -> f64 {
+        match self {
+            Self::Points(_) => std::u8::MIN as f64,
+        }
+    }
 }
 
 struct Logics {
@@ -276,7 +288,7 @@ impl World {
                         logics
                             .resources
                             .transactions
-                            .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]);
+                            .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1.0))]);
                     }
                 }
 
