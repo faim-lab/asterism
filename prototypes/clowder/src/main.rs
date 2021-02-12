@@ -84,7 +84,7 @@ impl Logics {
                 let mut collision = AabbCollision::new();
                 collision.add_entity_as_xywh(
                     0.0,
-                    HEIGHT as f32,
+                    HEIGHT as f32, //bottom wall
                     WIDTH as f32,
                     0.0,
                     Vec2::new(0.0, 0.0),
@@ -92,28 +92,9 @@ impl Logics {
                     true,
                     CollisionID::InertWall,
                 );
+
                 collision.add_entity_as_xywh(
-                    0.0,
-                    BALL_SIZE as f32,
-                    ((WIDTH / 2) - BALL_SIZE) as f32,
-                    0.0,
-                    Vec2::new(0.0, 0.0),
-                    true,
-                    true,
-                    CollisionID::InertWall,
-                );
-                collision.add_entity_as_xywh(
-                    ((WIDTH / 2) + (BALL_SIZE * 2)) as f32,
-                    BALL_SIZE as f32,
-                    ((WIDTH / 2) - BALL_SIZE) as f32,
-                    0.0,
-                    Vec2::new(0.0, 0.0),
-                    true,
-                    true,
-                    CollisionID::InertWall,
-                );
-                collision.add_entity_as_xywh(
-                    0.0,
+                    0.0, //left wall
                     0.0,
                     0.0,
                     HEIGHT as f32,
@@ -123,9 +104,29 @@ impl Logics {
                     CollisionID::InertWall,
                 );
                 collision.add_entity_as_xywh(
+                    0.0, //top 1
+                    BALL_SIZE as f32,
                     ((WIDTH / 2) - BALL_SIZE) as f32,
                     0.0,
-                    (BALL_SIZE * 2) as f32,
+                    Vec2::new(0.0, 0.0),
+                    true,
+                    true,
+                    CollisionID::InertWall,
+                );
+                collision.add_entity_as_xywh(
+                    -(((WIDTH / 2) + BALL_SIZE) as f32), //top 2
+                    BALL_SIZE as f32,
+                    ((WIDTH / 2) - BALL_SIZE) as f32,
+                    0.0,
+                    Vec2::new(0.0, 0.0),
+                    true,
+                    true,
+                    CollisionID::InertWall,
+                );
+                collision.add_entity_as_xywh(
+                    0.0,
+                    0.0,
+                    WIDTH as f32,
                     0.0,
                     Vec2::new(0.0, 0.0),
                     true,
@@ -133,7 +134,7 @@ impl Logics {
                     CollisionID::Goal(Player::P1),
                 );
                 collision.add_entity_as_xywh(
-                    WIDTH as f32,
+                    WIDTH as f32, //right wall
                     0.0,
                     0.0,
                     HEIGHT as f32,
@@ -189,7 +190,10 @@ fn main() -> Result<(), Error> {
     let mut logics = Logics::new();
 
     for _i in 0..BALL_NUM {
-        world.balls.push(Ball::new(Vec2::new(5.0, 7.0)));
+        world.balls.push(Ball::new(Vec2::new(
+            (WIDTH / 2) as f32,
+            (BALL_SIZE * 2) as f32,
+        )));
     }
 
     event_loop.run(move |event, _, control_flow| {
@@ -266,14 +270,14 @@ impl World {
                 logics.collision.metadata[contact.j].id,
             ) {
                 (CollisionID::Goal(_player), CollisionID::Ball(i)) => {
-                    if logics.collision.sides_touched(idx).y > 0.0 {
+                    if i <= self.balls.len() {
                         self.balls.remove(i);
+                        println!("goal");
+                        logics
+                            .resources
+                            .transactions
+                            .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]);
                     }
-                    println!("goal");
-                    logics
-                        .resources
-                        .transactions
-                        .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1))]);
                 }
 
                 (CollisionID::InertWall, CollisionID::Ball(i)) => {
@@ -422,8 +426,8 @@ impl World {
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
         for (i, ball) in self.balls.iter_mut().enumerate() {
-            ball.pos.x = (collision.centers[i].x - collision.half_sizes[i].x).trunc();
-            ball.pos.y = (collision.centers[i].y - collision.half_sizes[i].y).trunc();
+            ball.pos.x = (collision.centers[i + 5].x - collision.half_sizes[i + 5].x).trunc();
+            ball.pos.y = (collision.centers[i + 5].y - collision.half_sizes[i + 5].y).trunc();
         }
     }
 
@@ -495,6 +499,15 @@ impl World {
             (WIDTH / 2) - BALL_SIZE,
             BALL_SIZE,
             [255, 255, 255, 255],
+            frame,
+        );
+
+        draw_rect(
+            (WIDTH / 2) - BALL_SIZE,
+            0,
+            BALL_SIZE * 2,
+            BALL_SIZE,
+            [200, 200, 200, 245],
             frame,
         );
 
