@@ -16,7 +16,7 @@ use winit_input_helper::WinitInputHelper;
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
-const PADDLE_OFF_Y: u8 = 24;
+const PADDLE_OFF_Y: u8 = 36;
 const PADDLE_HEIGHT: u8 = 16;
 const PADDLE_WIDTH: u8 = 24;
 const BALL_SIZE: u8 = 8;
@@ -203,8 +203,8 @@ fn main() -> Result<(), Error> {
 
     for _i in 0..BALL_NUM {
         world.balls.push(Ball::new(Vec2::new(
-            (WIDTH / 2) as f32,
-            (BALL_SIZE * 2) as f32,
+            rand::gen_range(BALL_SIZE as f32, (WIDTH - BALL_SIZE) as f32),
+            rand::gen_range((BALL_SIZE * 2) as f32, (HEIGHT - BALL_SIZE) as f32),
         )));
     }
 
@@ -276,15 +276,15 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        for (idx, contact) in logics.collision.contacts.iter().enumerate() {
+        for contact in logics.collision.contacts.iter() {
             match (
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Goal(_player), CollisionID::Ball(i)) => {
+                (CollisionID::Goal(_player), CollisionID::Ball(i))
+                | (CollisionID::Ball(i), CollisionID::Goal(_player)) => {
                     if i <= self.balls.len() {
                         self.balls.remove(i);
-                        println!("goal");
                         logics
                             .resources
                             .transactions
@@ -292,8 +292,11 @@ impl World {
                     }
                 }
 
-                (CollisionID::InertWall, CollisionID::Ball(i)) => {
-                    let sides_touched = logics.collision.sides_touched(idx);
+                (CollisionID::InertWall, CollisionID::Ball(i))
+                | (CollisionID::Ball(i), CollisionID::InertWall) => {
+                    let sides_touched = logics
+                        .collision
+                        .sides_touched(contact, &CollisionID::Ball(i));
 
                     if sides_touched.x != 0.0 {
                         self.balls[i].vel.x *= -1.0;
@@ -304,7 +307,9 @@ impl World {
                 }
 
                 (CollisionID::Ball(i), CollisionID::Ball(j)) => {
-                    let sides_touched = logics.collision.sides_touched(idx);
+                    let sides_touched = logics
+                        .collision
+                        .sides_touched(contact, &CollisionID::Ball(i));
 
                     if sides_touched.x != 0.0 {
                         self.balls[i].vel.x *= -1.0;
@@ -320,10 +325,12 @@ impl World {
                     let Vec2 {
                         x: touch_x,
                         y: touch_y,
-                    } = logics.collision.sides_touched(idx);
+                    } = logics
+                        .collision
+                        .sides_touched(contact, &CollisionID::Ball(i));
                     if (self.balls[i].vel.x, self.balls[i].vel.y) == (0.0, 0.0) {
                         if touch_y != 1.0 {
-                            self.balls[i].vel = Vec2::new(touch_y, touch_y);
+                            self.balls[i].vel = Vec2::new(touch_x, touch_y);
                         }
                     } else {
                         if touch_y != 0.0 {
@@ -343,18 +350,21 @@ impl World {
         logics.resources.update();
         self.unproject_resources(&logics.resources);
 
-        for (completed, item_types) in logics.resources.completed.iter() {
-            if *completed {
-                for item_type in item_types {
-                    match item_type {
-                        PoolID::Points(player) => {
-                            match player {
-                                Player::P1 => print!("p1"),
+        for completed in logics.resources.completed.iter() {
+            match completed {
+                Ok(item_types) => {
+                    for item_type in item_types {
+                        match item_type {
+                            PoolID::Points(player) => {
+                                match player {
+                                    Player::P1 => print!("p1"),
+                                }
+                                println!(" scores! p1: {}", self.score.0);
                             }
-                            println!(" scores! p1: {}, p2: {}", self.score.0, self.score.1);
                         }
                     }
                 }
+                Err(_) => {}
             }
         }
     }
@@ -378,11 +388,11 @@ impl World {
     }
 
     fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
-        physics.positions.resize_with(3, Vec2::default);
-        physics.velocities.resize_with(3, Vec2::default);
-        physics.accelerations.resize_with(3, Vec2::default);
-        for (i, ball) in self.balls.iter().enumerate() {
-            physics.add_physics_entity(i, ball.pos, ball.vel, Vec2::new(0.0, 0.0));
+        physics.positions.clear();
+        physics.velocities.clear();
+        physics.accelerations.clear();
+        for ball in self.balls.iter() {
+            physics.add_physics_entity(ball.pos, ball.vel, Vec2::new(0.0, 0.0));
         }
     }
 
@@ -467,16 +477,19 @@ impl World {
     }
 
     fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
-        for (completed, item_types) in resources.completed.iter() {
-            if *completed {
-                for item_type in item_types {
-                    let value = resources.get_value_by_itemtype(item_type).min(255.0) as u8;
-                    match item_type {
-                        PoolID::Points(player) => match player {
-                            Player::P1 => self.score.0 = value,
-                        },
+        for completed in resources.completed.iter() {
+            match completed {
+                Ok(item_types) => {
+                    for item_type in item_types {
+                        let value = resources.get_value_by_itemtype(item_type).unwrap();
+                        match item_type {
+                            PoolID::Points(player) => match player {
+                                Player::P1 => self.score.0 = value as u8,
+                            },
+                        }
                     }
                 }
+                Err(_) => {}
             }
         }
     }
@@ -511,15 +524,6 @@ impl World {
             (WIDTH / 2) - BALL_SIZE,
             BALL_SIZE,
             [255, 255, 255, 255],
-            frame,
-        );
-
-        draw_rect(
-            (WIDTH / 2) - BALL_SIZE,
-            0,
-            BALL_SIZE * 2,
-            BALL_SIZE,
-            [200, 200, 200, 245],
             frame,
         );
 
