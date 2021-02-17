@@ -1,12 +1,17 @@
+#![allow(clippy::single_match)]
 use std::io::{self, Write};
 
 use asterism::{
     collision::{AabbCollision, Vec2 as AstVec2},
     control::{KeyboardControl, MacroQuadKeyboardControl},
     physics::PointPhysics,
-    resources::{PoolInfo, QueuedResources, Transaction},
+    resources::{QueuedResources, Transaction},
 };
 use macroquad::prelude::*;
+
+mod ids;
+
+use ids::*;
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -15,51 +20,45 @@ const PADDLE_HEIGHT: u8 = 48;
 const PADDLE_WIDTH: u8 = 8;
 const BALL_SIZE: u8 = 8;
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-enum ActionID {
-    MoveUp(Player),
-    MoveDown(Player),
-    Serve(Player),
-    Quit,
+struct Paddle {
+    pos: u8,
+    speed: f32,
 }
 
-impl Default for ActionID {
-    fn default() -> Self {
-        Self::MoveDown(Player::P1)
-    }
+struct Ball {
+    starting_pos: Vec2,
+    pos: Vec2,
+    vel: Vec2,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
-enum CollisionID {
-    Paddle(Player),
-    Ball(usize),
-    BounceWall,
-    ScoreWall(Player),
-}
-
-impl Default for CollisionID {
-    fn default() -> Self {
-        Self::Ball(0)
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-enum PoolID {
-    Points(Player),
-}
-
-impl PoolInfo for PoolID {
-    fn max_value(&self) -> f64 {
-        match self {
-            Self::Points(_) => std::u8::MAX as f64,
+impl Ball {
+    fn new(pos: Vec2) -> Self {
+        Self {
+            starting_pos: pos,
+            pos,
+            vel: Vec2::zero(),
         }
     }
+}
 
-    fn min_value(&self) -> f64 {
-        match self {
-            Self::Points(_) => std::u8::MIN as f64,
-        }
+struct Wall {
+    pos: Vec2,
+    size: Vec2,
+}
+
+impl Wall {
+    fn new(pos: Vec2, size: Vec2) -> Self {
+        Self { pos, size }
     }
+}
+
+struct World {
+    paddles: (Paddle, Paddle),
+    balls: Vec<Ball>,
+    walls: Vec<Wall>, // consider using an ecs.........?
+    serving: Option<Player>,
+    score: (u8, u8),
+    variant: Variant,
 }
 
 struct Logics {
@@ -142,55 +141,16 @@ impl Logics {
     }
 }
 
-#[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Debug)]
-enum Player {
-    P1,
-    P2,
-}
-
-struct Paddle {
-    pos: u8,
-    speed: f32,
-}
-
-struct Ball {
-    pos: Vec2,
-    vel: Vec2,
-}
-
-#[allow(dead_code)]
-struct Wall {
-    pos: Vec2,
-}
-
-struct World {
-    paddles: (Paddle, Paddle),
-    balls: Vec<Ball>,
-    #[allow(dead_code)]
-    walls: Vec<Wall>,
-    serving: Option<Player>,
-    score: (u8, u8),
-    variant: Variant,
-}
-
-fn window_conf() -> Conf {
-    Conf {
-        window_title: "paddles variants".to_owned(),
-        window_width: WIDTH as i32,
-        window_height: HEIGHT as i32,
-        fullscreen: false,
-        ..Default::default()
-    }
-}
-
 enum Variant {
     Paddles,
     TrickBall,
     TrickPaddle,
+    WallBreaker,
+    PaddleBallMania,
 }
 
 fn get_variant() -> Variant {
-    println!("please enter which paddles variant you want to play.\npaddles: 1\ntrick-ball: 2\ntrick-paddle: 3");
+    println!("please enter which paddles variant you want to play.\npaddles: 1\ntrick-ball: 2\ntrick-paddle: 3\nwall-breaker: 4\npaddle-ball-mania: 5");
 
     loop {
         print!("> ");
@@ -198,17 +158,12 @@ fn get_variant() -> Variant {
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
 
-        match input.trim().parse::<u8>() {
-            Ok(i) if i <= 3 && i != 0 => {
-                return match i {
-                    1 => Variant::Paddles,
-                    2 => Variant::TrickBall,
-                    3 => Variant::TrickPaddle,
-                    _ => {
-                        panic!("it shouldn't be possible to get here");
-                    }
-                };
-            }
+        match input.trim() {
+            "1" => return Variant::Paddles,
+            "2" => return Variant::TrickBall,
+            "3" => return Variant::TrickPaddle,
+            "4" => return Variant::WallBreaker,
+            "5" => return Variant::PaddleBallMania,
             _ => {
                 println!("please enter a valid input...");
             }
@@ -224,10 +179,8 @@ async fn main() {
     let mut logics = Logics::new();
 
     loop {
-        if let Ok(cont) = world.update(&mut logics) {
-            if !cont {
-                break;
-            }
+        if !world.update(&mut logics) {
+            break;
         }
         world.draw();
         next_frame().await;
@@ -247,29 +200,47 @@ impl World {
                     speed: 1.0,
                 },
             ),
-            balls: vec![Ball {
-                pos: Vec2::new(
+            balls: match variant {
+                Variant::PaddleBallMania => {
+                    vec![
+                        Ball::new(Vec2::new((WIDTH / 2 - BALL_SIZE / 2) as f32, 50.0)),
+                        Ball::new(Vec2::new((WIDTH / 2 - BALL_SIZE / 2) as f32, 100.0)),
+                        Ball::new(Vec2::new((WIDTH / 2 - BALL_SIZE / 2) as f32, 150.0)),
+                        Ball::new(Vec2::new((WIDTH / 2 - BALL_SIZE / 2) as f32, 200.0)),
+                    ]
+                }
+                _ => vec![Ball::new(Vec2::new(
                     (WIDTH / 2 - BALL_SIZE / 2) as f32,
                     (HEIGHT / 2 - BALL_SIZE / 2) as f32,
-                ),
-                vel: Vec2::zero(),
-            }],
+                ))],
+            },
             walls: match variant {
+                Variant::WallBreaker => {
+                    let wall_size = Vec2::new(8.0, 30.0);
+                    vec![
+                        Wall::new(Vec2::new(86.0, 62.0), wall_size),
+                        Wall::new(Vec2::new(130.0, 160.0), wall_size),
+                        Wall::new(Vec2::new(200.0, 180.0), wall_size),
+                    ]
+                }
                 _ => Vec::new(),
             },
-            serving: Some(Player::P1),
+            serving: match variant {
+                Variant::PaddleBallMania => None,
+                _ => Some(Player::P1),
+            },
             score: (0, 0),
             variant,
         }
     }
 
-    fn update(&mut self, logics: &mut Logics) -> Result<bool, ()> {
+    fn update(&mut self, logics: &mut Logics) -> bool {
         self.project_control(&mut logics.control);
         logics.control.update(&());
         self.unproject_control(&logics.control);
 
         if logics.control.values[2][0].value != 0.0 {
-            return Ok(false);
+            return false;
         }
 
         self.project_physics(&mut logics.physics);
@@ -280,16 +251,15 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
+        let mut remove_walls = Vec::new();
+
         for contact in logics.collision.contacts.iter() {
             match (
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
                 (CollisionID::Ball(i), CollisionID::ScoreWall(player)) => {
-                    self.balls[i].pos = Vec2::new(
-                        (WIDTH / 2 - BALL_SIZE / 2) as f32,
-                        (HEIGHT / 2 - BALL_SIZE / 2) as f32,
-                    );
+                    self.balls[i].pos = self.balls[i].starting_pos;
                     self.balls[i].vel = Vec2::zero();
                     match player {
                         Player::P1 => {
@@ -310,11 +280,52 @@ impl World {
                 }
 
                 (CollisionID::Ball(i), CollisionID::BounceWall) => {
-                    self.balls[i].vel.y *= -1.0;
+                    let sides_touched = logics
+                        .collision
+                        .sides_touched(&contact, &CollisionID::Ball(i));
+                    if sides_touched.y != 0.0 {
+                        self.balls[i].vel.y *= -1.0;
+                    }
+                    if sides_touched.x != 0.0 {
+                        self.balls[i].vel.x *= -1.0;
+                    }
+                }
+
+                (CollisionID::Ball(i), CollisionID::Ball(j)) => {
+                    let sides_touched = logics
+                        .collision
+                        .sides_touched(contact, &CollisionID::Ball(i));
+                    if sides_touched.x != 0.0 {
+                        // restituted left/right
+                        self.balls[i].vel.x *= -1.0;
+                        self.balls[j].vel.x *= -1.0;
+                    }
+                    if sides_touched.y != 0.0 {
+                        // restituted up/down
+                        self.balls[i].vel.y *= -1.0;
+                        self.balls[j].vel.y *= -1.0;
+                    }
+                }
+
+                (CollisionID::Ball(i), CollisionID::BreakWall(j)) => {
+                    let sides_touched = logics
+                        .collision
+                        .sides_touched(&contact, &CollisionID::Ball(i));
+                    if sides_touched.y != 0.0 {
+                        self.balls[i].vel.y *= -1.0;
+                    }
+                    if sides_touched.x != 0.0 {
+                        self.balls[i].vel.x *= -1.0;
+                    }
                     match self.variant {
                         Variant::TrickBall => {
                             if self.balls[i].vel.magnitude() < 5.0 {
                                 self.balls[i].vel *= 1.1;
+                            }
+                        }
+                        Variant::WallBreaker => {
+                            if j < self.walls.len() {
+                                remove_walls.push(j);
                             }
                         }
                         _ => {}
@@ -327,7 +338,7 @@ impl World {
                         .sides_touched(contact, &CollisionID::Ball(i));
                     match player {
                         Player::P1 => {
-                            if sides_touched.x == 1.0 {
+                            if sides_touched.x > 0.0 {
                                 self.balls[i].vel.x *= -1.0;
                                 match self.variant {
                                     Variant::TrickPaddle => {
@@ -340,7 +351,7 @@ impl World {
                             }
                         }
                         Player::P2 => {
-                            if sides_touched.x == -1.0 {
+                            if sides_touched.x < 0.0 {
                                 self.balls[i].vel.x *= -1.0;
                                 match self.variant {
                                     Variant::TrickPaddle => {
@@ -370,6 +381,10 @@ impl World {
             }
         }
 
+        for idx in remove_walls.iter().rev() {
+            self.walls.remove(*idx);
+        }
+
         self.project_resources(&mut logics.resources);
         logics.resources.update();
         self.unproject_resources(&logics.resources);
@@ -393,7 +408,7 @@ impl World {
             }
         }
 
-        Ok(true)
+        true
     }
 
     fn project_control(&self, control: &mut MacroQuadKeyboardControl<ActionID>) {
@@ -403,16 +418,24 @@ impl World {
         control.mapping[1][1].is_valid = true;
         control.mapping[2][0].is_valid = true;
 
-        for Ball { vel, .. } in self.balls.iter() {
-            if (vel.x, vel.y) == (0.0, 0.0) {
-                match self.serving {
-                    Some(Player::P1) => control.mapping[0][2].is_valid = true,
-                    Some(Player::P2) => control.mapping[1][2].is_valid = true,
-                    None => {}
+        match self.variant {
+            Variant::PaddleBallMania => {
+                control.mapping[0][2].is_valid = true;
+                control.mapping[1][2].is_valid = true;
+            }
+            _ => {
+                for Ball { vel, .. } in self.balls.iter() {
+                    if (vel.x, vel.y) == (0.0, 0.0) {
+                        match self.serving {
+                            Some(Player::P1) => control.mapping[0][2].is_valid = true,
+                            Some(Player::P2) => control.mapping[1][2].is_valid = true,
+                            None => {}
+                        }
+                    } else {
+                        control.mapping[0][2].is_valid = false;
+                        control.mapping[1][2].is_valid = false;
+                    }
                 }
-            } else {
-                control.mapping[0][2].is_valid = false;
-                control.mapping[1][2].is_valid = false;
             }
         }
     }
@@ -445,26 +468,44 @@ impl World {
 
         for Ball { vel, .. } in self.balls.iter_mut() {
             if (vel.x, vel.y) == (0.0, 0.0) {
-                match self.serving {
-                    Some(Player::P1) => {
+                match self.variant {
+                    Variant::PaddleBallMania => {
                         let values = control
                             .get_action_in_set(0, ActionID::Serve(Player::P1))
                             .unwrap();
-                        if values.changed_by == 1.0 && values.value != 0.0 {
+                        if values.changed_by >= 1.0 && values.value != 0.0 {
                             vel.x = 1.0;
                             vel.y = 1.0;
                         }
-                    }
-                    Some(Player::P2) => {
                         let values = control
                             .get_action_in_set(1, ActionID::Serve(Player::P2))
                             .unwrap();
-                        if values.changed_by == 1.0 && values.value != 0.0 {
+                        if values.changed_by >= 1.0 && values.value != 0.0 {
                             vel.x = -1.0;
                             vel.y = -1.0;
                         }
                     }
-                    None => {}
+                    _ => match self.serving {
+                        Some(Player::P1) => {
+                            let values = control
+                                .get_action_in_set(0, ActionID::Serve(Player::P1))
+                                .unwrap();
+                            if values.changed_by >= 1.0 && values.value != 0.0 {
+                                vel.x = 1.0;
+                                vel.y = 1.0;
+                            }
+                        }
+                        Some(Player::P2) => {
+                            let values = control
+                                .get_action_in_set(1, ActionID::Serve(Player::P2))
+                                .unwrap();
+                            if values.changed_by >= 1.0 && values.value != 0.0 {
+                                vel.x = -1.0;
+                                vel.y = -1.0;
+                            }
+                        }
+                        None => {}
+                    },
                 }
             }
         }
@@ -474,13 +515,13 @@ impl World {
         physics.positions.clear();
         physics.velocities.clear();
         physics.accelerations.clear();
-        for Ball { pos, vel } in self.balls.iter() {
-            physics.add_physics_entity(*pos, *vel, Vec2::new(0.0, 0.0));
+        for Ball { pos, vel, .. } in self.balls.iter() {
+            physics.add_physics_entity(*pos, *vel, Vec2::zero());
         }
     }
 
     fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
-        for (i, Ball { pos, vel }) in self.balls.iter_mut().enumerate() {
+        for (i, Ball { pos, vel, .. }) in self.balls.iter_mut().enumerate() {
             *pos = physics.positions[i];
             *vel = physics.velocities[i];
         }
@@ -492,7 +533,7 @@ impl World {
         collision.velocities.resize_with(4, Default::default);
         collision.metadata.resize_with(4, Default::default);
 
-        for (i, Ball { pos, vel }) in self.balls.iter().enumerate() {
+        for (i, Ball { pos, vel, .. }) in self.balls.iter().enumerate() {
             collision.add_entity_as_xywh(
                 pos.x,
                 pos.y,
@@ -502,6 +543,19 @@ impl World {
                 true,
                 false,
                 CollisionID::Ball(i),
+            );
+        }
+
+        for (i, Wall { pos, size }) in self.walls.iter().enumerate() {
+            collision.add_entity_as_xywh(
+                pos.x,
+                pos.y,
+                size.x,
+                size.y,
+                Vec2::zero(),
+                true,
+                true,
+                CollisionID::BreakWall(i),
             );
         }
 
@@ -556,12 +610,14 @@ impl World {
     }
 
     fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
-        if !resources.items.contains_key(&PoolID::Points(Player::P1)) {
-            resources.items.insert(PoolID::Points(Player::P1), 0.0);
-        }
-        if !resources.items.contains_key(&PoolID::Points(Player::P2)) {
-            resources.items.insert(PoolID::Points(Player::P2), 0.0);
-        }
+        resources
+            .items
+            .entry(PoolID::Points(Player::P1))
+            .or_insert(0.0);
+        resources
+            .items
+            .entry(PoolID::Points(Player::P2))
+            .or_insert(0.0);
     }
 
     fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
@@ -585,6 +641,8 @@ impl World {
 
     fn draw(&self) {
         clear_background(Color::new(0., 0., 0.5, 1.));
+
+        // paddles
         draw_rectangle(
             PADDLE_OFF_X as f32,
             self.paddles.0.pos as f32,
@@ -599,6 +657,7 @@ impl World {
             PADDLE_HEIGHT as f32,
             WHITE,
         );
+
         for Ball { pos, .. } in self.balls.iter() {
             draw_rectangle(
                 pos.x,
@@ -608,5 +667,19 @@ impl World {
                 Color::new(1., 0.75, 0., 1.),
             );
         }
+
+        for Wall { pos, size } in self.walls.iter() {
+            draw_rectangle(pos.x, pos.y, size.x, size.y, Color::new(0.8, 0.8, 0.8, 1.));
+        }
+    }
+}
+
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "paddles variants".to_owned(),
+        window_width: WIDTH as i32,
+        window_height: HEIGHT as i32,
+        fullscreen: false,
+        ..Default::default()
     }
 }
