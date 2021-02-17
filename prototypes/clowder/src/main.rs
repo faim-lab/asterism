@@ -126,7 +126,7 @@ impl Logics {
                     CollisionID::InertWall,
                 );
                 collision.add_entity_as_xywh(
-                    -(((WIDTH / 2) + BALL_SIZE) as f32), //top 2
+                    ((WIDTH / 2) + (BALL_SIZE * 2)) as f32, //top 2
                     BALL_SIZE as f32,
                     ((WIDTH / 2) - BALL_SIZE) as f32,
                     0.0,
@@ -200,11 +200,12 @@ fn main() -> Result<(), Error> {
     };
     let mut world = World::new();
     let mut logics = Logics::new();
+    let mut rng = rand::thread_rng();
 
     for _i in 0..BALL_NUM {
         world.balls.push(Ball::new(Vec2::new(
-            rand::gen_range(BALL_SIZE as f32, (WIDTH - BALL_SIZE) as f32),
-            rand::gen_range((BALL_SIZE * 2) as f32, (HEIGHT - BALL_SIZE) as f32),
+            rng.gen_range((BALL_SIZE as f32)..((WIDTH - BALL_SIZE) as f32)),
+            rng.gen_range(((BALL_SIZE * 2) as f32)..((HEIGHT - BALL_SIZE) as f32)),
         )));
     }
 
@@ -298,12 +299,9 @@ impl World {
                         .collision
                         .sides_touched(contact, &CollisionID::Ball(i));
 
-                    if sides_touched.x != 0.0 {
-                        self.balls[i].vel.x *= -1.0;
-                    }
-                    if sides_touched.y != 0.0 {
-                        self.balls[i].vel.y *= -1.0;
-                    }
+                    self.balls[i].vel.x *= -1.0;
+
+                    self.balls[i].vel.y *= -1.0;
                 }
 
                 (CollisionID::Ball(i), CollisionID::Ball(j)) => {
@@ -335,7 +333,8 @@ impl World {
                     } else {
                         if touch_y != 0.0 {
                             self.balls[i].vel.y *= -1.0;
-                        } else if touch_x != 0.0 {
+                        }
+                        if touch_x != 0.0 {
                             self.balls[i].vel.x *= -1.0;
                         }
                     }
