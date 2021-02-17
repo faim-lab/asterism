@@ -14,7 +14,7 @@ members = [
     "prototypes/trick-paddle",
     "prototypes/wall-breaker",
     "prototypes/paddle-ball-mania",
-    "prototypes/all-paddles-variants"
+    "prototypes/omnipaddles"
     # "prototypes/maze-minigame",
     # "prototypes/paddles",
 ]
