@@ -9,8 +9,10 @@ use asterism::{
 };
 use macroquad::prelude::*;
 
+mod data;
 mod ids;
 
+use data::*;
 use ids::*;
 
 const WIDTH: u8 = 255;
@@ -55,20 +57,20 @@ impl Wall {
 struct World {
     paddles: (Paddle, Paddle),
     balls: Vec<Ball>,
-    walls: Vec<Wall>, // consider using an ecs.........?
+    walls: Vec<Wall>,
     serving: Option<Player>,
     score: (u8, u8),
-    variant: Variant,
 }
 
-struct Logics {
+struct Logics<'data> {
     control: MacroQuadKeyboardControl<ActionID>,
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
+    data: Data<'data>,
 }
 
-impl Logics {
+impl<'data> Logics<'data> {
     fn new() -> Self {
         Self {
             control: {
@@ -137,6 +139,7 @@ impl Logics {
                 resources.items.insert(PoolID::Points(Player::P2), 0.0);
                 resources
             },
+            data: Data::new(Vec::new()),
         }
     }
 }
@@ -145,12 +148,12 @@ enum Variant {
     Paddles,
     TrickBall,
     TrickPaddle,
-    WallBreaker,
-    PaddleBallMania,
+    // WallBreaker,
+    // PaddleBallMania,
 }
 
 fn get_variant() -> Variant {
-    println!("please enter which paddles variant you want to play.\npaddles: 1\ntrick-ball: 2\ntrick-paddle: 3\nwall-breaker: 4\npaddle-ball-mania: 5");
+    println!("please enter which paddles variant you want to play.\npaddles: 1\ntrick-ball: 2\ntrick-paddle: 3"); // \nwall-breaker: 4\npaddle-ball-mania: 5");
 
     loop {
         print!("> ");
@@ -162,8 +165,8 @@ fn get_variant() -> Variant {
             "1" => return Variant::Paddles,
             "2" => return Variant::TrickBall,
             "3" => return Variant::TrickPaddle,
-            "4" => return Variant::WallBreaker,
-            "5" => return Variant::PaddleBallMania,
+            // "4" => return Variant::WallBreaker,
+            // "5" => return Variant::PaddleBallMania,
             _ => {
                 println!("please enter a valid input...");
             }
@@ -173,9 +176,9 @@ fn get_variant() -> Variant {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let variant = get_variant();
+    // let variant = get_variant();
 
-    let mut world = World::new(variant);
+    let mut world = World::new();
     let mut logics = Logics::new();
 
     loop {
@@ -188,7 +191,7 @@ async fn main() {
 }
 
 impl World {
-    fn new(variant: Variant) -> Self {
+    fn new() -> Self {
         Self {
             paddles: (
                 Paddle {
@@ -200,37 +203,13 @@ impl World {
                     speed: 1.0,
                 },
             ),
-            balls: match variant {
-                Variant::PaddleBallMania => {
-                    vec![
-                        Ball::new(Vec2::new((WIDTH / 2 - BALL_SIZE / 2) as f32, 50.0)),
-                        Ball::new(Vec2::new((WIDTH / 2 - BALL_SIZE / 2) as f32, 100.0)),
-                        Ball::new(Vec2::new((WIDTH / 2 - BALL_SIZE / 2) as f32, 150.0)),
-                        Ball::new(Vec2::new((WIDTH / 2 - BALL_SIZE / 2) as f32, 200.0)),
-                    ]
-                }
-                _ => vec![Ball::new(Vec2::new(
-                    (WIDTH / 2 - BALL_SIZE / 2) as f32,
-                    (HEIGHT / 2 - BALL_SIZE / 2) as f32,
-                ))],
-            },
-            walls: match variant {
-                Variant::WallBreaker => {
-                    let wall_size = Vec2::new(8.0, 30.0);
-                    vec![
-                        Wall::new(Vec2::new(86.0, 62.0), wall_size),
-                        Wall::new(Vec2::new(130.0, 160.0), wall_size),
-                        Wall::new(Vec2::new(200.0, 180.0), wall_size),
-                    ]
-                }
-                _ => Vec::new(),
-            },
-            serving: match variant {
-                Variant::PaddleBallMania => None,
-                _ => Some(Player::P1),
-            },
+            balls: vec![Ball::new(Vec2::new(
+                (WIDTH / 2 - BALL_SIZE / 2) as f32,
+                (HEIGHT / 2 - BALL_SIZE / 2) as f32,
+            ))],
+            walls: Vec::new(),
+            serving: Some(Player::P1),
             score: (0, 0),
-            variant,
         }
     }
 
@@ -251,7 +230,7 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        let mut remove_walls = Vec::new();
+        // let mut remove_walls = Vec::new();
 
         for contact in logics.collision.contacts.iter() {
             match (
@@ -317,19 +296,6 @@ impl World {
                     if sides_touched.x != 0.0 {
                         self.balls[i].vel.x *= -1.0;
                     }
-                    match self.variant {
-                        Variant::TrickBall => {
-                            if self.balls[i].vel.magnitude() < 5.0 {
-                                self.balls[i].vel *= 1.1;
-                            }
-                        }
-                        Variant::WallBreaker => {
-                            if j < self.walls.len() {
-                                remove_walls.push(j);
-                            }
-                        }
-                        _ => {}
-                    }
                 }
 
                 (CollisionID::Ball(i), CollisionID::Paddle(player)) => {
@@ -340,27 +306,11 @@ impl World {
                         Player::P1 => {
                             if sides_touched.x > 0.0 {
                                 self.balls[i].vel.x *= -1.0;
-                                match self.variant {
-                                    Variant::TrickPaddle => {
-                                        if self.paddles.0.speed < 4.0 {
-                                            self.paddles.0.speed *= 1.2;
-                                        }
-                                    }
-                                    _ => {}
-                                }
                             }
                         }
                         Player::P2 => {
                             if sides_touched.x < 0.0 {
                                 self.balls[i].vel.x *= -1.0;
-                                match self.variant {
-                                    Variant::TrickPaddle => {
-                                        if self.paddles.1.speed < 4.0 {
-                                            self.paddles.1.speed *= 1.2;
-                                        }
-                                    }
-                                    _ => {}
-                                }
                             }
                         }
                     }
@@ -370,10 +320,7 @@ impl World {
 
                     self.change_angle(i, player);
                     if self.balls[i].vel.magnitude() < 5.0 {
-                        match self.variant {
-                            Variant::TrickBall => self.balls[i].vel *= 0.9,
-                            _ => self.balls[i].vel *= 1.1,
-                        }
+                        self.balls[i].vel *= 1.1;
                     }
                 }
 
@@ -381,9 +328,9 @@ impl World {
             }
         }
 
-        for idx in remove_walls.iter().rev() {
+        /* for idx in remove_walls.iter().rev() {
             self.walls.remove(*idx);
-        }
+        } */
 
         self.project_resources(&mut logics.resources);
         logics.resources.update();
@@ -418,24 +365,16 @@ impl World {
         control.mapping[1][1].is_valid = true;
         control.mapping[2][0].is_valid = true;
 
-        match self.variant {
-            Variant::PaddleBallMania => {
-                control.mapping[0][2].is_valid = true;
-                control.mapping[1][2].is_valid = true;
-            }
-            _ => {
-                for Ball { vel, .. } in self.balls.iter() {
-                    if (vel.x, vel.y) == (0.0, 0.0) {
-                        match self.serving {
-                            Some(Player::P1) => control.mapping[0][2].is_valid = true,
-                            Some(Player::P2) => control.mapping[1][2].is_valid = true,
-                            None => {}
-                        }
-                    } else {
-                        control.mapping[0][2].is_valid = false;
-                        control.mapping[1][2].is_valid = false;
-                    }
+        for Ball { vel, .. } in self.balls.iter() {
+            if (vel.x, vel.y) == (0.0, 0.0) {
+                match self.serving {
+                    Some(Player::P1) => control.mapping[0][2].is_valid = true,
+                    Some(Player::P2) => control.mapping[1][2].is_valid = true,
+                    None => {}
                 }
+            } else {
+                control.mapping[0][2].is_valid = false;
+                control.mapping[1][2].is_valid = false;
             }
         }
     }
@@ -468,8 +407,8 @@ impl World {
 
         for Ball { vel, .. } in self.balls.iter_mut() {
             if (vel.x, vel.y) == (0.0, 0.0) {
-                match self.variant {
-                    Variant::PaddleBallMania => {
+                match self.serving {
+                    Some(Player::P1) => {
                         let values = control
                             .get_action_in_set(0, ActionID::Serve(Player::P1))
                             .unwrap();
@@ -477,6 +416,8 @@ impl World {
                             vel.x = 1.0;
                             vel.y = 1.0;
                         }
+                    }
+                    Some(Player::P2) => {
                         let values = control
                             .get_action_in_set(1, ActionID::Serve(Player::P2))
                             .unwrap();
@@ -485,27 +426,7 @@ impl World {
                             vel.y = -1.0;
                         }
                     }
-                    _ => match self.serving {
-                        Some(Player::P1) => {
-                            let values = control
-                                .get_action_in_set(0, ActionID::Serve(Player::P1))
-                                .unwrap();
-                            if values.changed_by >= 1.0 && values.value != 0.0 {
-                                vel.x = 1.0;
-                                vel.y = 1.0;
-                            }
-                        }
-                        Some(Player::P2) => {
-                            let values = control
-                                .get_action_in_set(1, ActionID::Serve(Player::P2))
-                                .unwrap();
-                            if values.changed_by >= 1.0 && values.value != 0.0 {
-                                vel.x = -1.0;
-                                vel.y = -1.0;
-                            }
-                        }
-                        None => {}
-                    },
+                    None => {}
                 }
             }
         }
