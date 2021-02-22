@@ -96,9 +96,9 @@ impl Logics {
                 let mut collision = AabbCollision::new();
                 collision.add_entity_as_xywh(
                     0.0,
-                    HEIGHT as f32, //bottom wall
+                    (HEIGHT - BALL_SIZE) as f32, //bottom wall
                     WIDTH as f32,
-                    0.0,
+                    BALL_SIZE as f32,
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
@@ -108,7 +108,7 @@ impl Logics {
                 collision.add_entity_as_xywh(
                     0.0, //left wall
                     0.0,
-                    0.0,
+                    BALL_SIZE as f32,
                     HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true,
@@ -117,9 +117,9 @@ impl Logics {
                 );
                 collision.add_entity_as_xywh(
                     0.0, //top 1
-                    BALL_SIZE as f32,
-                    ((WIDTH / 2) - BALL_SIZE) as f32,
                     0.0,
+                    ((WIDTH / 2) - BALL_SIZE) as f32,
+                    BALL_SIZE as f32,
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
@@ -136,7 +136,7 @@ impl Logics {
                     CollisionID::InertWall,
                 );
                 collision.add_entity_as_xywh(
-                    0.0,
+                    0.0, //goal
                     0.0,
                     WIDTH as f32,
                     0.0,
@@ -146,9 +146,9 @@ impl Logics {
                     CollisionID::Goal(Player::P1),
                 );
                 collision.add_entity_as_xywh(
-                    WIDTH as f32, //right wall
+                    (WIDTH - BALL_SIZE) as f32, //right wall
                     0.0,
-                    0.0,
+                    BALL_SIZE as f32,
                     HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true,
@@ -299,42 +299,71 @@ impl World {
                         .collision
                         .sides_touched(contact, &CollisionID::Ball(i));
 
-                    self.balls[i].vel.x *= -1.0;
+                    if self.balls[i].vel.x != 0.0 {
+                        if sides_touched.x != 0.0 {
+                            self.balls[i].vel.x = sides_touched.x * -1.0;
+                        } else if sides_touched.y != 0.0 {
+                            self.balls[i].vel.x = sides_touched.y * -1.0;
+                        }
+                    }
 
-                    self.balls[i].vel.y *= -1.0;
+                    if self.balls[i].vel.y == 0.0 {
+                        if sides_touched.y != 0.0 {
+                            self.balls[i].vel.y = sides_touched.x * -1.0;
+                        } else if sides_touched.y != 0.0 {
+                            self.balls[i].vel.y = sides_touched.y * -1.0;
+                        }
+                    } else {
+                        if sides_touched.y != 0.0 {
+                            self.balls[i].vel.y *= -1.0;
+                        }
+                        if sides_touched.x != 0.0 {
+                            self.balls[i].vel.x *= -1.0;
+                        }
+                    }
                 }
 
-                (CollisionID::Ball(i), CollisionID::Ball(j)) => {
+                (CollisionID::Ball(i), CollisionID::Ball(j))
+                | (CollisionID::Ball(j), CollisionID::Ball(i)) => {
                     let sides_touched = logics
                         .collision
                         .sides_touched(contact, &CollisionID::Ball(i));
 
-                    if sides_touched.x != 0.0 {
-                        self.balls[i].vel.x *= -1.0;
-                        self.balls[j].vel.x *= -1.0;
-                    }
-                    if sides_touched.y != 0.0 {
-                        self.balls[i].vel.y *= -1.0;
-                        self.balls[j].vel.y *= -1.0;
+                    if (self.balls[i].vel.x, self.balls[i].vel.y) == (0.0, 0.0) {
+                        if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
+                            self.balls[i].vel = Vec2::new(sides_touched.x, sides_touched.y);
+                        }
+                    } else if (self.balls[j].vel.x, self.balls[j].vel.y) == (0.0, 0.0) {
+                        if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
+                            self.balls[j].vel = Vec2::new(sides_touched.x, sides_touched.y);
+                        }
+                    } else {
+                        if sides_touched.x != 0.0 {
+                            self.balls[i].vel.x *= -1.0;
+                            self.balls[j].vel.x *= -1.0;
+                        }
+                        if sides_touched.y != 0.0 {
+                            self.balls[i].vel.y *= -1.0;
+                            self.balls[j].vel.y *= -1.0;
+                        }
                     }
                 }
 
-                (CollisionID::Ball(i), CollisionID::Paddle(player)) => {
-                    let Vec2 {
-                        x: touch_x,
-                        y: touch_y,
-                    } = logics
+                (CollisionID::Ball(i), CollisionID::Paddle(player))
+                | (CollisionID::Paddle(player), CollisionID::Ball(i)) => {
+                    let sides_touched = logics
                         .collision
                         .sides_touched(contact, &CollisionID::Ball(i));
+
                     if (self.balls[i].vel.x, self.balls[i].vel.y) == (0.0, 0.0) {
-                        if touch_y != 1.0 {
-                            self.balls[i].vel = Vec2::new(touch_x, touch_y);
+                        if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
+                            self.balls[i].vel = Vec2::new(sides_touched.x, sides_touched.y);
                         }
                     } else {
-                        if touch_y != 0.0 {
+                        if sides_touched.y != 0.0 {
                             self.balls[i].vel.y *= -1.0;
                         }
-                        if touch_x != 0.0 {
+                        if sides_touched.x != 0.0 {
                             self.balls[i].vel.x *= -1.0;
                         }
                     }
@@ -500,6 +529,7 @@ impl World {
         for pixel in frame.chunks_exact_mut(4) {
             pixel.copy_from_slice(&[0, 0, 128, 255]);
         }
+        //paddle
         draw_rect(
             self.paddles.0.x as u8,
             self.paddles.0.y as u8,
@@ -509,6 +539,7 @@ impl World {
             frame,
         );
 
+        //top 1 (left)
         draw_rect(
             0,
             0,
@@ -517,6 +548,8 @@ impl World {
             [255, 255, 255, 255],
             frame,
         );
+
+        //top 2 (right)
         draw_rect(
             (WIDTH / 2) + (BALL_SIZE * 2),
             0,
@@ -526,6 +559,30 @@ impl World {
             frame,
         );
 
+        //left wall
+        draw_rect(0, 0, BALL_SIZE, HEIGHT, [255, 255, 255, 255], frame);
+
+        //right wall
+        draw_rect(
+            WIDTH - BALL_SIZE,
+            0,
+            BALL_SIZE,
+            HEIGHT,
+            [255, 255, 255, 255],
+            frame,
+        );
+
+        //bottom wall
+        draw_rect(
+            0,
+            HEIGHT - BALL_SIZE,
+            WIDTH,
+            BALL_SIZE,
+            [255, 255, 255, 255],
+            frame,
+        );
+
+        //balls
         for ball in self.balls.iter() {
             draw_rect(
                 ball.pos.x as u8,
