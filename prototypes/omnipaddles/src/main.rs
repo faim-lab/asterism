@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #![allow(clippy::single_match)]
 use std::io::{self, Write};
 
@@ -6,6 +7,7 @@ use asterism::{
     control::{KeyboardControl, MacroQuadKeyboardControl},
     physics::PointPhysics,
     resources::{QueuedResources, Transaction},
+    GameState, Logic,
 };
 use macroquad::prelude::*;
 
@@ -62,15 +64,19 @@ struct World {
     score: (u8, u8),
 }
 
-struct Logics<'data> {
+impl GameState for World {}
+
+struct Logics {
     control: MacroQuadKeyboardControl<ActionID>,
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
-    data: Data<'data>,
+
+    // i'm slightly scared of actually implementing this
+    data: Data<World>,
 }
 
-impl<'data> Logics<'data> {
+impl Logics {
     fn new() -> Self {
         Self {
             control: {
@@ -283,18 +289,6 @@ impl World {
                         // restituted up/down
                         self.balls[i].vel.y *= -1.0;
                         self.balls[j].vel.y *= -1.0;
-                    }
-                }
-
-                (CollisionID::Ball(i), CollisionID::BreakWall(j)) => {
-                    let sides_touched = logics
-                        .collision
-                        .sides_touched(&contact, &CollisionID::Ball(i));
-                    if sides_touched.y != 0.0 {
-                        self.balls[i].vel.y *= -1.0;
-                    }
-                    if sides_touched.x != 0.0 {
-                        self.balls[i].vel.x *= -1.0;
                     }
                 }
 

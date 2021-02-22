@@ -6,6 +6,7 @@
 //! or concrete locations on demand or over time, and trigger other actions when these transactions
 //! take place.
 
+use crate::{Logic, LogicType};
 use std::collections::BTreeMap;
 
 /// A resource logic that queues transactions, then applies them all at once when updating.
@@ -21,20 +22,16 @@ pub struct QueuedResources<ID: PoolInfo> {
     pub completed: Vec<Result<Vec<ID>, (ID, ResourceError)>>,
 }
 
-impl<ID: PoolInfo> QueuedResources<ID> {
-    pub fn new() -> Self {
-        Self {
-            items: BTreeMap::new(),
-            transactions: Vec::new(),
-            completed: Vec::new(),
-        }
+impl<ID: PoolInfo> Logic for QueuedResources<ID> {
+    fn logic_type(&self) -> LogicType {
+        LogicType::Resource
     }
 
     /// Updates the values of resources based on the queued transactions. If a transaction cannot
     /// be completed (if the value goes below zero), a snapshot of the resources before the
     /// transaction occurred is restored, and the transaction is marked as incomplete, and we
     /// continue to process the remaining transactions.
-    pub fn update(&mut self) {
+    fn update(&mut self) {
         self.completed.clear();
         'exchange: for exchange in self.transactions.iter() {
             let mut snapshot = BTreeMap::new();
@@ -64,6 +61,16 @@ impl<ID: PoolInfo> QueuedResources<ID> {
             self.completed.push(Ok(item_types));
         }
         self.transactions.clear();
+    }
+}
+
+impl<ID: PoolInfo> QueuedResources<ID> {
+    pub fn new() -> Self {
+        Self {
+            items: BTreeMap::new(),
+            transactions: Vec::new(),
+            completed: Vec::new(),
+        }
     }
 
     /// Checks if the transaction is possible or not
