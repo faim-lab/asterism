@@ -4,6 +4,7 @@ use asterism::{
     entity_state::FlatEntityState,
     physics::PointPhysics,
     resources::{PoolInfo, QueuedResources, Transaction},
+    Logic,
 };
 use macroquad::prelude::*;
 use std::io::{self, Write};
@@ -126,44 +127,36 @@ impl Logics {
                 let mut collision = AabbCollision::new();
                 // left
                 collision.add_entity_as_xywh(
-                    -2.0,
-                    0.0,
-                    2.0,
-                    HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(-2.0, 0.0),
+                    Vec2::new(2.0, HEIGHT as f32),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::Wall,
                 );
                 // right
                 collision.add_entity_as_xywh(
-                    WIDTH as f32,
-                    0.0,
-                    2.0,
-                    HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(WIDTH as f32, 0.0),
+                    Vec2::new(2.0, HEIGHT as f32),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::Wall,
                 );
                 // top
                 collision.add_entity_as_xywh(
-                    0.0,
-                    -2.0,
-                    WIDTH as f32,
-                    2.0,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(0.0, -2.0),
+                    Vec2::new(WIDTH as f32, 2.0),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::Wall,
                 );
                 // bottom
                 collision.add_entity_as_xywh(
-                    0.0,
-                    HEIGHT as f32,
-                    WIDTH as f32,
-                    2.0,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(0.0, HEIGHT as f32),
+                    Vec2::new(WIDTH as f32, 2.0),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::Floor,
@@ -325,22 +318,19 @@ impl World {
         collision.metadata.resize_with(4, Default::default);
 
         collision.add_entity_as_xywh(
-            self.basket.x,
-            self.basket.y,
-            BASKET_WIDTH as f32,
-            BASKET_HEIGHT as f32,
+            self.basket,
+            Vec2::new(BASKET_WIDTH as f32, BASKET_HEIGHT as f32),
             self.basket_vel,
             true,
             true,
             CollisionID::Basket,
         );
 
+        let apple_size = Vec2::new(APPLE_SIZE as f32, APPLE_SIZE as f32);
         for (i, apple) in self.apples.iter().enumerate() {
             collision.add_entity_as_xywh(
-                apple.pos.x as f32,
-                apple.pos.y as f32,
-                APPLE_SIZE as f32,
-                APPLE_SIZE as f32,
+                apple.pos,
+                apple_size,
                 apple.vel,
                 true,
                 false,

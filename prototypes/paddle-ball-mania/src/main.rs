@@ -4,6 +4,7 @@ use asterism::{
     control::{KeyboardControl, MacroQuadKeyboardControl},
     physics::PointPhysics,
     resources::{PoolInfo, QueuedResources, Transaction},
+    Logic,
 };
 use macroquad::prelude::*;
 
@@ -87,44 +88,36 @@ impl Logics {
                 let mut collision = AabbCollision::new();
                 // left
                 collision.add_entity_as_xywh(
-                    -2.0,
-                    0.0,
-                    2.0,
-                    HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(-2.0, 0.0),
+                    Vec2::new(2.0, HEIGHT as f32),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::ScoreWall(Player::P1),
                 );
                 // right
                 collision.add_entity_as_xywh(
-                    WIDTH as f32,
-                    0.0,
-                    2.0,
-                    HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(WIDTH as f32, 0.0),
+                    Vec2::new(2.0, HEIGHT as f32),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::ScoreWall(Player::P2),
                 );
                 // top
                 collision.add_entity_as_xywh(
-                    0.0,
-                    -2.0,
-                    WIDTH as f32,
-                    2.0,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(0.0, -2.0),
+                    Vec2::new(WIDTH as f32, 2.0),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::BounceWall,
                 );
                 // bottom
                 collision.add_entity_as_xywh(
-                    0.0,
-                    HEIGHT as f32,
-                    WIDTH as f32,
-                    2.0,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(0.0, HEIGHT as f32),
+                    Vec2::new(WIDTH as f32, 2.0),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::BounceWall,
@@ -412,12 +405,11 @@ impl World {
         collision.velocities.resize_with(4, Default::default);
         collision.metadata.resize_with(4, Default::default);
 
+        let ball_size = Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32);
         for (i, Ball { pos, vel, .. }) in self.balls.iter().enumerate() {
             collision.add_entity_as_xywh(
-                pos.x,
-                pos.y,
-                BALL_SIZE as f32,
-                BALL_SIZE as f32,
+                Vec2::new(pos.x, pos.y),
+                ball_size,
                 *vel,
                 true,
                 false,
@@ -426,10 +418,8 @@ impl World {
         }
 
         collision.add_entity_as_xywh(
-            PADDLE_OFF_X as f32,
-            self.paddles.0 as f32,
-            PADDLE_WIDTH as f32,
-            PADDLE_HEIGHT as f32,
+            Vec2::new(PADDLE_OFF_X as f32, self.paddles.0 as f32),
+            Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32),
             Vec2::new(0.0, control.values[0][1].value - control.values[0][0].value),
             true,
             true,
@@ -437,10 +427,11 @@ impl World {
         );
 
         collision.add_entity_as_xywh(
-            (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32,
-            self.paddles.1 as f32,
-            PADDLE_WIDTH as f32,
-            PADDLE_HEIGHT as f32,
+            Vec2::new(
+                (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32,
+                self.paddles.1 as f32,
+            ),
+            Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32),
             Vec2::new(0.0, control.values[1][1].value - control.values[1][0].value),
             true,
             true,

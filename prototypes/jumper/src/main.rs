@@ -3,7 +3,7 @@
 
 use asterism::{
     collision::AabbCollision, control::KeyboardControl, control::WinitKeyboardControl,
-    entity_state::FlatEntityState, physics::PointPhysics,
+    entity_state::FlatEntityState, physics::PointPhysics, Logic,
 };
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use ultraviolet::Vec2;
@@ -82,41 +82,33 @@ impl Logics {
             collision: {
                 let mut collision = AabbCollision::new();
                 collision.add_entity_as_xywh(
-                    -1.0,
-                    0.0,
-                    1.0,
-                    HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(-1.0, 0.0),
+                    Vec2::new(1.0, HEIGHT as f32),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::LeftWall,
                 );
                 collision.add_entity_as_xywh(
-                    WIDTH as f32,
-                    0.0,
-                    1.0,
-                    HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(WIDTH as f32, 0.0),
+                    Vec2::new(1.0, HEIGHT as f32),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::RightWall,
                 );
                 collision.add_entity_as_xywh(
-                    0.0,
-                    -1.0,
-                    WIDTH as f32,
-                    1.0,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(0.0, -1.0),
+                    Vec2::new(WIDTH as f32, 1.0),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::TopWall,
                 );
                 collision.add_entity_as_xywh(
-                    0.0,
-                    HEIGHT as f32,
-                    WIDTH as f32,
-                    1.0,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(0.0, HEIGHT as f32),
+                    Vec2::new(WIDTH as f32, 1.0),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::BottomWall,
@@ -406,40 +398,38 @@ impl World {
         collision.metadata.resize_with(4, Default::default);
 
         collision.add_entity_as_xywh(
-            self.player.x as f32 + self.player.err.x,
-            self.player.y as f32 + self.player.err.y,
-            self.player.w as f32,
-            self.player.h as f32,
+            Vec2::new(
+                self.player.x as f32 + self.player.err.x,
+                self.player.y as f32 + self.player.err.y,
+            ),
+            Vec2::new(self.player.w as f32, self.player.h as f32),
             self.player.vel,
             true,
             false,
             CollisionID::Player,
         );
         collision.add_entity_as_xywh(
-            self.ground.x as f32,
-            self.ground.y as f32,
-            self.ground.w as f32,
-            self.ground.h as f32,
+            Vec2::new(self.ground.x as f32, self.ground.y as f32),
+            Vec2::new(self.ground.w as f32, self.ground.h as f32),
             self.ground.vel,
             true,
             true,
             CollisionID::Ground,
         );
         collision.add_entity_as_xywh(
-            self.platform.x as f32,
-            self.platform.y as f32,
-            self.platform.w as f32,
-            self.platform.h as f32,
+            Vec2::new(self.platform.x as f32, self.platform.y as f32),
+            Vec2::new(self.platform.w as f32, self.platform.h as f32),
             self.platform.vel,
             true,
             true,
             CollisionID::MovingPlatform,
         );
         collision.add_entity_as_xywh(
-            self.enemy.x as f32 + self.enemy.err.x,
-            self.enemy.y as f32 + self.enemy.err.y,
-            self.enemy.w as f32,
-            self.enemy.h as f32,
+            Vec2::new(
+                self.enemy.x as f32 + self.enemy.err.x,
+                self.enemy.y as f32 + self.enemy.err.y,
+            ),
+            Vec2::new(self.enemy.w as f32, self.enemy.h as f32),
             self.enemy.vel,
             true,
             false,

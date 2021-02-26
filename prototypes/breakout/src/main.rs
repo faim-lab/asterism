@@ -4,6 +4,7 @@ use asterism::{
     control::MacroQuadKeyboardControl,
     physics::PointPhysics,
     resources::{PoolInfo, QueuedResources, Transaction},
+    Logic,
 };
 use macroquad::prelude::*;
 use std::io::{self, Write};
@@ -123,44 +124,36 @@ impl Logics {
                 let mut collision = AabbCollision::new();
                 // left
                 collision.add_entity_as_xywh(
-                    -2.0,
-                    0.0,
-                    2.0,
-                    HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(-2.0, 0.0),
+                    Vec2::new(2.0, HEIGHT as f32),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::SideWall,
                 );
                 // right
                 collision.add_entity_as_xywh(
-                    WIDTH as f32,
-                    0.0,
-                    2.0,
-                    HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(WIDTH as f32, 0.0),
+                    Vec2::new(2.0, HEIGHT as f32),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::SideWall,
                 );
                 // top
                 collision.add_entity_as_xywh(
-                    0.0,
-                    -2.0,
-                    WIDTH as f32,
-                    2.0,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(0.0, -2.0),
+                    Vec2::new(WIDTH as f32, 2.0),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::TopWall,
                 );
                 // bottom
                 collision.add_entity_as_xywh(
-                    0.0,
-                    HEIGHT as f32,
-                    WIDTH as f32,
-                    2.0,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(0.0, HEIGHT as f32),
+                    Vec2::new(WIDTH as f32, 2.0),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::EndWall,
@@ -332,21 +325,18 @@ impl World {
         collision.metadata.resize_with(4, Default::default);
 
         collision.add_entity_as_xywh(
-            self.ball.x,
-            self.ball.y,
-            BALL_SIZE as f32,
-            BALL_SIZE as f32,
+            self.ball,
+            Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32),
             self.ball_vel,
             true,
             false,
             CollisionID::Ball,
         );
 
+        let paddle_size = Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32);
         collision.add_entity_as_xywh(
-            self.paddle as f32,
-            PADDLE_OFF_Y as f32,
-            PADDLE_WIDTH as f32,
-            PADDLE_HEIGHT as f32,
+            Vec2::new(self.paddle as f32, PADDLE_OFF_Y as f32),
+            paddle_size,
             Vec2::new(0.0, control.values[0][1].value - control.values[0][0].value),
             true,
             true,
@@ -357,11 +347,12 @@ impl World {
             for (j, Block { visible, .. }) in row.iter().enumerate() {
                 if *visible {
                     collision.add_entity_as_xywh(
-                        j as f32 * BLOCK_WIDTH as f32,
-                        i as f32 * BLOCK_HEIGHT as f32,
-                        BLOCK_WIDTH as f32,
-                        BLOCK_HEIGHT as f32,
-                        Vec2::new(0.0, 0.0),
+                        Vec2::new(
+                            j as f32 * BLOCK_WIDTH as f32,
+                            i as f32 * BLOCK_HEIGHT as f32,
+                        ),
+                        Vec2::new(BLOCK_WIDTH as f32, BLOCK_HEIGHT as f32),
+                        Vec2::zero(),
                         true,
                         true,
                         CollisionID::Block(i, j),

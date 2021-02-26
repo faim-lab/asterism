@@ -3,6 +3,7 @@ use asterism::{
     control::{KeyboardControl, MacroQuadKeyboardControl},
     linking::GraphedLinking,
     resources::{PoolInfo, QueuedResources, Transaction},
+    Logic,
 };
 use macroquad::prelude::*;
 
@@ -129,23 +130,20 @@ impl Logics {
                 let mut collision = AabbCollision::new();
                 for wall in walls.iter() {
                     collision.add_entity_as_xywh(
-                        wall.x as f32,
-                        wall.y as f32,
-                        wall.w as f32,
-                        wall.h as f32,
-                        Vec2::new(0.0, 0.0),
+                        Vec2::new(wall.x as f32, wall.y as f32),
+                        Vec2::new(wall.w as f32, wall.h as f32),
+                        Vec2::zero(),
                         true,
                         true,
                         CollisionID::Wall,
                     );
                 }
+                let portal_size = Vec2::new(PORTAL_SIZE as f32, PORTAL_SIZE as f32);
                 for (i, portal) in portals.iter().enumerate() {
                     collision.add_entity_as_xywh(
-                        portal.x as f32,
-                        portal.y as f32,
-                        PORTAL_SIZE as f32,
-                        PORTAL_SIZE as f32,
-                        Vec2::new(0.0, 0.0),
+                        Vec2::new(portal.x as f32, portal.y as f32),
+                        portal_size,
+                        Vec2::zero(),
                         false,
                         true,
                         CollisionID::Portal(portal.to, i),
@@ -364,13 +362,13 @@ impl World {
             .resize_with(self.walls.len() + self.portals.len(), Default::default);
 
         // create collider for items
+
+        let item_size = Vec2::new(ITEM_SIZE as f32, ITEM_SIZE as f32);
         for item in &self.items {
             collision.add_entity_as_xywh(
-                item.x as f32,
-                item.y as f32,
-                ITEM_SIZE as f32,
-                ITEM_SIZE as f32,
-                Vec2::new(0.0, 0.0),
+                Vec2::new(item.x as f32, item.y as f32),
+                item_size,
+                Vec2::zero(),
                 false,
                 true,
                 CollisionID::Item,
@@ -379,10 +377,8 @@ impl World {
 
         // create collider for player
         collision.add_entity_as_xywh(
-            self.x as f32,
-            self.y as f32,
-            BOX_SIZE as f32,
-            BOX_SIZE as f32,
+            Vec2::new(self.x as f32, self.y as f32),
+            Vec2::new(BOX_SIZE as f32, BOX_SIZE as f32),
             Vec2::new(
                 control
                     .get_action(ActionID::Move(Direction::Right))

@@ -1,4 +1,3 @@
-#![deny(clippy::all)]
 #![forbid(unsafe_code)]
 
 use asterism::{
@@ -6,6 +5,7 @@ use asterism::{
     control::{KeyboardControl, WinitKeyboardControl},
     physics::PointPhysics,
     resources::{PoolInfo, QueuedResources, Transaction},
+    Logic,
 };
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use ultraviolet::Vec2;
@@ -97,41 +97,33 @@ impl Logics {
             collision: {
                 let mut collision = AabbCollision::new();
                 collision.add_entity_as_xywh(
-                    0.0,
-                    HEIGHT as f32,
-                    WIDTH as f32,
-                    0.0,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(0.0, HEIGHT as f32),
+                    Vec2::new(WIDTH as f32, 0.0),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::TopWall(Player::P1),
                 );
                 collision.add_entity_as_xywh(
-                    0.0,
-                    0.0,
-                    WIDTH as f32,
-                    0.0,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::zero(),
+                    Vec2::new(WIDTH as f32, 0.0),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::BottomWall(Player::P2),
                 );
                 collision.add_entity_as_xywh(
-                    WIDTH as f32,
-                    0.0,
-                    0.0,
-                    HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(WIDTH as f32, 0.0),
+                    Vec2::new(0.0, HEIGHT as f32),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::RightWall,
                 );
                 collision.add_entity_as_xywh(
-                    0.0,
-                    0.0,
-                    0.0,
-                    HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::zero(),
+                    Vec2::new(0.0, HEIGHT as f32),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::LeftWall,
@@ -441,20 +433,18 @@ impl World {
         collision.velocities.resize_with(4, Default::default);
         collision.metadata.resize_with(4, Default::default);
         collision.add_entity_as_xywh(
-            self.ball.0 as f32,
-            self.ball.1 as f32,
-            BALL_SIZE as f32,
-            BALL_SIZE as f32,
+            Vec2::new(self.ball.0 as f32, self.ball.1 as f32),
+            Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32),
             self.ball_vel,
             true,
             false,
             CollisionID::Ball,
         );
+
+        let paddle_size = Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32);
         collision.add_entity_as_xywh(
-            self.paddles.0.x as f32,
-            self.paddles.0.y as f32,
-            PADDLE_WIDTH as f32,
-            PADDLE_HEIGHT as f32,
+            self.paddles.0,
+            paddle_size,
             Vec2::new(
                 -control.values[0][0].value + control.values[0][1].value,
                 -control.values[0][2].value + control.values[0][3].value,
@@ -465,8 +455,8 @@ impl World {
         );
 
         collision.add_entity_as_xywh(
-            self.paddles.1.x as f32,
-            self.paddles.1.y as f32,
+            self.paddles.1,
+            paddle_size,
             PADDLE_WIDTH as f32,
             PADDLE_HEIGHT as f32,
             Vec2::new(
