@@ -8,4 +8,4 @@ edition = "2018"
 
 [dependencies]
 asterism = { path = "../../asterism" }
-macroquad = { git = "https://github.com/not-fl3/macroquad", rev = "b3fc6aa8f9a66e32a401b00864af8c99fbfc26e2" }
+macroquad = { git = "https://github.com/not-fl3/macroquad", rev = "31cff5d89ed17a6c83f39cf6568348dab25145dc" }

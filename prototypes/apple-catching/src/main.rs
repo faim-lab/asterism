@@ -5,7 +5,7 @@ use asterism::{
     physics::PointPhysics,
     resources::{PoolInfo, QueuedResources, Transaction},
 };
-use macroquad::prelude::*;
+use macroquad::*;
 use std::io::{self, Write};
 
 const WIDTH: u8 = 255;
@@ -234,7 +234,7 @@ impl World {
                         && logics
                             .collision
                             .sides_touched(contact, &CollisionID::Apple(i))
-                            .y
+                            .y()
                             < 0.0
                     {
                         self.apples.remove(i);
@@ -283,8 +283,10 @@ impl World {
     }
 
     fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
-        self.basket_vel.x = -control.get_action(ActionID::MoveLeft).unwrap().value
-            + control.get_action(ActionID::MoveRight).unwrap().value;
+        self.basket_vel.set_x(
+            -control.get_action(ActionID::MoveLeft).unwrap().value
+                + control.get_action(ActionID::MoveRight).unwrap().value,
+        );
     }
 
     fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
@@ -296,7 +298,7 @@ impl World {
         }
         physics.add_physics_entity(
             self.basket,
-            Vec2::new(self.basket_vel.x, 0.0),
+            Vec2::new(self.basket_vel.x(), 0.0),
             Vec2::new(0.0, 0.0),
         );
     }
@@ -325,8 +327,8 @@ impl World {
         collision.metadata.resize_with(4, Default::default);
 
         collision.add_entity_as_xywh(
-            self.basket.x,
-            self.basket.y,
+            self.basket.x(),
+            self.basket.y(),
             BASKET_WIDTH as f32,
             BASKET_HEIGHT as f32,
             self.basket_vel,
@@ -337,8 +339,8 @@ impl World {
 
         for (i, apple) in self.apples.iter().enumerate() {
             collision.add_entity_as_xywh(
-                apple.pos.x as f32,
-                apple.pos.y as f32,
+                apple.pos.x() as f32,
+                apple.pos.y() as f32,
                 APPLE_SIZE as f32,
                 APPLE_SIZE as f32,
                 apple.vel,
@@ -383,8 +385,8 @@ impl World {
                 collision.metadata[contact.j].id,
             ) {
                 (CollisionID::Apple(i), CollisionID::Floor) => {
-                    if collision.sides_touched(contact, &CollisionID::Apple(i)).y < 0.0 {
-                        if self.apples[i].vel.y < 1.0 {
+                    if collision.sides_touched(contact, &CollisionID::Apple(i)).y() < 0.0 {
+                        if self.apples[i].vel.y() < 1.0 {
                             entity_state.conditions[i][2] = true;
                         } else {
                             entity_state.conditions[i][1] = true;
@@ -393,16 +395,16 @@ impl World {
                     }
                 }
                 (CollisionID::Apple(i), CollisionID::Apple(j)) => {
-                    if collision.sides_touched(contact, &CollisionID::Apple(i)).y < 0.0 {
-                        if self.apples[i].vel.y < 1.0 {
+                    if collision.sides_touched(contact, &CollisionID::Apple(i)).y() < 0.0 {
+                        if self.apples[i].vel.y() < 1.0 {
                             entity_state.conditions[i][2] = true;
                         } else {
                             entity_state.conditions[i][1] = true;
                             bounce.push(i);
                         }
                     }
-                    if collision.sides_touched(contact, &CollisionID::Apple(j)).y < 0.0 {
-                        if self.apples[j].vel.y < 1.0 {
+                    if collision.sides_touched(contact, &CollisionID::Apple(j)).y() < 0.0 {
+                        if self.apples[j].vel.y() < 1.0 {
                             entity_state.conditions[j][2] = true;
                         } else {
                             entity_state.conditions[j][1] = true;
@@ -423,11 +425,11 @@ impl World {
         for (i, state) in entity_state.states.iter().enumerate() {
             match entity_state.maps[i].states[*state].id {
                 StateID::AppleBouncing => {
-                    self.apples[i].vel.y *= -0.6;
+                    *self.apples[i].vel.y_mut() *= -0.6;
                 }
                 StateID::AppleFalling => {}
                 StateID::AppleResting => {
-                    self.apples[i].vel.y = 0.0;
+                    self.apples[i].vel.set_y(0.0);
                 }
             }
         }
@@ -458,8 +460,8 @@ impl World {
     fn draw(&self) {
         clear_background(Color::new(0., 0., 0.5, 1.));
         draw_rectangle(
-            self.basket.x,
-            self.basket.y,
+            self.basket.x(),
+            self.basket.y(),
             BASKET_WIDTH as f32,
             BASKET_HEIGHT as f32,
             WHITE,
@@ -467,8 +469,8 @@ impl World {
 
         for apple in self.apples.iter() {
             draw_circle(
-                apple.pos.x + APPLE_SIZE as f32 / 2.0,
-                apple.pos.y + APPLE_SIZE as f32 / 2.0,
+                apple.pos.x() + APPLE_SIZE as f32 / 2.0,
+                apple.pos.y() + APPLE_SIZE as f32 / 2.0,
                 APPLE_SIZE as f32 / 2.0,
                 apple.color,
             );

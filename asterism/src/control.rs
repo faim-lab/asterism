@@ -9,7 +9,7 @@
 
 #[cfg(feature = "asterism-bevy")]
 use bevy_input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
-use macroquad::prelude::{is_key_down, KeyCode as MqKeyCode};
+use macroquad::{is_key_down, KeyCode as MqKeyCode};
 use winit::event::VirtualKeyCode;
 use winit_input_helper::WinitInputHelper;
 
