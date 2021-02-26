@@ -6,15 +6,18 @@ use asterism::{
     collision::{AabbCollision, Vec2 as AstVec2},
     control::{KeyboardControl, MacroQuadKeyboardControl},
     physics::PointPhysics,
-    resources::{QueuedResources, Transaction},
-    GameState, Logic,
+    resources::QueuedResources, //, Transaction},
+    GameState,
+    Logic,
 };
 use macroquad::prelude::*;
 
 mod data;
+mod game_data;
 mod ids;
 
 use data::*;
+use game_data::*;
 use ids::*;
 
 const WIDTH: u8 = 255;
@@ -71,8 +74,6 @@ struct Logics {
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
-
-    // i'm slightly scared of actually implementing this
     data: Data<World>,
 }
 
@@ -95,10 +96,8 @@ impl Logics {
                 let mut collision = AabbCollision::new();
                 // left
                 collision.add_entity_as_xywh(
-                    -2.0,
-                    0.0,
-                    2.0,
-                    HEIGHT as f32,
+                    Vec2::new(-2.0, 0.0),
+                    Vec2::new(2.0, HEIGHT as f32),
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
@@ -106,10 +105,8 @@ impl Logics {
                 );
                 // right
                 collision.add_entity_as_xywh(
-                    WIDTH as f32,
-                    0.0,
-                    2.0,
-                    HEIGHT as f32,
+                    Vec2::new(WIDTH as f32, 0.0),
+                    Vec2::new(2.0, HEIGHT as f32),
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
@@ -117,10 +114,8 @@ impl Logics {
                 );
                 // top
                 collision.add_entity_as_xywh(
-                    0.0,
-                    -2.0,
-                    WIDTH as f32,
-                    2.0,
+                    Vec2::new(0.0, -2.0),
+                    Vec2::new(WIDTH as f32, 2.0),
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
@@ -128,10 +123,8 @@ impl Logics {
                 );
                 // bottom
                 collision.add_entity_as_xywh(
-                    0.0,
-                    HEIGHT as f32,
-                    WIDTH as f32,
-                    2.0,
+                    Vec2::new(0.0, HEIGHT as f32),
+                    Vec2::new(WIDTH as f32, 2.0),
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
@@ -145,7 +138,26 @@ impl Logics {
                 resources.items.insert(PoolID::Points(Player::P2), 0.0);
                 resources
             },
-            data: Data::new(Vec::new()),
+            data: Data::new(vec![
+                (
+                    CollisionEvent::new(CollisionID::Ball(0), CollisionID::ScoreWall(Player::P2)),
+                    Box::new(AddPoint {
+                        player: Player::P1,
+                        ball_idx: 0,
+                    }),
+                ),
+                (
+                    CollisionEvent::new(CollisionID::Ball(0), CollisionID::ScoreWall(Player::P1)),
+                    Box::new(AddPoint {
+                        player: Player::P2,
+                        ball_idx: 0,
+                    }),
+                ),
+                /* ( something something trait object grumble
+                    CollisionEvent::new(CollisionID::Ball(0), CollisionID::ScoreWall(Player::P1)),
+                    Box::new(BounceWall::new(0)),
+                ) ,*/
+            ]),
         }
     }
 }
@@ -188,9 +200,56 @@ async fn main() {
     let mut logics = Logics::new();
 
     loop {
-        if !world.update(&mut logics) {
+        world.project_control(&mut logics.control);
+        logics.control.update(&());
+        world.unproject_control(&logics.control);
+
+        if logics.control.values[2][0].value != 0.0 {
             break;
         }
+
+        world.project_physics(&mut logics.physics);
+        logics.physics.update();
+        world.unproject_physics(&logics.physics);
+
+        world.project_collision(&mut logics.collision);
+        logics.collision.update();
+        world.unproject_collision(&logics.collision);
+
+        for contact in logics.collision.contacts.iter() {
+            let id_i = logics.collision.metadata[contact.i].id;
+            let id_j = logics.collision.metadata[contact.j].id;
+            for (event, reaction) in logics.data.collision_interactions.iter() {
+                if CollisionEvent::new(id_i, id_j) == *event {
+                    reaction.react(&mut world, &mut logics.resources);
+                    break;
+                }
+            }
+        }
+
+        world.project_resources(&mut logics.resources);
+        logics.resources.update();
+        world.unproject_resources(&logics.resources);
+
+        for completed in logics.resources.completed.iter() {
+            match completed {
+                Ok(item_types) => {
+                    for item_type in item_types {
+                        match item_type {
+                            PoolID::Points(player) => {
+                                match player {
+                                    Player::P1 => print!("p1"),
+                                    Player::P2 => print!("p2"),
+                                }
+                                println!(" scores! p1: {}, p2: {}", world.score.0, world.score.1);
+                            }
+                        }
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+
         world.draw();
         next_frame().await;
     }
@@ -217,139 +276,6 @@ impl World {
             serving: Some(Player::P1),
             score: (0, 0),
         }
-    }
-
-    fn update(&mut self, logics: &mut Logics) -> bool {
-        self.project_control(&mut logics.control);
-        logics.control.update(&());
-        self.unproject_control(&logics.control);
-
-        if logics.control.values[2][0].value != 0.0 {
-            return false;
-        }
-
-        self.project_physics(&mut logics.physics);
-        logics.physics.update();
-        self.unproject_physics(&logics.physics);
-
-        self.project_collision(&mut logics.collision);
-        logics.collision.update();
-        self.unproject_collision(&logics.collision);
-
-        // let mut remove_walls = Vec::new();
-
-        for contact in logics.collision.contacts.iter() {
-            match (
-                logics.collision.metadata[contact.i].id,
-                logics.collision.metadata[contact.j].id,
-            ) {
-                (CollisionID::Ball(i), CollisionID::ScoreWall(player)) => {
-                    self.balls[i].pos = self.balls[i].starting_pos;
-                    self.balls[i].vel = Vec2::zero();
-                    match player {
-                        Player::P1 => {
-                            logics
-                                .resources
-                                .transactions
-                                .push(vec![(PoolID::Points(Player::P2), Transaction::Change(1.0))]);
-                            self.serving = Some(Player::P2);
-                        }
-                        Player::P2 => {
-                            logics
-                                .resources
-                                .transactions
-                                .push(vec![(PoolID::Points(Player::P1), Transaction::Change(1.0))]);
-                            self.serving = Some(Player::P1);
-                        }
-                    }
-                }
-
-                (CollisionID::Ball(i), CollisionID::BounceWall) => {
-                    let sides_touched = logics
-                        .collision
-                        .sides_touched(&contact, &CollisionID::Ball(i));
-                    if sides_touched.y != 0.0 {
-                        self.balls[i].vel.y *= -1.0;
-                    }
-                    if sides_touched.x != 0.0 {
-                        self.balls[i].vel.x *= -1.0;
-                    }
-                }
-
-                (CollisionID::Ball(i), CollisionID::Ball(j)) => {
-                    let sides_touched = logics
-                        .collision
-                        .sides_touched(contact, &CollisionID::Ball(i));
-                    if sides_touched.x != 0.0 {
-                        // restituted left/right
-                        self.balls[i].vel.x *= -1.0;
-                        self.balls[j].vel.x *= -1.0;
-                    }
-                    if sides_touched.y != 0.0 {
-                        // restituted up/down
-                        self.balls[i].vel.y *= -1.0;
-                        self.balls[j].vel.y *= -1.0;
-                    }
-                }
-
-                (CollisionID::Ball(i), CollisionID::Paddle(player)) => {
-                    let sides_touched = logics
-                        .collision
-                        .sides_touched(contact, &CollisionID::Ball(i));
-                    match player {
-                        Player::P1 => {
-                            if sides_touched.x > 0.0 {
-                                self.balls[i].vel.x *= -1.0;
-                            }
-                        }
-                        Player::P2 => {
-                            if sides_touched.x < 0.0 {
-                                self.balls[i].vel.x *= -1.0;
-                            }
-                        }
-                    }
-                    if sides_touched.y != 0.0 {
-                        self.balls[i].vel.y *= -1.0;
-                    }
-
-                    self.change_angle(i, player);
-                    if self.balls[i].vel.magnitude() < 5.0 {
-                        self.balls[i].vel *= 1.1;
-                    }
-                }
-
-                _ => {}
-            }
-        }
-
-        /* for idx in remove_walls.iter().rev() {
-            self.walls.remove(*idx);
-        } */
-
-        self.project_resources(&mut logics.resources);
-        logics.resources.update();
-        self.unproject_resources(&logics.resources);
-
-        for completed in logics.resources.completed.iter() {
-            match completed {
-                Ok(item_types) => {
-                    for item_type in item_types {
-                        match item_type {
-                            PoolID::Points(player) => {
-                                match player {
-                                    Player::P1 => print!("p1"),
-                                    Player::P2 => print!("p2"),
-                                }
-                                println!(" scores! p1: {}, p2: {}", self.score.0, self.score.1);
-                            }
-                        }
-                    }
-                }
-                Err(_) => {}
-            }
-        }
-
-        true
     }
 
     fn project_control(&self, control: &mut MacroQuadKeyboardControl<ActionID>) {
@@ -448,25 +374,15 @@ impl World {
         collision.velocities.resize_with(4, Default::default);
         collision.metadata.resize_with(4, Default::default);
 
+        let ball_size = Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32);
         for (i, Ball { pos, vel, .. }) in self.balls.iter().enumerate() {
-            collision.add_entity_as_xywh(
-                pos.x,
-                pos.y,
-                BALL_SIZE as f32,
-                BALL_SIZE as f32,
-                *vel,
-                true,
-                false,
-                CollisionID::Ball(i),
-            );
+            collision.add_entity_as_xywh(*pos, ball_size, *vel, true, false, CollisionID::Ball(i));
         }
 
         for (i, Wall { pos, size }) in self.walls.iter().enumerate() {
             collision.add_entity_as_xywh(
-                pos.x,
-                pos.y,
-                size.x,
-                size.y,
+                *pos,
+                *size,
                 Vec2::zero(),
                 true,
                 true,
@@ -474,11 +390,10 @@ impl World {
             );
         }
 
+        let paddle_size = Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32);
         collision.add_entity_as_xywh(
-            PADDLE_OFF_X as f32,
-            self.paddles.0.pos as f32,
-            PADDLE_WIDTH as f32,
-            PADDLE_HEIGHT as f32,
+            Vec2::new(PADDLE_OFF_X as f32, self.paddles.0.pos as f32),
+            paddle_size,
             Vec2::new(0.0, self.paddles.0.speed),
             true,
             true,
@@ -486,10 +401,11 @@ impl World {
         );
 
         collision.add_entity_as_xywh(
-            (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32,
-            self.paddles.1.pos as f32,
-            PADDLE_WIDTH as f32,
-            PADDLE_HEIGHT as f32,
+            Vec2::new(
+                (WIDTH - PADDLE_OFF_X - PADDLE_WIDTH) as f32,
+                self.paddles.1.pos as f32,
+            ),
+            paddle_size,
             Vec2::new(0.0, self.paddles.1.speed),
             true,
             true,
