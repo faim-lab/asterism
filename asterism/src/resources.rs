@@ -6,7 +6,7 @@
 //! or concrete locations on demand or over time, and trigger other actions when these transactions
 //! take place.
 
-use crate::{Logic, LogicType};
+use crate::Logic;
 use std::collections::BTreeMap;
 
 /// A resource logic that queues transactions, then applies them all at once when updating.
@@ -23,10 +23,6 @@ pub struct QueuedResources<ID: PoolInfo> {
 }
 
 impl<ID: PoolInfo> Logic for QueuedResources<ID> {
-    fn logic_type(&self) -> LogicType {
-        LogicType::Resource
-    }
-
     /// Updates the values of resources based on the queued transactions. If a transaction cannot
     /// be completed (if the value goes below zero), a snapshot of the resources before the
     /// transaction occurred is restored, and the transaction is marked as incomplete, and we
@@ -64,13 +60,19 @@ impl<ID: PoolInfo> Logic for QueuedResources<ID> {
     }
 }
 
-impl<ID: PoolInfo> QueuedResources<ID> {
-    pub fn new() -> Self {
+impl<ID: PoolInfo> Default for QueuedResources<ID> {
+    fn default() -> Self {
         Self {
             items: BTreeMap::new(),
             transactions: Vec::new(),
             completed: Vec::new(),
         }
+    }
+}
+
+impl<ID: PoolInfo> QueuedResources<ID> {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Checks if the transaction is possible or not
@@ -94,7 +96,7 @@ impl<ID: PoolInfo> QueuedResources<ID> {
 
     /// Gets the value of the item based on its ID.
     pub fn get_value_by_itemtype(&self, item_type: &ID) -> Option<f64> {
-        self.items.get(item_type).and_then(|value| Some(*value))
+        self.items.get(item_type).cloned()
     }
 }
 

@@ -148,8 +148,8 @@ pub struct AabbCollision<ID: Copy + Eq, V2: Vec2> {
     pub displacements: Vec<V2>,
 }
 
-impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
-    pub fn new() -> Self {
+impl<ID: Copy + Eq, V2: Vec2> Default for AabbCollision<ID, V2> {
+    fn default() -> Self {
         Self {
             centers: Vec::new(),
             half_sizes: Vec::new(),
@@ -158,6 +158,12 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
             contacts: Vec::new(),
             displacements: Vec::new(),
         }
+    }
+}
+
+impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Checks collisions every frame and handles restitution (works most of the time).
@@ -231,16 +237,8 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
                 displ_i.x() - already_moved_i.x(),
                 displ_i.y() - already_moved_i.y(),
             );
-            let flipped_i = {
-                if {
-                    already_moved_i.x().abs() > displ_i.x().abs()
-                        || already_moved_i.y().abs() > displ_i.y().abs()
-                } {
-                    true
-                } else {
-                    false
-                }
-            };
+            let flipped_i = already_moved_i.x().abs() > displ_i.x().abs()
+                || already_moved_i.y().abs() > displ_i.y().abs();
             if flipped_i {
                 remove.push(idx);
             }
@@ -267,17 +265,9 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
                     displ_j.x() - already_moved_j.x(),
                     displ_j.y() - already_moved_j.y(),
                 );
-                let flipped_j = {
-                    if {
-                        already_moved_j.x().abs() > displ_j.x().abs()
-                            || already_moved_j.y().abs() > displ_j.y().abs()
-                    } {
-                        true
-                    } else {
-                        false
-                    }
-                };
-                if flipped_j && (remove.len() > 0 && remove[remove.len() - 1] != idx) {
+                let flipped_j = already_moved_j.x().abs() > displ_j.x().abs()
+                    || already_moved_j.y().abs() > displ_j.y().abs();
+                if flipped_j && (!remove.is_empty() && remove[remove.len() - 1] != idx) {
                     remove.push(idx);
                 }
 
@@ -376,15 +366,17 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
     /// fields represent.
     pub fn add_entity_as_xywh(
         &mut self,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
+        pos: V2,
+        size: V2,
         vel: V2,
         solid: bool,
         fixed: bool,
         id: ID,
     ) {
+        let x = pos.x();
+        let y = pos.y();
+        let w = size.x();
+        let h = size.y();
         self.add_collision_entity(
             V2::new(x + w / 2.0, y + h / 2.0),
             V2::new(w / 2.0, h / 2.0),

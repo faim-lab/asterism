@@ -21,11 +21,7 @@ pub struct FlatEntityState<ID: Copy + Eq> {
 
 impl<ID: Copy + Eq> FlatEntityState<ID> {
     pub fn new() -> Self {
-        Self {
-            maps: Vec::new(),
-            conditions: Vec::new(),
-            states: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Updates the enitity-state logic.
@@ -89,4 +85,14 @@ pub struct State<ID> {
     pub id: ID,
     /// The edges to the states that the entity can move to from the current state.
     pub edges: Vec<usize>,
+}
+
+impl<ID: Copy + Eq> Default for FlatEntityState<ID> {
+    fn default() -> Self {
+        Self {
+            maps: Vec::new(),
+            conditions: Vec::new(),
+            states: Vec::new(),
+        }
+    }
 }

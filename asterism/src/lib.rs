@@ -18,18 +18,7 @@ pub mod physics;
 pub mod resources;
 
 pub trait Logic {
-    fn logic_type(&self) -> LogicType;
     fn update(&mut self);
 }
 
 pub trait GameState {}
-
-#[derive(Debug, Ord, Eq, PartialOrd, PartialEq)]
-pub enum LogicType {
-    Control,
-    Physics,
-    Collision,
-    Resource,
-    EntityState,
-    Linking,
-}

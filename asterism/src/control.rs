@@ -7,8 +7,6 @@
 //! We're currently trying to consider analog as well as digital inputs, but we haven't implemented
 //! controller support, so some of these fields don't really make sense yet.
 
-#[cfg(feature = "asterism-bevy")]
-use bevy_input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
 use macroquad::prelude::{is_key_down, KeyCode as MqKeyCode};
 use winit::event::VirtualKeyCode;
 use winit_input_helper::WinitInputHelper;
@@ -20,11 +18,13 @@ trait Input {
 }
 
 /// Trait for generic keyboard control.
-pub trait KeyboardControl<ID, KeyCode, InputHandler>
+pub trait KeyboardControl<ID, KeyCode, InputHandler>: Default
 where
     ID: Copy + Eq + Ord,
 {
-    fn new() -> Self;
+    fn new() -> Self {
+        Self::default()
+    }
 
     /// Checks and updates what inputs are being pressed every frame.
     fn update(&mut self, events: &InputHandler);
@@ -130,16 +130,6 @@ pub struct WinitKeyboardControl<ID: Copy + Eq + Ord> {
     this_frame_inputs: Vec<VirtualKeyCode>,
 }
 
-/// Implementation of keyboard control for Bevy's input handler. See [WinitKeyboardControl] for
-/// documentation of fields.
-#[cfg(feature = "asterism-bevy")]
-pub struct BevyKeyboardControl<ID: Copy + Eq + Ord> {
-    pub mapping: Vec<Vec<Action<ID, BevyKeyCode>>>,
-    pub values: Vec<Vec<Values>>,
-    last_frame_inputs: Vec<BevyKeyCode>,
-    this_frame_inputs: Vec<BevyKeyCode>,
-}
-
 /// Implementation of keyboard control for Macroquad's input handler. See [WinitKeyboardControl] for
 /// documentation of fields.
 pub struct MacroQuadKeyboardControl<ID: Copy + Eq + Ord> {
@@ -153,15 +143,6 @@ impl<ID> KeyboardControl<ID, VirtualKeyCode, WinitInputHelper> for WinitKeyboard
 where
     ID: Copy + Eq + Ord,
 {
-    fn new() -> Self {
-        Self {
-            mapping: Vec::new(),
-            values: Vec::new(),
-            last_frame_inputs: Vec::new(),
-            this_frame_inputs: Vec::new(),
-        }
-    }
-
     fn mapping(&self) -> &Vec<Vec<Action<ID, VirtualKeyCode>>> {
         &self.mapping
     }
@@ -187,7 +168,7 @@ where
                 } = action;
                 let Values { value, changed_by } = &mut values;
                 match input_type {
-                    _ => {
+                    InputType::Digital => {
                         if events.key_held(key_input.keycode) {
                             self.this_frame_inputs.push(key_input.keycode);
                             if *is_valid {
@@ -201,20 +182,19 @@ where
                                     *changed_by = 1.0;
                                 }
                             }
-                        } else {
-                            if *is_valid {
-                                if let Some(..) = self
-                                    .last_frame_inputs
-                                    .iter()
-                                    .position(|vkc| *vkc == key_input.keycode)
-                                {
-                                    *changed_by = -1.0;
-                                } else {
-                                    *changed_by = 0.0;
-                                }
+                        } else if *is_valid {
+                            if let Some(..) = self
+                                .last_frame_inputs
+                                .iter()
+                                .position(|vkc| *vkc == key_input.keycode)
+                            {
+                                *changed_by = -1.0;
+                            } else {
+                                *changed_by = 0.0;
                             }
                         }
                     }
+                    InputType::Analog => todo!(),
                 }
                 *value = (*value + *changed_by)
                     .max(key_input.min())
@@ -229,12 +209,11 @@ where
     }
 }
 
-#[cfg(feature = "asterism-bevy")]
-impl<ID> KeyboardControl<ID, BevyKeyCode, BevyInput<BevyKeyCode>> for BevyKeyboardControl<ID>
+impl<ID> Default for WinitKeyboardControl<ID>
 where
     ID: Copy + Eq + Ord,
 {
-    fn new() -> Self {
+    fn default() -> Self {
         Self {
             mapping: Vec::new(),
             values: Vec::new(),
@@ -242,7 +221,113 @@ where
             this_frame_inputs: Vec::new(),
         }
     }
+}
 
+/// Macroquad doesn't have a keyboard handler type, so use the unit type.
+impl<ID> KeyboardControl<ID, MqKeyCode, ()> for MacroQuadKeyboardControl<ID>
+where
+    ID: Copy + Eq + Ord,
+{
+    fn mapping(&self) -> &Vec<Vec<Action<ID, MqKeyCode>>> {
+        &self.mapping
+    }
+    fn mapping_mut(&mut self) -> &mut Vec<Vec<Action<ID, MqKeyCode>>> {
+        &mut self.mapping
+    }
+
+    fn values(&self) -> &Vec<Vec<Values>> {
+        &self.values
+    }
+    fn values_mut(&mut self) -> &mut Vec<Vec<Values>> {
+        &mut self.values
+    }
+
+    /// Macroquad doesn't have an input handler type, so pass in a reference to the unit type
+    /// instead
+    fn update(&mut self, _events: &()) {
+        for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
+            for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
+                let Action {
+                    key_input,
+                    input_type,
+                    is_valid,
+                    ..
+                } = action;
+                let Values { value, changed_by } = &mut values;
+                match input_type {
+                    InputType::Digital => {
+                        if is_key_down(key_input.keycode) {
+                            self.this_frame_inputs.push(key_input.keycode);
+                            if *is_valid {
+                                if let Some(..) = self
+                                    .last_frame_inputs
+                                    .iter()
+                                    .position(|vkc| *vkc == key_input.keycode)
+                                {
+                                    *changed_by = 0.0;
+                                } else {
+                                    *changed_by = 1.0;
+                                }
+                            }
+                        } else if *is_valid {
+                            if let Some(..) = self
+                                .last_frame_inputs
+                                .iter()
+                                .position(|vkc| *vkc == key_input.keycode)
+                            {
+                                *changed_by = -1.0;
+                            } else {
+                                *changed_by = 0.0;
+                            }
+                        }
+                    }
+                    InputType::Analog => todo!(),
+                }
+                *value = (*value + *changed_by)
+                    .max(key_input.min())
+                    .min(key_input.max());
+            }
+        }
+        self.last_frame_inputs.clear();
+        for input in self.this_frame_inputs.iter() {
+            self.last_frame_inputs.push(*input);
+        }
+        self.this_frame_inputs.clear();
+    }
+}
+
+impl<ID> Default for MacroQuadKeyboardControl<ID>
+where
+    ID: Copy + Eq + Ord,
+{
+    fn default() -> Self {
+        Self {
+            mapping: Vec::new(),
+            values: Vec::new(),
+            last_frame_inputs: Vec::new(),
+            this_frame_inputs: Vec::new(),
+        }
+    }
+}
+
+#[cfg(feature = "bevy-engine")]
+use bevy_input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
+
+/// Implementation of keyboard control for Bevy's input handler. See [WinitKeyboardControl] for
+/// documentation of fields.
+#[cfg(feature = "bevy-engine")]
+pub struct BevyKeyboardControl<ID: Copy + Eq + Ord> {
+    pub mapping: Vec<Vec<Action<ID, BevyKeyCode>>>,
+    pub values: Vec<Vec<Values>>,
+    last_frame_inputs: Vec<BevyKeyCode>,
+    this_frame_inputs: Vec<BevyKeyCode>,
+}
+
+#[cfg(feature = "bevy-engine")]
+impl<ID> KeyboardControl<ID, BevyKeyCode, BevyInput<BevyKeyCode>> for BevyKeyboardControl<ID>
+where
+    ID: Copy + Eq + Ord,
+{
     fn mapping(&self) -> &Vec<Vec<Action<ID, BevyKeyCode>>> {
         &self.mapping
     }
@@ -268,7 +353,7 @@ where
                 } = action;
                 let Values { value, changed_by } = &mut values;
                 match input_type {
-                    _ => {
+                    InputType::Digital => {
                         if events.pressed(key_input.keycode) {
                             self.this_frame_inputs.push(key_input.keycode);
                             if *is_valid {
@@ -282,20 +367,19 @@ where
                                     *changed_by = 1.0;
                                 }
                             }
-                        } else {
-                            if *is_valid {
-                                if let Some(..) = self
-                                    .last_frame_inputs
-                                    .iter()
-                                    .position(|vkc| *vkc == key_input.keycode)
-                                {
-                                    *changed_by = -1.0;
-                                } else {
-                                    *changed_by = 0.0;
-                                }
+                        } else if *is_valid {
+                            if let Some(..) = self
+                                .last_frame_inputs
+                                .iter()
+                                .position(|vkc| *vkc == key_input.keycode)
+                            {
+                                *changed_by = -1.0;
+                            } else {
+                                *changed_by = 0.0;
                             }
                         }
                     }
+                    InputType::Analog => todo!(),
                 }
                 *value = (*value + *changed_by)
                     .max(key_input.min())
@@ -310,84 +394,17 @@ where
     }
 }
 
-/// Macroquad doesn't have a keyboard handler type, so use the unit type.
-impl<ID> KeyboardControl<ID, MqKeyCode, ()> for MacroQuadKeyboardControl<ID>
+#[cfg(feature = "bevy-engine")]
+impl<ID> Default for BevyKeyboardControl<ID>
 where
     ID: Copy + Eq + Ord,
 {
-    fn new() -> Self {
+    fn default() -> Self {
         Self {
             mapping: Vec::new(),
             values: Vec::new(),
             last_frame_inputs: Vec::new(),
             this_frame_inputs: Vec::new(),
         }
-    }
-
-    fn mapping(&self) -> &Vec<Vec<Action<ID, MqKeyCode>>> {
-        &self.mapping
-    }
-    fn mapping_mut(&mut self) -> &mut Vec<Vec<Action<ID, MqKeyCode>>> {
-        &mut self.mapping
-    }
-
-    fn values(&self) -> &Vec<Vec<Values>> {
-        &self.values
-    }
-    fn values_mut(&mut self) -> &mut Vec<Vec<Values>> {
-        &mut self.values
-    }
-
-    /// Instead of an input handler type, pass in a reference to the unit type (?)
-    fn update(&mut self, _events: &()) {
-        for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
-            for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
-                let Action {
-                    key_input,
-                    input_type,
-                    is_valid,
-                    ..
-                } = action;
-                let Values { value, changed_by } = &mut values;
-                match input_type {
-                    _ => {
-                        if is_key_down(key_input.keycode) {
-                            self.this_frame_inputs.push(key_input.keycode);
-                            if *is_valid {
-                                if let Some(..) = self
-                                    .last_frame_inputs
-                                    .iter()
-                                    .position(|vkc| *vkc == key_input.keycode)
-                                {
-                                    *changed_by = 0.0;
-                                } else {
-                                    *changed_by = 1.0;
-                                }
-                            }
-                        } else {
-                            if *is_valid {
-                                if let Some(..) = self
-                                    .last_frame_inputs
-                                    .iter()
-                                    .position(|vkc| *vkc == key_input.keycode)
-                                {
-                                    *changed_by = -1.0;
-                                } else {
-                                    *changed_by = 0.0;
-                                }
-                            }
-                        }
-                    }
-                }
-                *value = (*value + *changed_by)
-                    .max(key_input.min())
-                    .min(key_input.max());
-            }
-        }
-        self.last_frame_inputs.clear();
-        for input in self.this_frame_inputs.iter() {
-            self.last_frame_inputs.push(*input);
-        }
-        self.this_frame_inputs.clear();
     }
 }

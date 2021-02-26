@@ -21,11 +21,7 @@ pub struct GraphedLinking {
 
 impl GraphedLinking {
     pub fn new() -> Self {
-        Self {
-            maps: Vec::new(),
-            conditions: Vec::new(),
-            positions: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Updates the linking logic.
@@ -87,4 +83,14 @@ pub struct NodeMap {
 pub struct Node {
     /// List of the indices in [NodeMap] of the nodes that this node is linked to.
     pub links: Vec<usize>,
+}
+
+impl Default for GraphedLinking {
+    fn default() -> Self {
+        Self {
+            maps: Vec::new(),
+            conditions: Vec::new(),
+            positions: Vec::new(),
+        }
+    }
 }

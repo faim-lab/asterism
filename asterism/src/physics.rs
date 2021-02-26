@@ -4,7 +4,7 @@
 //! They update and honor objects' physical properties like position, velocity, density, etc.,
 //! according to physical laws integrated over time.
 
-use crate::{collision::Vec2, Logic, LogicType};
+use crate::{collision::Vec2, Logic};
 
 /// A physics logic using 2d points.
 pub struct PointPhysics<V2: Vec2> {
@@ -14,10 +14,6 @@ pub struct PointPhysics<V2: Vec2> {
 }
 
 impl<V2: Vec2> Logic for PointPhysics<V2> {
-    fn logic_type(&self) -> LogicType {
-        LogicType::Physics
-    }
-
     /// Update the physics logic: changes the velocities of entities based on acceleration, then
     /// changes entities' positions based on updated velocities.
     fn update(&mut self) {
@@ -34,11 +30,7 @@ impl<V2: Vec2> Logic for PointPhysics<V2> {
 
 impl<V2: Vec2> PointPhysics<V2> {
     pub fn new() -> Self {
-        Self {
-            positions: Vec::new(),
-            velocities: Vec::new(),
-            accelerations: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Adds a physics entity to the logic with the given position, velocity, and acceleration.
@@ -46,5 +38,15 @@ impl<V2: Vec2> PointPhysics<V2> {
         self.positions.push(pos);
         self.velocities.push(vel);
         self.accelerations.push(acc);
+    }
+}
+
+impl<V2: Vec2> Default for PointPhysics<V2> {
+    fn default() -> Self {
+        Self {
+            positions: Vec::new(),
+            velocities: Vec::new(),
+            accelerations: Vec::new(),
+        }
     }
 }
