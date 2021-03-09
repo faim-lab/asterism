@@ -12,13 +12,29 @@
 
 pub mod collision;
 pub mod control;
+pub mod data;
 pub mod entity_state;
 pub mod linking;
 pub mod physics;
 pub mod resources;
 
 pub trait Logic {
+    type Event: Event;
+    type Reaction: Reaction;
+
     fn update(&mut self);
+    fn react(&mut self, reaction_type: Self::Reaction);
 }
 
 pub trait GameState {}
+
+pub trait Event: Eq {}
+pub trait Reaction {
+    fn for_logic(&self) -> LogicType;
+}
+
+pub enum LogicType {
+    PntPhysics,
+    QdResource,
+    AabbCollision,
+}

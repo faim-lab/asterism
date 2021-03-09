@@ -6,7 +6,7 @@
 //! or concrete locations on demand or over time, and trigger other actions when these transactions
 //! take place.
 
-use crate::Logic;
+use crate::{Event, Logic, LogicType, Reaction};
 use std::collections::BTreeMap;
 
 /// A resource logic that queues transactions, then applies them all at once when updating.
@@ -19,10 +19,13 @@ pub struct QueuedResources<ID: PoolInfo> {
     /// A Vec of all transactions and if they were able to be completed or not. If yes, supply
     /// a Vec of the IDs of successful transactions; if no, supply the ID of the pool that
     /// caused the error and a reason (see [ResourceError]).
-    pub completed: Vec<Result<Vec<ID>, (ID, ResourceError)>>,
+    pub completed: Vec<ResourceEvent<ID>>,
 }
 
 impl<ID: PoolInfo> Logic for QueuedResources<ID> {
+    type Event = ResourceEvent<ID>;
+    type Reaction = ResourceReaction<ID>;
+
     /// Updates the values of resources based on the queued transactions. If a transaction cannot
     /// be completed (if the value goes below zero), a snapshot of the resources before the
     /// transaction occurred is restored, and the transaction is marked as incomplete, and we
@@ -57,6 +60,11 @@ impl<ID: PoolInfo> Logic for QueuedResources<ID> {
             self.completed.push(Ok(item_types));
         }
         self.transactions.clear();
+    }
+
+    fn react(&mut self, (pool, amt): Self::Reaction) {
+        self.transactions
+            .push(vec![(pool, Transaction::Change(amt))]);
     }
 }
 
@@ -107,7 +115,7 @@ pub enum Transaction {
 }
 
 /// information for the min/max values the entities in this pool can take, inclusive (I think)
-pub trait PoolInfo: Copy + Ord {
+pub trait PoolInfo: Copy + Ord + Eq {
     fn min_value(&self) -> f64 {
         std::f64::MIN
     }
@@ -117,9 +125,19 @@ pub trait PoolInfo: Copy + Ord {
 }
 
 /// Errors possible when trying to complete a transaction.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ResourceError {
     PoolNotFound,
     TooBig,
     TooSmall,
 }
+
+pub type ResourceReaction<ID> = (ID, f64);
+pub type ResourceEvent<ID> = Result<Vec<ID>, (ID, ResourceError)>;
+
+impl<ID> Reaction for ResourceReaction<ID> {
+    fn for_logic(&self) -> LogicType {
+        LogicType::QdResource
+    }
+}
+impl<ID: PoolInfo> Event for ResourceEvent<ID> {}

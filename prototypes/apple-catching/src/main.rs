@@ -322,7 +322,7 @@ impl World {
             Vec2::new(BASKET_WIDTH as f32, BASKET_HEIGHT as f32),
             self.basket_vel,
             true,
-            true,
+            false,
             CollisionID::Basket,
         );
 
@@ -340,6 +340,9 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
+        self.basket = collision
+            .get_xy_pos_for_entity(CollisionID::Basket)
+            .unwrap();
         for (i, apple) in self.apples.iter_mut().enumerate() {
             apple.pos = collision
                 .get_xy_pos_for_entity(CollisionID::Apple(i))

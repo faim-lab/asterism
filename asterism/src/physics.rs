@@ -4,7 +4,7 @@
 //! They update and honor objects' physical properties like position, velocity, density, etc.,
 //! according to physical laws integrated over time.
 
-use crate::{collision::Vec2, Logic};
+use crate::{collision::Vec2, Event, Logic, LogicType, Reaction};
 
 /// A physics logic using 2d points.
 pub struct PointPhysics<V2: Vec2> {
@@ -14,6 +14,9 @@ pub struct PointPhysics<V2: Vec2> {
 }
 
 impl<V2: Vec2> Logic for PointPhysics<V2> {
+    type Reaction = PhysicsReaction;
+    type Event = PhysicsEvent;
+
     /// Update the physics logic: changes the velocities of entities based on acceleration, then
     /// changes entities' positions based on updated velocities.
     fn update(&mut self) {
@@ -25,6 +28,10 @@ impl<V2: Vec2> Logic for PointPhysics<V2> {
             *vel += *acc;
             *pos += *vel;
         }
+    }
+
+    fn react(&mut self, reaction_type: Self::Reaction) {
+        match reaction_type {}
     }
 }
 
@@ -50,3 +57,14 @@ impl<V2: Vec2> Default for PointPhysics<V2> {
         }
     }
 }
+
+pub enum PhysicsReaction {}
+#[derive(PartialEq, Eq)]
+pub enum PhysicsEvent {}
+
+impl Reaction for PhysicsReaction {
+    fn for_logic(&self) -> LogicType {
+        LogicType::PntPhysics
+    }
+}
+impl Event for PhysicsEvent {}

@@ -1,8 +1,7 @@
 use crate::{data::Reaction, Player, PoolID, World};
-use asterism::{
-    physics::PointPhysics,
-    resources::{QueuedResources, Transaction},
-};
+use asterism::resources::{QueuedResources, Transaction};
+// physics::PointPhysics,
+// Logic,
 use macroquad::math::Vec2;
 
 pub struct AddPoint {
@@ -10,11 +9,13 @@ pub struct AddPoint {
     pub ball_idx: usize,
 }
 
-impl Reaction<World, QueuedResources<PoolID>> for AddPoint {
-    fn react(&self, state: &mut World, logic: &mut QueuedResources<PoolID>) {
+impl Reaction<World> for AddPoint {
+    type ReactingLogic = QueuedResources<PoolID>;
+
+    fn react(&self, state: &mut World, resources: &mut QueuedResources<PoolID>) {
         state.balls[self.ball_idx].pos = state.balls[self.ball_idx].starting_pos;
         state.balls[self.ball_idx].vel = Vec2::zero();
-        logic.transactions.push(vec![(
+        resources.transactions.push(vec![(
             PoolID::Points(self.player),
             Transaction::Change(1.0),
         )]);
@@ -30,8 +31,8 @@ impl BounceWall {
     }
 }
 
-impl Reaction<World, PointPhysics<Vec2>> for BounceWall {
+/* impl Reaction<World> for BounceWall {
     fn react(&self, state: &mut World, logic: &mut PointPhysics<Vec2>) {
         state.balls[self.0].vel.y *= -1.0;
     }
-}
+}*/

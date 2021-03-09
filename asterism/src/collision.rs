@@ -6,9 +6,11 @@
 //!
 //! Note: Collision is hard and may be broken.
 
-use glam::Vec2 as GlamVec2;
 use std::cmp::Ordering;
 use std::ops::{Add, AddAssign};
+
+use crate::{Event, Logic, LogicType, Reaction};
+use glam::Vec2 as GlamVec2;
 use ultraviolet::Vec2 as UVVec2;
 
 /// A trait for a set of two coordinates that represent a point in 2d space.
@@ -161,10 +163,9 @@ impl<ID: Copy + Eq, V2: Vec2> Default for AabbCollision<ID, V2> {
     }
 }
 
-impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
-    pub fn new() -> Self {
-        Self::default()
-    }
+impl<ID: Copy + Eq, V2: Vec2> Logic for AabbCollision<ID, V2> {
+    type Event = CollisionEvent;
+    type Reaction = CollisionReaction;
 
     /// Checks collisions every frame and handles restitution (works most of the time).
     ///
@@ -179,7 +180,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
     ///    "remaining" amount (which might be 0) and add that to the vec of (3).
     ///
     /// Explanation of algorithm lightly modified from a message by Prof Osborn.
-    pub fn update(&mut self) {
+    fn update(&mut self) {
         self.contacts.clear();
         self.displacements.clear();
         self.displacements
@@ -288,6 +289,25 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         for (i, displacement) in self.displacements.iter().enumerate() {
             self.centers[i] += *displacement;
         }
+    }
+
+    fn react(&mut self, _reaction_type: Self::Reaction) {}
+}
+
+pub enum CollisionReaction {}
+#[derive(PartialEq, Eq)]
+pub enum CollisionEvent {}
+
+impl Reaction for CollisionReaction {
+    fn for_logic(&self) -> LogicType {
+        LogicType::AabbCollision
+    }
+}
+impl Event for CollisionEvent {}
+
+impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn find_displacement(&self, i: usize, j: usize) -> V2 {
