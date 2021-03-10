@@ -28,13 +28,17 @@ pub trait Logic {
 
 pub trait GameState {}
 
-pub trait Event: Eq {}
-pub trait Reaction {
+pub trait Event: PartialEq {
     fn for_logic(&self) -> LogicType;
 }
 
+pub trait Reaction: PartialEq + Copy {
+    fn for_logic(&self) -> LogicType;
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LogicType {
-    PntPhysics,
-    QdResource,
-    AabbCollision,
+    Physics,
+    Resource,
+    Collision,
 }

@@ -164,7 +164,7 @@ impl<ID: Copy + Eq, V2: Vec2> Default for AabbCollision<ID, V2> {
 }
 
 impl<ID: Copy + Eq, V2: Vec2> Logic for AabbCollision<ID, V2> {
-    type Event = CollisionEvent;
+    type Event = CollisionEvent<ID>;
     type Reaction = CollisionReaction;
 
     /// Checks collisions every frame and handles restitution (works most of the time).
@@ -294,16 +294,21 @@ impl<ID: Copy + Eq, V2: Vec2> Logic for AabbCollision<ID, V2> {
     fn react(&mut self, _reaction_type: Self::Reaction) {}
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum CollisionReaction {}
-#[derive(PartialEq, Eq)]
-pub enum CollisionEvent {}
+pub type CollisionEvent<ID> = (ID, ID);
 
 impl Reaction for CollisionReaction {
     fn for_logic(&self) -> LogicType {
-        LogicType::AabbCollision
+        LogicType::Collision
     }
 }
-impl Event for CollisionEvent {}
+
+impl<ID: Eq> Event for CollisionEvent<ID> {
+    fn for_logic(&self) -> LogicType {
+        LogicType::Collision
+    }
+}
 
 impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
     pub fn new() -> Self {
@@ -486,5 +491,9 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
             <= self.half_sizes[i].x() + self.half_sizes[j].x()
             && (self.centers[i].y() - self.centers[j].y()).abs()
                 <= self.half_sizes[i].y() + self.half_sizes[j].y()
+    }
+
+    pub fn get_ids(&self, contact: &Contact<V2>) -> CollisionEvent<ID> {
+        (self.metadata[contact.i].id, self.metadata[contact.j].id)
     }
 }

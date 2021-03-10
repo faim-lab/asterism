@@ -58,13 +58,19 @@ impl<V2: Vec2> Default for PointPhysics<V2> {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum PhysicsReaction {}
 #[derive(PartialEq, Eq)]
 pub enum PhysicsEvent {}
 
 impl Reaction for PhysicsReaction {
     fn for_logic(&self) -> LogicType {
-        LogicType::PntPhysics
+        LogicType::Physics
     }
 }
-impl Event for PhysicsEvent {}
+
+impl Event for PhysicsEvent {
+    fn for_logic(&self) -> LogicType {
+        LogicType::Physics
+    }
+}

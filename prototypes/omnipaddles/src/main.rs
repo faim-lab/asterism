@@ -5,7 +5,7 @@ use std::io::{self, Write};
 use asterism::{
     collision::{AabbCollision, Vec2 as AstVec2},
     control::{KeyboardControl, MacroQuadKeyboardControl},
-    data::Data,
+    data::{Data, EventWrapper, ReactionWrapper},
     physics::PointPhysics,
     resources::QueuedResources, //, Transaction},
     GameState,
@@ -73,7 +73,7 @@ struct Logics {
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
-    data: Data<PoolID, Vec2, CollisionID>,
+    data: Data<CollisionID, PoolID>,
 }
 
 impl Logics {
@@ -137,10 +137,23 @@ impl Logics {
                 resources.items.insert(PoolID::Points(Player::P2), 0.0);
                 resources
             },
-            data: Data {
-                resource_interactions: Vec::new(),
-                collision_interactions: Vec::new(),
-                physics_interactions: Vec::new(),
+            data: {
+                let mut data: Data<CollisionID, PoolID> = Data::new();
+                data.add_interaction(
+                    EventWrapper::Collision((
+                        CollisionID::Ball(0),
+                        CollisionID::ScoreWall(Player::P1),
+                    )),
+                    ReactionWrapper::Resource((PoolID::Points(Player::P2), 1.0)),
+                );
+                data.add_interaction(
+                    EventWrapper::Collision((
+                        CollisionID::Ball(0),
+                        CollisionID::ScoreWall(Player::P2),
+                    )),
+                    ReactionWrapper::Resource((PoolID::Points(Player::P1), 1.0)),
+                );
+                data
             },
         }
     }
@@ -201,14 +214,18 @@ async fn main() {
         world.unproject_collision(&logics.collision);
 
         for contact in logics.collision.contacts.iter() {
-            let id_i = logics.collision.metadata[contact.i].id;
-            let id_j = logics.collision.metadata[contact.j].id;
-            /* for (event, reaction) in logics.data.collision_interactions.iter() {
-                if CollisionEvent::new(id_i, id_j) == *event {
-                    reaction.react(&mut world, &mut logics.resources);
-                    break;
+            let ids = logics.collision.get_ids(contact);
+            if let Some(reactions) = logics.data.get_reaction(EventWrapper::Collision(ids)) {
+                for reaction in reactions {
+                    match reaction {
+                        ReactionWrapper::Collision(_) => {}
+                        ReactionWrapper::Physics(_) => {}
+                        ReactionWrapper::Resource(reaction) => {
+                            logics.resources.react(reaction);
+                        }
+                    }
                 }
-            } */
+            }
         }
 
         world.project_resources(&mut logics.resources);

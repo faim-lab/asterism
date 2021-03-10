@@ -135,9 +135,13 @@ pub enum ResourceError {
 pub type ResourceReaction<ID> = (ID, f64);
 pub type ResourceEvent<ID> = Result<Vec<ID>, (ID, ResourceError)>;
 
-impl<ID> Reaction for ResourceReaction<ID> {
+impl<ID: Eq + Copy> Reaction for ResourceReaction<ID> {
     fn for_logic(&self) -> LogicType {
-        LogicType::QdResource
+        LogicType::Resource
     }
 }
-impl<ID: PoolInfo> Event for ResourceEvent<ID> {}
+impl<ID: PoolInfo> Event for ResourceEvent<ID> {
+    fn for_logic(&self) -> LogicType {
+        LogicType::Resource
+    }
+}
