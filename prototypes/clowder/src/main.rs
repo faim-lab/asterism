@@ -308,7 +308,7 @@ impl World {
                     }
 
                     if self.balls[i].vel.y == 0.0 {
-                        if sides_touched.y != 0.0 {
+                        if sides_touched.x != 0.0 {
                             self.balls[i].vel.y = sides_touched.x * -1.0;
                         } else if sides_touched.y != 0.0 {
                             self.balls[i].vel.y = sides_touched.y * -1.0;
