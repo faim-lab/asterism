@@ -35,7 +35,7 @@ impl Default for CollisionID {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
 pub enum PoolID {
     Points(Player),
 }

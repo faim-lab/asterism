@@ -8,7 +8,7 @@ use crate::{Event, LogicType, Reaction};
 pub struct Data<CollisionID: Copy + Eq, PoolID: PoolInfo> {
     pub events: Events<CollisionID, PoolID>,
     pub reactions: Reactions<PoolID>,
-    graph: BTreeMap<(LogicType, usize), Vec<(LogicType, usize)>>,
+    graph: BTreeMap<(LogicType, usize), Vec<Option<(LogicType, usize)>>>,
 }
 
 impl<CollisionID: Copy + Eq, PoolID: PoolInfo> Data<CollisionID, PoolID> {
@@ -127,12 +127,21 @@ impl<CollisionID: Copy + Eq, PoolID: PoolInfo> Data<CollisionID, PoolID> {
                     rct_idx = self.reactions.resource.len() - 1;
                 }
             }
+            ReactionWrapper::GameState => {
+                let interaction = self
+                    .graph
+                    .entry((ev_logic, ev_idx))
+                    .or_insert_with(Vec::new);
+                interaction.push(None);
+                return;
+            }
         }
+
         let interaction = self
             .graph
             .entry((ev_logic, ev_idx))
             .or_insert_with(Vec::new);
-        interaction.push((rct_logic, rct_idx));
+        interaction.push(Some((rct_logic, rct_idx)));
     }
 
     pub fn get_reaction(
@@ -188,15 +197,21 @@ impl<CollisionID: Copy + Eq, PoolID: PoolInfo> Data<CollisionID, PoolID> {
             Some(
                 reactions
                     .iter()
-                    .map(|(rct_logic, rct_idx)| match rct_logic {
-                        LogicType::Physics => {
-                            ReactionWrapper::Physics(self.reactions.physics[*rct_idx])
-                        }
-                        LogicType::Resource => {
-                            ReactionWrapper::Resource(self.reactions.resource[*rct_idx])
-                        }
-                        LogicType::Collision => {
-                            ReactionWrapper::Collision(self.reactions.collision[*rct_idx])
+                    .map(|reaction| {
+                        if let Some((rct_logic, rct_idx)) = reaction {
+                            match rct_logic {
+                                LogicType::Physics => {
+                                    ReactionWrapper::Physics(self.reactions.physics[*rct_idx])
+                                }
+                                LogicType::Resource => {
+                                    ReactionWrapper::Resource(self.reactions.resource[*rct_idx])
+                                }
+                                LogicType::Collision => {
+                                    ReactionWrapper::Collision(self.reactions.collision[*rct_idx])
+                                }
+                            }
+                        } else {
+                            ReactionWrapper::GameState
                         }
                     })
                     .collect::<Vec<_>>(),
@@ -207,16 +222,19 @@ impl<CollisionID: Copy + Eq, PoolID: PoolInfo> Data<CollisionID, PoolID> {
     }
 }
 
+#[derive(Debug)]
 pub enum EventWrapper<CollisionID, PoolID> {
     Physics(PhysicsEvent),
     Collision(CollisionEvent<CollisionID>),
     Resource(ResourceEvent<PoolID>),
 }
 
+#[derive(Debug)]
 pub enum ReactionWrapper<PoolID> {
     Physics(PhysicsReaction),
     Collision(CollisionReaction),
     Resource(ResourceReaction<PoolID>),
+    GameState,
 }
 
 pub struct Events<CollisionID: Copy + Eq, PoolID: PoolInfo> {

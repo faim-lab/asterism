@@ -294,7 +294,7 @@ impl<ID: Copy + Eq, V2: Vec2> Logic for AabbCollision<ID, V2> {
     fn react(&mut self, _reaction_type: Self::Reaction) {}
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum CollisionReaction {}
 pub type CollisionEvent<ID> = (ID, ID);
 

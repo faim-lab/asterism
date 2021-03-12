@@ -58,9 +58,9 @@ impl<V2: Vec2> Default for PointPhysics<V2> {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum PhysicsReaction {}
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum PhysicsEvent {}
 
 impl Reaction for PhysicsReaction {

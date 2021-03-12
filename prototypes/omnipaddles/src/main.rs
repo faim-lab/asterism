@@ -138,7 +138,7 @@ impl Logics {
                 resources
             },
             data: {
-                let mut data: Data<CollisionID, PoolID> = Data::new();
+                let mut data = Data::new();
                 data.add_interaction(
                     EventWrapper::Collision((
                         CollisionID::Ball(0),
@@ -152,6 +152,38 @@ impl Logics {
                         CollisionID::ScoreWall(Player::P2),
                     )),
                     ReactionWrapper::Resource((PoolID::Points(Player::P1), 1.0)),
+                );
+                data.add_interaction(
+                    EventWrapper::Collision((
+                        CollisionID::Ball(0),
+                        CollisionID::ScoreWall(Player::P1),
+                    )),
+                    ReactionWrapper::GameState,
+                );
+                data.add_interaction(
+                    EventWrapper::Collision((
+                        CollisionID::Ball(0),
+                        CollisionID::ScoreWall(Player::P2),
+                    )),
+                    ReactionWrapper::GameState,
+                );
+                data.add_interaction(
+                    EventWrapper::Collision((CollisionID::Ball(0), CollisionID::BounceWall)),
+                    ReactionWrapper::GameState,
+                );
+                data.add_interaction(
+                    EventWrapper::Collision((
+                        CollisionID::Ball(0),
+                        CollisionID::Paddle(Player::P1),
+                    )),
+                    ReactionWrapper::GameState,
+                );
+                data.add_interaction(
+                    EventWrapper::Collision((
+                        CollisionID::Ball(0),
+                        CollisionID::Paddle(Player::P2),
+                    )),
+                    ReactionWrapper::GameState,
                 );
                 data
             },
@@ -223,6 +255,41 @@ async fn main() {
                         ReactionWrapper::Resource(reaction) => {
                             logics.resources.react(reaction);
                         }
+                        ReactionWrapper::GameState => match ids {
+                            (CollisionID::Ball(i), CollisionID::ScoreWall(player)) => {
+                                world.serving = Some(match player {
+                                    Player::P1 => Player::P2,
+                                    Player::P2 => Player::P1,
+                                });
+                                world.balls[i].pos = world.balls[i].starting_pos;
+                                world.balls[i].vel = Vec2::zero();
+                            }
+                            (CollisionID::Ball(i), CollisionID::BounceWall) => {
+                                let sides_touched = logics
+                                    .collision
+                                    .sides_touched(&contact, &CollisionID::Ball(i));
+                                if sides_touched.x != 0.0 {
+                                    world.balls[i].vel.x *= -1.0;
+                                }
+                                if sides_touched.y != 0.0 {
+                                    world.balls[i].vel.y *= -1.0;
+                                }
+                            }
+                            (CollisionID::Ball(i), CollisionID::Paddle(player)) => {
+                                let sides_touched = logics
+                                    .collision
+                                    .sides_touched(&contact, &CollisionID::Ball(i));
+                                if sides_touched.x != 0.0 {
+                                    world.balls[i].vel.x *= -1.0;
+                                }
+                                if sides_touched.y != 0.0 {
+                                    world.balls[i].vel.y *= -1.0;
+                                }
+                                world.balls[i].vel *= 1.1;
+                                world.change_angle(i, player);
+                            }
+                            _ => {}
+                        },
                     }
                 }
             }
