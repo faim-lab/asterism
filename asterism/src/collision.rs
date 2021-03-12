@@ -472,7 +472,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
     }
 
     /// Gets the (x, y) position for the entity given its CollisionID, if it exists: (center -
-    /// half_size). Matches with [add_entity_as_xywh].
+    /// half_size). Matches with [add_entity_as_xywh][AabbCollision::add_entity_as_xywh].
     pub fn get_xy_pos_for_entity(&self, id: ID) -> Option<V2> {
         if let Some(i) = self.metadata.iter().position(|metadata| metadata.id == id) {
             let center = self.centers[i];

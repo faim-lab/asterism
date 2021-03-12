@@ -1,16 +1,10 @@
 //! # Control logics
 //!
-//! Control logics communicate that different entities are controlled by different inputs at
-//! different times. They map button inputs, AI intentions, network socket messages, etc onto
-//! high-level game actions.
+//! Control logics communicate that different entities are controlled by different inputs at different times. They map button inputs, AI intentions, network socket messages, etc onto high-level game actions.
 //!
-//! We're currently trying to consider analog as well as digital inputs, but we haven't implemented
-//! controller support, so some of these fields don't really make sense yet.
+//! We're currently trying to consider analog as well as digital inputs, but we haven't implemented controller support, so some of these fields don't really make sense yet.
 
 use std::collections::BTreeSet;
-
-use winit::event::VirtualKeyCode;
-use winit_input_helper::WinitInputHelper;
 
 /// Information for a key/button press.
 trait Input {
@@ -18,52 +12,55 @@ trait Input {
     fn max(&self) -> f32;
 }
 
-/// Generic keyboard control.
-pub struct KeyboardControl<ID, KeyCode>
+use std::marker::PhantomData;
+/// A keyboard control logic.
+///
+/// Note that an InputHelper is the struct sometimes provided by a game engine to keep track of inputs, ex. Bevy's `bevy_input::Input` and Winit's `WinitInputHelper`. Macroquad doesn't provide such a struct, so you may want to pass in the unit type `()`. A Wrapper is a helper struct that helps keep track of information that InputHelper structs may not, but we want, such as [BevyInputWrapper], [MacroquadInputWrapper], or [WinitInputWrapper].
+pub struct KeyboardControl<ID, KeyCode, InputHelper, Wrapper>
 where
     ID: Copy + Eq + Ord,
     KeyCode: Copy,
+    Wrapper: InputWrapper<KeyCode, InputHelper>,
 {
+    /// Input mappings from actions to keypresses. Each outer Vec is a set of inputs, ex. one player gets the first set of mappings, another gets a second set of mappings, an AI player gets the third.
     pub mapping: Vec<Vec<Action<ID, KeyCode>>>,
+    /// The values for each keypress in the sets described above.
     pub values: Vec<Vec<Values>>,
+    /// An input wrapper
+    input_wrapper: Wrapper,
+    phantom: PhantomData<InputHelper>,
 }
 
-impl<ID: Copy + Eq + Ord, KeyCode: Copy> Default for KeyboardControl<ID, KeyCode> {
+impl<ID, KeyCode, InputHelper, Wrapper> Default
+    for KeyboardControl<ID, KeyCode, InputHelper, Wrapper>
+where
+    ID: Copy + Eq + Ord,
+    KeyCode: Copy,
+    Wrapper: InputWrapper<KeyCode, InputHelper>,
+{
     fn default() -> Self {
         Self {
             mapping: Vec::new(),
             values: Vec::new(),
+            input_wrapper: Wrapper::new(),
+            phantom: PhantomData,
         }
     }
 }
 
-impl<ID: Copy + Eq + Ord, KeyCode: Copy> KeyboardControl<ID, KeyCode> {
+impl<ID, KeyCode, InputHelper, Wrapper> KeyboardControl<ID, KeyCode, InputHelper, Wrapper>
+where
+    ID: Copy + Eq + Ord,
+    KeyCode: Copy,
+    Wrapper: InputWrapper<KeyCode, InputHelper>,
+{
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Checks and updates what inputs are being pressed every frame.
-    pub fn update<InputHelper>(
-        &mut self,
-        event_wrapper: &mut impl InputWrapper<KeyCode, InputHelper>,
-        events: &InputHelper,
-    ) {
-        event_wrapper.update(
-            // "please stop trying to do things with iterators cynthia"
-            // absolutely not. i have to use my hard-won cs54 knowledge for _something_
-            // anyway this is probably expensive or something. the way we log input schemes is so nightmarish :smiling_face_with_tear_emoji:
-            &self
-                .mapping
-                .iter()
-                .flat_map(|actions| {
-                    actions
-                        .iter()
-                        .map(|Action { key_input, .. }| key_input.keycode)
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>(),
-            events,
-        );
+    pub fn update(&mut self, events: &InputHelper) {
+        self.input_wrapper.clear();
         for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
             for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
                 let Action {
@@ -75,21 +72,26 @@ impl<ID: Copy + Eq + Ord, KeyCode: Copy> KeyboardControl<ID, KeyCode> {
                 let Values { value, changed_by } = &mut values;
                 match input_type {
                     InputType::Digital => {
-                        if *is_valid {
-                            if event_wrapper.is_held(&key_input.keycode, events) {
-                                if !event_wrapper.is_pressed(&key_input.keycode, events) {
+                        // NOTE: if update_held isn't called for every key in the mappings, it can completely break some of the input wrappers.
+                        //
+                        // This doesn't feel super safe... but it feels less weird than filtering out and looping through all inputs beforehand to see if they're held, _then_ calling is_held again---which is just doing the same thing twice?
+                        if self.input_wrapper.update_held(&key_input.keycode, events) {
+                            if !self.input_wrapper.is_pressed(&key_input.keycode, events) {
+                                if *is_valid {
                                     *changed_by = 0.0;
-                                } else {
-                                    *changed_by = 1.0;
                                 }
-                            } else if event_wrapper.is_released(&key_input.keycode, events) {
-                                *changed_by = -1.0;
-                            } else {
-                                *changed_by = 0.0;
+                            } else if *is_valid {
+                                *changed_by = 1.0;
                             }
+                        } else if self.input_wrapper.is_released(&key_input.keycode, events) {
+                            if *is_valid {
+                                *changed_by = -1.0;
+                            }
+                        } else if *is_valid {
+                            *changed_by = 0.0;
                         }
                     }
-                    InputType::Analog => todo!(),
+                    InputType::Analog => unimplemented!(),
                 }
                 *value = (*value + *changed_by)
                     .max(key_input.min())
@@ -157,6 +159,7 @@ pub enum InputType {
     Digital,
 }
 
+/// Information about the player's input related to one action.
 #[derive(Copy, Clone)]
 pub struct Values {
     /// How much the value of the input was changed last frame.
@@ -165,6 +168,7 @@ pub struct Values {
     pub value: f32,
 }
 
+/// Information for an action and the input it's attached to.
 pub struct Action<ID, KeyCode> {
     pub id: ID,
     /// The input's keycode and min/max.
@@ -175,36 +179,48 @@ pub struct Action<ID, KeyCode> {
     pub input_type: InputType,
 }
 
+/// A wrapper to help keep track of input information that preexisting input handlers may not offer, but that we need.
 pub trait InputWrapper<KeyCode, InputHelper> {
-    fn update(&mut self, keys: &[KeyCode], events: &InputHelper);
+    fn new() -> Self;
+
+    /// clears input information for this frame
+    fn clear(&mut self);
+
+    /// if the key is held or not. If keeping track of current inputs, also logs what keys are being pressed this frame.
+    fn update_held(&mut self, key: &KeyCode, events: &InputHelper) -> bool;
+
+    /// if the key has just been pressed or not
     fn is_pressed(&self, key: &KeyCode, events: &InputHelper) -> bool;
+
+    /// if the key has just been released or not
     fn is_released(&self, key: &KeyCode, events: &InputHelper) -> bool;
-    fn is_held(&self, key: &KeyCode, events: &InputHelper) -> bool;
 }
 
 use macroquad::prelude::{is_key_down, is_key_pressed, KeyCode as MqKeyCode};
+/// Macroquad doesn't keep track of when keys are released, so track the keys pressed last and this frame.
 pub struct MacroquadInputWrapper {
-    this_frame_inputs: Vec<MqKeyCode>,
-    last_frame_inputs: Vec<MqKeyCode>,
-}
-
-impl MacroquadInputWrapper {
-    pub fn new() -> Self {
-        Self {
-            this_frame_inputs: Vec::new(),
-            last_frame_inputs: Vec::new(),
-        }
-    }
+    this_frame_keys: Vec<MqKeyCode>,
+    last_frame_keys: Vec<MqKeyCode>,
 }
 
 impl InputWrapper<MqKeyCode, ()> for MacroquadInputWrapper {
-    fn update(&mut self, keys: &[MqKeyCode], _events: &()) {
-        self.last_frame_inputs = std::mem::take(&mut self.this_frame_inputs);
-        for key in keys.iter() {
-            if is_key_pressed(*key) {
-                self.this_frame_inputs.push(*key);
-            }
+    fn new() -> Self {
+        Self {
+            this_frame_keys: Vec::new(),
+            last_frame_keys: Vec::new(),
         }
+    }
+
+    fn clear(&mut self) {
+        self.last_frame_keys = std::mem::take(&mut self.this_frame_keys);
+    }
+
+    fn update_held(&mut self, key: &MqKeyCode, _events: &()) -> bool {
+        if is_key_down(*key) {
+            self.this_frame_keys.push(*key);
+            return true;
+        }
+        false
     }
 
     fn is_pressed(&self, key: &MqKeyCode, _events: &()) -> bool {
@@ -213,40 +229,44 @@ impl InputWrapper<MqKeyCode, ()> for MacroquadInputWrapper {
 
     fn is_released(&self, key: &MqKeyCode, _events: &()) -> bool {
         let was_pressed = self
-            .last_frame_inputs
+            .last_frame_keys
             .iter()
-            .position(|key_pressed| key == key_pressed)
-            .is_some();
-        let is_not_pressed = self
-            .this_frame_inputs
+            .any(|key_pressed| key == key_pressed);
+        let is_not_pressed = !self
+            .this_frame_keys
             .iter()
-            .position(|key_pressed| key == key_pressed)
-            .is_none();
+            .any(|key_pressed| key == key_pressed);
         was_pressed && is_not_pressed
-    }
-
-    fn is_held(&self, key: &MqKeyCode, _events: &()) -> bool {
-        is_key_down(*key)
     }
 }
 
+use winit::event::VirtualKeyCode;
+use winit_input_helper::WinitInputHelper;
+
+/// WinitInputHelper doesn't handle key repeat properly (may depend on system?), so track the keys pressed last and this frame.
 pub struct WinitInputWrapper {
     this_frame_keys: BTreeSet<VirtualKeyCode>,
     last_frame_keys: BTreeSet<VirtualKeyCode>,
 }
 
 impl InputWrapper<VirtualKeyCode, WinitInputHelper> for WinitInputWrapper {
-    fn update(&mut self, keys: &[VirtualKeyCode], events: &WinitInputHelper) {
-        self.last_frame_keys = std::mem::take(&mut self.this_frame_keys);
-        for key in keys.iter() {
-            if events.key_held(*key) {
-                self.this_frame_keys.insert(*key);
-            }
+    fn new() -> Self {
+        Self {
+            this_frame_keys: BTreeSet::new(),
+            last_frame_keys: BTreeSet::new(),
         }
     }
 
-    fn is_held(&self, key: &VirtualKeyCode, events: &WinitInputHelper) -> bool {
-        events.key_held(*key)
+    fn clear(&mut self) {
+        self.last_frame_keys = std::mem::take(&mut self.this_frame_keys);
+    }
+
+    fn update_held(&mut self, key: &VirtualKeyCode, events: &WinitInputHelper) -> bool {
+        if events.key_held(*key) {
+            self.this_frame_keys.insert(*key);
+            return true;
+        }
+        false
     }
 
     fn is_pressed(&self, key: &VirtualKeyCode, _events: &WinitInputHelper) -> bool {
@@ -262,13 +282,18 @@ impl InputWrapper<VirtualKeyCode, WinitInputHelper> for WinitInputWrapper {
 use bevy_input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
 
 #[cfg(feature = "bevy-engine")]
+/// Bevy's input handler already correctly handles the information we need, so this is just a wrapper for their functions
 pub struct BevyInputWrapper;
 
 #[cfg(feature = "bevy-engine")]
 impl InputWrapper<BevyKeyCode, BevyInput<BevyKeyCode>> for BevyInputWrapper {
-    fn update(&mut self, _keys: &[BevyKeyCode], _events: &BevyInput<BevyKeyCode>) {}
+    fn new() -> Self {
+        Self
+    }
 
-    fn is_held(&self, key: &BevyKeyCode, events: &BevyInput<BevyKeyCode>) -> bool {
+    fn clear(&mut self) {}
+
+    fn update_held(&mut self, key: &BevyKeyCode, events: &BevyInput<BevyKeyCode>) -> bool {
         events.pressed(*key)
     }
 

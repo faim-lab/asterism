@@ -4,7 +4,7 @@ use std::io::{self, Write};
 
 use asterism::{
     collision::{AabbCollision, Vec2 as AstVec2},
-    control::{KeyboardControl, MacroQuadKeyboardControl},
+    control::{KeyboardControl, MacroquadInputWrapper},
     data::{Data, EventWrapper, ReactionWrapper},
     physics::PointPhysics,
     resources::QueuedResources, //, Transaction},
@@ -69,7 +69,7 @@ struct World {
 impl GameState for World {}
 
 struct Logics {
-    control: MacroQuadKeyboardControl<ActionID>,
+    control: KeyboardControl<ActionID, KeyCode, (), MacroquadInputWrapper>,
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
@@ -80,7 +80,7 @@ impl Logics {
     fn new() -> Self {
         Self {
             control: {
-                let mut control = MacroQuadKeyboardControl::new();
+                let mut control = KeyboardControl::new();
                 control.add_key_map(0, KeyCode::Q, ActionID::MoveUp(Player::P1));
                 control.add_key_map(0, KeyCode::A, ActionID::MoveDown(Player::P1));
                 control.add_key_map(0, KeyCode::W, ActionID::Serve(Player::P1));
@@ -346,7 +346,10 @@ impl World {
         }
     }
 
-    fn project_control(&self, control: &mut MacroQuadKeyboardControl<ActionID>) {
+    fn project_control(
+        &self,
+        control: &mut KeyboardControl<ActionID, KeyCode, (), MacroquadInputWrapper>,
+    ) {
         control.mapping[0][0].is_valid = true;
         control.mapping[0][1].is_valid = true;
         control.mapping[1][0].is_valid = true;
@@ -367,7 +370,10 @@ impl World {
         }
     }
 
-    fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
+    fn unproject_control(
+        &mut self,
+        control: &KeyboardControl<ActionID, KeyCode, (), MacroquadInputWrapper>,
+    ) {
         self.paddles.0.pos = ((self.paddles.0.pos as i16
             + ((control
                 .get_action_in_set(0, ActionID::MoveDown(Player::P1))
