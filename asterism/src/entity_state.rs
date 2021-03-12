@@ -1,22 +1,17 @@
 //! # Entity-state Logics
 //!
-//! Entity-state logics communicate that game entities act in different ways or have different
-//! capabilities at different times, in ways that are intrinsic to each such entity. They govern
-//! the finite, discrete states of a set of game characters or other entities, update states when
-//! necessary, and condition the operators of other logics on entities' discrete states.
+//! Entity-state logics communicate that game entities act in different ways or have different capabilities at different times, in ways that are intrinsic to each such entity. They govern the finite, discrete states of a set of game characters or other entities, update states when necessary, and condition the operators of other logics on entities' discrete states.
 
 /// An entity-state logic for flat entity state machines.
+///
+/// Invariants: maps, conditions, positions length are all equal. forall i, states[i] < conditions[i].len(), conditions[i].len() = maps[i].states.len()
 pub struct FlatEntityState<ID: Copy + Eq> {
     /// A vec of graphs representing each state machine.
     pub maps: Vec<StateMap<ID>>,
-    /// Condition tables for each map in `self.maps`. If `conditions[i][j]` is true,
-    /// that means the node `j` in `maps[i]` can be moved to, i.e. `position[i]` can be set to
-    /// `j`.
+    /// Condition tables for each map in `self.maps`. If `conditions[i][j]` is true, that means the node `j` in `maps[i]` can be moved to, i.e. `position[i]` can be set to `j`.
     pub conditions: Vec<Vec<bool>>,
     /// The current state the entity is in. `states[i]` is an index in `maps[i].states`.
     pub states: Vec<usize>,
-    // invariants: maps, conditions, positions length are all equal. forall i, states[i] < conditions[i].len()
-    // conditions[i].len() = maps[i].states.len()
 }
 
 impl<ID: Copy + Eq> FlatEntityState<ID> {
@@ -26,9 +21,7 @@ impl<ID: Copy + Eq> FlatEntityState<ID> {
 
     /// Updates the enitity-state logic.
     ///
-    /// First, check the status of all the edges from the current state in the condition table. If
-    /// any of those edges are `true`, i.e. that state can be moved to, update the current state
-    /// to that one. Then, reset the condition table.
+    /// First, check the status of all the edges from the current state in the condition table. If any of those edges are `true`, i.e. that state can be moved to, update the current state to that one. Then, reset the condition table.
     pub fn update(&mut self) {
         for (i, state_idx) in self.states.iter_mut().enumerate() {
             for edge in &self.maps[i].states[*state_idx].edges {
@@ -51,8 +44,7 @@ impl<ID: Copy + Eq> FlatEntityState<ID> {
 
     /// Adds a state machine to the logic.
     ///
-    /// At each index i of `states`, the vec of indices represents the indices of states to which
-    /// the entity can move to from state i.
+    /// At each index i of `states`, the vec of indices represents the indices of states to which the entity can move to from state i.
     ///
     /// All conditions by default are set to false.
     pub fn add_state_map(&mut self, starting_state: usize, states: Vec<(ID, Vec<usize>)>) {

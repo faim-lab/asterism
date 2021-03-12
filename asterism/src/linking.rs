@@ -1,19 +1,14 @@
 //! # Linking logics
 //!
-//! Linking logics present the idea that some things, in some context, are related or connected to
-//! each other. They maintain, enumerate, and follow/activate directed connections between
-//! concepts.
+//! Linking logics present the idea that some things, in some context, are related or connected to each other. They maintain, enumerate, and follow/activate directed connections between concepts.
 //!
-//! Linking logics are incredibly broad and have a wide range of uses. Linking logics are slightly
-//! confusing to visualize because of all the nested vecs. I recommend looking at `yarn` and
-//! `maze-minigame` in `/prototypes/` for examples.
+//! Linking logics are incredibly broad and have a wide range of uses. Linking logics are slightly confusing to visualize because of all the nested vecs. I recommend looking at `yarn` and `maze-minigame` in `/prototypes/` for examples.
 
 /// A generic linking logic.
 pub struct GraphedLinking {
     /// A vec of maps.
     pub maps: Vec<NodeMap>,
-    /// Condition tables for each map in `self.maps`. If `conditions[i][j]` is true, that means the
-    /// node `j` in `maps[i]` can be moved to, i.e. `position[i]` can be set to `j`.
+    /// Condition tables for each map in `self.maps`. If `conditions[i][j]` is true, that means the node `j` in `maps[i]` can be moved to, i.e. `position[i]` can be set to `j`.
     pub conditions: Vec<Vec<bool>>,
     /// The current node the map is on. `positions[i]` is an index in `maps[i].nodes`.
     pub positions: Vec<usize>,
@@ -26,9 +21,7 @@ impl GraphedLinking {
 
     /// Updates the linking logic.
     ///
-    /// First, check the status of all the links from the current node in the condition table. If
-    /// any of those links are `true`, i.e. that node can be moved to, move the current position.
-    /// Then, reset the condition table.
+    /// First, check the status of all the links from the current node in the condition table. If any of those links are `true`, i.e. that node can be moved to, move the current position. Then, reset the condition table.
     pub fn update(&mut self) {
         for (i, idx) in self.positions.iter_mut().enumerate() {
             for link in &self.maps[i].nodes[*idx].links {
@@ -50,8 +43,7 @@ impl GraphedLinking {
     ///
     /// `starting_pos` is where the node where the linking logic will start looking for links.
     ///
-    /// At each index i of `nodes`, the vec of indices j_0, j_1, j_2, ... represents the indices of
-    /// nodes to which node i can be linked to.
+    /// At each index i of `nodes`, the vec of indices j_0, j_1, j_2, ... represents the indices of nodes to which node i can be linked to.
     ///
     /// All conditions by default are set to false.
     pub fn add_link_map(&mut self, starting_pos: usize, nodes: Vec<Vec<usize>>) {

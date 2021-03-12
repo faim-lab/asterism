@@ -1,10 +1,6 @@
 //! # Resource Logics
 //!
-//! Resource logics communicate that generic or specific resources can be created, destroyed,
-//! converted, or transferred between abstract or concrete locations. They create, destroy, and
-//! exchange (usually) discrete quantities of generic or specific resources in or between abstract
-//! or concrete locations on demand or over time, and trigger other actions when these transactions
-//! take place.
+//! Resource logics communicate that generic or specific resources can be created, destroyed, converted, or transferred between abstract or concrete locations. They create, destroy, and exchange (usually) discrete quantities of generic or specific resources in or between abstract or concrete locations on demand or over time, and trigger other actions when these transactions take place.
 
 use crate::{Event, Logic, LogicType, Reaction};
 use std::collections::BTreeMap;
@@ -13,12 +9,9 @@ use std::collections::BTreeMap;
 pub struct QueuedResources<ID: PoolInfo> {
     /// The items involved, and their values.
     pub items: BTreeMap<ID, f64>,
-    /// Each transaction is a list of items involved in the transaction and the amount they're
-    /// being changed.
+    /// Each transaction is a list of items involved in the transaction and the amount they're being changed.
     pub transactions: Vec<Vec<(ID, Transaction)>>,
-    /// A Vec of all transactions and if they were able to be completed or not. If yes, supply
-    /// a Vec of the IDs of successful transactions; if no, supply the ID of the pool that
-    /// caused the error and a reason (see [ResourceError]).
+    /// A Vec of all transactions and if they were able to be completed or not. If yes, supply a Vec of the IDs of successful transactions; if no, supply the ID of the pool that caused the error and a reason (see [ResourceError]).
     pub completed: Vec<ResourceEvent<ID>>,
 }
 
@@ -26,10 +19,7 @@ impl<ID: PoolInfo> Logic for QueuedResources<ID> {
     type Event = ResourceEvent<ID>;
     type Reaction = ResourceReaction<ID>;
 
-    /// Updates the values of resources based on the queued transactions. If a transaction cannot
-    /// be completed (if the value goes below zero), a snapshot of the resources before the
-    /// transaction occurred is restored, and the transaction is marked as incomplete, and we
-    /// continue to process the remaining transactions.
+    /// Updates the values of resources based on the queued transactions. If a transaction cannot be completed (if the value goes below zero), a snapshot of the resources before the transaction occurred is restored, and the transaction is marked as incomplete, and we continue to process the remaining transactions.
     fn update(&mut self) {
         self.completed.clear();
         'exchange: for exchange in self.transactions.iter() {
@@ -114,7 +104,7 @@ pub enum Transaction {
     Change(f64),
 }
 
-/// information for the min/max values the entities in this pool can take, inclusive (I think)
+/// information for the min/max values the entities in this pool can take, inclusive
 pub trait PoolInfo: Copy + Ord + Eq {
     fn min_value(&self) -> f64 {
         std::f64::MIN

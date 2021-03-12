@@ -1,8 +1,6 @@
 //! # Physics logics
 //!
-//! Physics logics communicate that physical laws govern the movement of some in-game entities.
-//! They update and honor objects' physical properties like position, velocity, density, etc.,
-//! according to physical laws integrated over time.
+//! Physics logics communicate that physical laws govern the movement of some in-game entities. They update and honor objects' physical properties like position, velocity, density, etc., according to physical laws integrated over time.
 
 use crate::{collision::Vec2, Event, Logic, LogicType, Reaction};
 
@@ -17,8 +15,7 @@ impl<V2: Vec2> Logic for PointPhysics<V2> {
     type Reaction = PhysicsReaction;
     type Event = PhysicsEvent;
 
-    /// Update the physics logic: changes the velocities of entities based on acceleration, then
-    /// changes entities' positions based on updated velocities.
+    /// Update the physics logic: changes the velocities of entities based on acceleration, then changes entities' positions based on updated velocities.
     fn update(&mut self) {
         for (pos, (vel, acc)) in self
             .positions

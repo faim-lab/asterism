@@ -1,8 +1,6 @@
 //! # Collision logics
 //!
-//! Collision logics offer an illusion of physical space is provided by the fact that some game
-//! objects occlude the movement of others. They detect overlaps between subsets of entities and/or
-//! regions of space, and automatically trigger reactions when such overlaps occur.
+//! Collision logics offer an illusion of physical space is provided by the fact that some game objects occlude the movement of others. They detect overlaps between subsets of entities and/or regions of space, and automatically trigger reactions when such overlaps occur.
 //!
 //! Note: Collision is hard and may be broken.
 
@@ -62,25 +60,18 @@ impl Vec2 for GlamVec2 {
     }
 }
 
-/// Information for each contact. If the entities at the indices `i` and `j` are both unfixed or
-/// both fixed, then `i < j`. If one is unfixed and the other is fixed, `i` will be the index of
-/// the unfixed entity.
+/// Information for each contact. If the entities at the indices `i` and `j` are both unfixed or both fixed, then `i < j`. If one is unfixed and the other is fixed, `i` will be the index of the unfixed entity.
 pub struct Contact<V2: Vec2> {
-    /// The index of the first contact in `centers`, `half_sizes`, `velocities`, `metadata`, and
-    /// `displacements`.
+    /// The index of the first contact in `centers`, `half_sizes`, `velocities`, `metadata`, and `displacements`.
     pub i: usize,
-    /// The index of the second contact in `centers`, `half_sizes`, `velocities`, `metadata`, and
-    /// `displacements`.
+    /// The index of the second contact in `centers`, `half_sizes`, `velocities`, `metadata`, and `displacements`.
     pub j: usize,
-    /// The projected displacement of each contact---not actual restituted displacement. If both
-    /// colliding bodies are fixed, or one of them is **not** solid, defaults to a `Vec2` with
-    /// a magnitude of 0.0.
+    /// The projected displacement of each contact---not actual restituted displacement. If both colliding bodies are fixed, or one of them is **not** solid, defaults to a `Vec2` with a magnitude of 0.0.
     pub displacement: V2,
 }
 
 impl<V2: Vec2> PartialEq for Contact<V2> {
-    /// Two `Contacts`s are equal when the indices of their contacts and their displacements are
-    /// the same.
+    /// Two `Contacts`s are equal when the indices of their contacts and their displacements are the same.
     fn eq(&self, other: &Self) -> bool {
         self.i == other.i
             && self.j == other.j
@@ -90,8 +81,7 @@ impl<V2: Vec2> PartialEq for Contact<V2> {
 }
 
 impl<V2: Vec2> PartialOrd for Contact<V2> {
-    /// A `Contact` is bigger than another when the magnitude of how much the contact should be
-    /// restituted is greater than the other.
+    /// A `Contact` is bigger than another when the magnitude of how much the contact should be restituted is greater than the other.
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         let e1 = self.get_restitution().magnitude();
         let e2 = other.get_restitution().magnitude();
@@ -100,8 +90,7 @@ impl<V2: Vec2> PartialOrd for Contact<V2> {
 }
 
 impl<V2: Vec2> Contact<V2> {
-    /// Returns how much the contact should be restituted, not taking into account other possible
-    /// contacts.
+    /// Returns how much the contact should be restituted, not taking into account other possible contacts.
     fn get_restitution(&self) -> V2 {
         if self.displacement.x().abs() < self.displacement.y().abs() {
             V2::new(self.displacement.x(), 0.0)
@@ -118,14 +107,11 @@ impl<V2: Vec2> Contact<V2> {
 pub struct CollisionData<ID: Copy + Eq> {
     /// True if the entity is solid, i.e. can stop other entities.
     ///
-    /// For example, a wall or player character might be solid, while a section of the ground that
-    /// applies an affect on the player character when they walk over it (colliding with it) might
-    /// not be.
+    /// For example, a wall or player character might be solid, while a section of the ground that applies an effect on the player character when they walk over it (colliding with it) might not be.
     pub solid: bool,
     /// True if the entity is fixed, i.e. does _not_ participate in restitution.
     ///
-    /// Pushable entities are _not_ fixed, while entities that shouldn't be pushable, such as walls
-    /// or moving platforms, are.
+    /// Pushable entities are _not_ fixed, while entities that shouldn't be pushable, such as walls or moving platforms, are.
     pub fixed: bool,
     pub id: ID,
 }
@@ -173,11 +159,8 @@ impl<ID: Copy + Eq, V2: Vec2> Logic for AabbCollision<ID, V2> {
     ///
     /// 1. Find all contacts, add to a big vec
     /// 2. Sort the big list by decreasing magnitude of displacement
-    /// 3. Have a vec<Vec2> of length # collision bodies; these are how much each body has been
-    ///    displaced so far during restitution.
-    /// 4. Process contacts vec in order: adding the displacement so far for each
-    ///    involved entity to the contact displacement, displace the correct entity the correct
-    ///    "remaining" amount (which might be 0) and add that to the vec of (3).
+    /// 3. Have a vec<Vec2> of length # collision bodies; these are how much each body has been displaced so far during restitution.
+    /// 4. Process contacts vec in order: adding the displacement so far for each involved entity to the contact displacement, displace the correct entity the correct "remaining" amount (which might be 0) and add that to the vec of (3).
     ///
     /// Explanation of algorithm lightly modified from a message by Prof Osborn.
     fn update(&mut self) {
@@ -223,8 +206,7 @@ impl<ID: Copy + Eq, V2: Vec2> Logic for AabbCollision<ID, V2> {
 
         let remove = &mut Vec::<usize>::new();
 
-        // sorted by magnitude of displ.
-        // if both unfixed, need to displace both
+        // sorted by magnitude of displ. if both unfixed, need to displace both
         for (idx, contact) in self.contacts.iter().enumerate() {
             let Contact {
                 i,
@@ -328,15 +310,11 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         )
     }
 
-    /// Calculates the speed ratio of the two entities, i.e. the amount of restitution an
-    /// entity should be responsible for.
+    /// Calculates the speed ratio of the two entities, i.e. the amount of restitution an entity should be responsible for.
     ///
-    /// Assumes that the entity at index `i` is unfixed. When the entity at index `j` is fixed,
-    /// entity `i` will be responsible for all of the restitution. Otherwise, it is responsible
-    /// for an amount of restitution proportional to the entities' velocity.
+    /// Assumes that the entity at index `i` is unfixed. When the entity at index `j` is fixed, entity `i` will be responsible for all of the restitution. Otherwise, it is responsible for an amount of restitution proportional to the entities' velocity.
     ///
-    /// I think this is mostly ripped from this tutorial:
-    /// https://gamedevelopment.tutsplus.com/series/basic-2d-platformer-physics--cms-998
+    /// I think this is mostly ripped from this tutorial: https://gamedevelopment.tutsplus.com/series/basic-2d-platformer-physics--cms-998
     fn get_speed_ratio(&self, i: usize, j: usize) -> V2 {
         if !self.metadata[j].fixed {
             let (vxi, vyi) = (self.velocities[i].x().abs(), self.velocities[i].y().abs());
@@ -366,10 +344,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         }
     }
 
-    /// Adds a collision entity to the logic, taking two Vec2s with the center and half the
-    /// dimensions of the AABB. `solid` represents if the entity can stop other entities, and
-    /// `fixed` represents if it can participate in restitution, i.e. be moved by the collision
-    /// logic or not. See [CollisionData] for further explanation.
+    /// Adds a collision entity to the logic, taking two Vec2s with the center and half the dimensions of the AABB. `solid` represents if the entity can stop other entities, and `fixed` represents if it can participate in restitution, i.e. be moved by the collision logic or not. See [CollisionData] for further explanation.
     pub fn add_collision_entity(
         &mut self,
         center: V2,
@@ -385,10 +360,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         self.metadata.push(CollisionData { solid, fixed, id });
     }
 
-    /// Adds a collision entity to the logic, taking the x and y positions, width, and height of the AABB as
-    /// well as its velocity and some metadata. See
-    /// [add_collision_entity][AabbCollision::add_collision_entity] for details on what the other
-    /// fields represent.
+    /// Adds a collision entity to the logic, taking the x and y positions, width, and height of the AABB as well as its velocity and some metadata. See [add_collision_entity][AabbCollision::add_collision_entity] for details on what the other fields represent.
     pub fn add_entity_as_xywh(
         &mut self,
         pos: V2,
@@ -412,11 +384,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         );
     }
 
-    /// Returns unit vector of normal of displacement for the entity of the given ID in the
-    /// given contact. I.e., if a contact is moved in a positive x direction after restitution
-    /// _because of_ the other entity involved in collision, `sides_touched` will return
-    /// `V2::new(1.0, 0.0)`. Panics if the given EntityID isn't that of either entity in the
-    /// contact.
+    /// Returns unit vector of normal of displacement for the entity of the given ID in the given contact. I.e., if a contact is moved in a positive x direction after restitution _because of_ the other entity involved in collision, `sides_touched` will return `V2::new(1.0, 0.0)`. Panics if the given EntityID isn't that of either entity in the contact.
     pub fn sides_touched(&self, contact: &Contact<V2>, id: &ID) -> V2 {
         assert!(*id == self.metadata[contact.i].id || *id == self.metadata[contact.j].id);
         let restitution = contact.get_restitution();
@@ -433,8 +401,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         let mut unit = V2::new(x, y);
 
         if unit.magnitude() == 0.0 {
-            // if unit.magnitude() == 0, that means either the x or y value of displ
-            // = 0.0
+            // if unit.magnitude() == 0, that means either the x or y value of displ = 0.0
             let displ = contact.displacement;
             let center_displ = V2::new(
                 self.centers[contact.i].x() - self.centers[contact.j].x(),
@@ -471,8 +438,7 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         }
     }
 
-    /// Gets the (x, y) position for the entity given its CollisionID, if it exists: (center -
-    /// half_size). Matches with [add_entity_as_xywh][AabbCollision::add_entity_as_xywh].
+    /// Gets the (x, y) position for the entity given its CollisionID, if it exists: (center - half_size). Matches with [add_entity_as_xywh][AabbCollision::add_entity_as_xywh].
     pub fn get_xy_pos_for_entity(&self, id: ID) -> Option<V2> {
         if let Some(i) = self.metadata.iter().position(|metadata| metadata.id == id) {
             let center = self.centers[i];
