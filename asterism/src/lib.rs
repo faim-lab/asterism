@@ -37,4 +37,5 @@ pub enum LogicType {
     Physics,
     Resource,
     Collision,
+    Control,
 }

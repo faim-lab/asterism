@@ -12,7 +12,7 @@ pub struct PointPhysics<V2: Vec2> {
 }
 
 impl<V2: Vec2> Logic for PointPhysics<V2> {
-    type Reaction = PhysicsReaction;
+    type Reaction = PhysicsReaction<V2>;
     type Event = PhysicsEvent;
 
     /// Update the physics logic: changes the velocities of entities based on acceleration, then changes entities' positions based on updated velocities.
@@ -28,7 +28,14 @@ impl<V2: Vec2> Logic for PointPhysics<V2> {
     }
 
     fn react(&mut self, reaction_type: Self::Reaction) {
-        match reaction_type {}
+        match reaction_type {
+            Self::Reaction::SetVel(idx, new_vel) => {
+                self.velocities[idx] = new_vel;
+            }
+            Self::Reaction::SetAcc(idx, new_acc) => {
+                self.accelerations[idx] = new_acc;
+            }
+        }
     }
 }
 
@@ -56,11 +63,14 @@ impl<V2: Vec2> Default for PointPhysics<V2> {
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum PhysicsReaction {}
+pub enum PhysicsReaction<V2: Vec2> {
+    SetVel(usize, V2),
+    SetAcc(usize, V2),
+}
 #[derive(PartialEq, Eq, Debug)]
 pub enum PhysicsEvent {}
 
-impl Reaction for PhysicsReaction {
+impl<V2: Vec2> Reaction for PhysicsReaction<V2> {
     fn for_logic(&self) -> LogicType {
         LogicType::Physics
     }

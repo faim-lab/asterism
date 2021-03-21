@@ -12,7 +12,7 @@ use glam::Vec2 as GlamVec2;
 use ultraviolet::Vec2 as UVVec2;
 
 /// A trait for a set of two coordinates that represent a point in 2d space.
-pub trait Vec2: Add + AddAssign + Copy {
+pub trait Vec2: Add + AddAssign + Copy + PartialEq {
     fn new(x: f32, y: f32) -> Self;
     fn x(&self) -> f32;
     fn y(&self) -> f32;

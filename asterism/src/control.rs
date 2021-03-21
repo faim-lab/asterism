@@ -6,60 +6,70 @@
 
 use std::collections::BTreeSet;
 
+use crate::{Event, Logic, LogicType, Reaction};
+
 /// Information for a key/button press.
 trait Input {
     fn min(&self) -> f32;
     fn max(&self) -> f32;
 }
 
-use std::marker::PhantomData;
 /// A keyboard control logic.
 ///
 /// Note that an InputHelper is the struct sometimes provided by a game engine to keep track of inputs, ex. Bevy's `bevy_input::Input` and Winit's `WinitInputHelper`. Macroquad doesn't provide such a struct, so you may want to pass in the unit type `()`. A Wrapper is a helper struct that helps keep track of information that InputHelper structs may not, but we want, such as [BevyInputWrapper], [MacroquadInputWrapper], or [WinitInputWrapper].
-pub struct KeyboardControl<ID, KeyCode, InputHelper, Wrapper>
+pub struct KeyboardControl<ID, Wrapper>
 where
     ID: Copy + Eq + Ord,
-    KeyCode: Copy,
-    Wrapper: InputWrapper<KeyCode, InputHelper>,
+    Wrapper: InputWrapper,
 {
     /// Input mappings from actions to keypresses. Each outer Vec is a set of inputs, ex. one player gets the first set of mappings, another gets a second set of mappings, an AI player gets the third.
-    pub mapping: Vec<Vec<Action<ID, KeyCode>>>,
+    pub mapping: Vec<Vec<Action<ID, Wrapper::KeyCode>>>,
     /// The values for each keypress in the sets described above.
     pub values: Vec<Vec<Values>>,
     /// An input wrapper
     input_wrapper: Wrapper,
-    phantom: PhantomData<InputHelper>,
 }
 
-impl<ID, KeyCode, InputHelper, Wrapper> Default
-    for KeyboardControl<ID, KeyCode, InputHelper, Wrapper>
+impl<ID, Wrapper> Default for KeyboardControl<ID, Wrapper>
 where
     ID: Copy + Eq + Ord,
-    KeyCode: Copy,
-    Wrapper: InputWrapper<KeyCode, InputHelper>,
+    Wrapper: InputWrapper,
 {
     fn default() -> Self {
         Self {
             mapping: Vec::new(),
             values: Vec::new(),
             input_wrapper: Wrapper::new(),
-            phantom: PhantomData,
         }
     }
 }
 
-impl<ID, KeyCode, InputHelper, Wrapper> KeyboardControl<ID, KeyCode, InputHelper, Wrapper>
+impl<ID, Wrapper> Logic for KeyboardControl<ID, Wrapper>
 where
     ID: Copy + Eq + Ord,
-    KeyCode: Copy,
-    Wrapper: InputWrapper<KeyCode, InputHelper>,
+    Wrapper: InputWrapper,
+{
+    type Event = ControlEvent<ID>;
+    type Reaction = ControlReaction;
+    /// use KeyboardControl::update() instead (for now???)
+    fn update(&mut self) {
+        unimplemented!();
+    }
+
+    fn react(&mut self, _reaction_type: Self::Reaction) {}
+}
+
+impl<ID, Wrapper> KeyboardControl<ID, Wrapper>
+where
+    ID: Copy + Eq + Ord,
+    Wrapper: InputWrapper,
 {
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Checks and updates what inputs are being pressed every frame.
-    pub fn update(&mut self, events: &InputHelper) {
+    pub fn update_input(&mut self, events: &Wrapper::InputHelper) {
         self.input_wrapper.clear();
         for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
             for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
@@ -119,7 +129,7 @@ where
     }
 
     /// Adds a single keymap to the logic.
-    pub fn add_key_map(&mut self, locus_idx: usize, keycode: KeyCode, id: ID) {
+    pub fn add_key_map(&mut self, locus_idx: usize, keycode: Wrapper::KeyCode, id: ID) {
         if locus_idx >= self.mapping.len() {
             self.mapping.resize_with(locus_idx + 1, Default::default);
             self.values.resize_with(locus_idx + 1, Default::default);
@@ -179,21 +189,48 @@ pub struct Action<ID, KeyCode> {
     pub input_type: InputType,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ControlReaction {}
+
+impl Reaction for ControlReaction {
+    fn for_logic(&self) -> LogicType {
+        LogicType::Control
+    }
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct ControlEvent<ID: Copy + Eq + Ord>(pub ID, pub ControlEventType);
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum ControlEventType {
+    KeyPressed,
+    KeyReleased,
+    KeyHeld,
+}
+
+impl<ID: Copy + Eq + Ord> Event for ControlEvent<ID> {
+    fn for_logic(&self) -> LogicType {
+        LogicType::Control
+    }
+}
+
 /// A wrapper to help keep track of input information that preexisting input handlers may not offer, but that we need.
-pub trait InputWrapper<KeyCode, InputHelper> {
+pub trait InputWrapper {
+    type KeyCode: Copy;
+    type InputHelper;
     fn new() -> Self;
 
     /// clears input information for this frame
     fn clear(&mut self);
 
     /// if the key is held or not. If keeping track of current inputs, also logs what keys are being pressed this frame.
-    fn update_held(&mut self, key: &KeyCode, events: &InputHelper) -> bool;
+    fn update_held(&mut self, key: &Self::KeyCode, events: &Self::InputHelper) -> bool;
 
     /// if the key has just been pressed or not
-    fn is_pressed(&self, key: &KeyCode, events: &InputHelper) -> bool;
+    fn is_pressed(&self, key: &Self::KeyCode, events: &Self::InputHelper) -> bool;
 
     /// if the key has just been released or not
-    fn is_released(&self, key: &KeyCode, events: &InputHelper) -> bool;
+    fn is_released(&self, key: &Self::KeyCode, events: &Self::InputHelper) -> bool;
 }
 
 use macroquad::prelude::{is_key_down, is_key_pressed, KeyCode as MqKeyCode};
@@ -203,7 +240,9 @@ pub struct MacroquadInputWrapper {
     last_frame_keys: Vec<MqKeyCode>,
 }
 
-impl InputWrapper<MqKeyCode, ()> for MacroquadInputWrapper {
+impl InputWrapper for MacroquadInputWrapper {
+    type KeyCode = MqKeyCode;
+    type InputHelper = ();
     fn new() -> Self {
         Self {
             this_frame_keys: Vec::new(),
@@ -249,7 +288,10 @@ pub struct WinitInputWrapper {
     last_frame_keys: BTreeSet<VirtualKeyCode>,
 }
 
-impl InputWrapper<VirtualKeyCode, WinitInputHelper> for WinitInputWrapper {
+impl InputWrapper for WinitInputWrapper {
+    type KeyCode = VirtualKeyCode;
+    type InputHelper = WinitInputHelper;
+
     fn new() -> Self {
         Self {
             this_frame_keys: BTreeSet::new(),
@@ -286,7 +328,10 @@ use bevy_input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
 pub struct BevyInputWrapper;
 
 #[cfg(feature = "bevy-engine")]
-impl InputWrapper<BevyKeyCode, BevyInput<BevyKeyCode>> for BevyInputWrapper {
+impl InputWrapper for BevyInputWrapper {
+    type KeyCode = BevyKeyCode;
+    type InputHelper = BevyInput<BevyKeyCode>;
+
     fn new() -> Self {
         Self
     }
