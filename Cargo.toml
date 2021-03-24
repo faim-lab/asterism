@@ -9,6 +9,7 @@ members = [
     "prototypes/yarn",
     "prototypes/paddles-macroquad",
     "prototypes/air_hockey",
+    "prototypes/clowder",
     "prototypes/breakout",
     "prototypes/apple-catching",
     "prototypes/maze-macroquad",
@@ -17,4 +18,5 @@ members = [
     "prototypes/wall-breaker",
     "prototypes/paddle-ball-mania"
 ]
+
 
