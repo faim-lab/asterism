@@ -1,0 +1,50 @@
+[
+
+{
+	"name": "apple",
+	"frame": {"x":0,"y":0,"w":32,"h":32},
+	"rotated": false,
+	"trimmed": false,
+	"sprite_source_size": {"x":0,"y":0,"w":32,"h":32},
+	"source_size": {"w":32,"h":32}
+},
+{
+	"name": "appletree",
+	"frame": {"x":0,"y":32,"w":255,"h":225},
+	"rotated": false,
+	"trimmed": false,
+	"sprite_source_size": {"x":0,"y":0,"w":255,"h":225},
+	"source_size": {"w":255,"h":225}
+},
+{
+	"name": "basket1",
+	"frame": {"x":0,"y":257,"w":64,"h":64},
+	"rotated": false,
+	"trimmed": false,
+	"sprite_source_size": {"x":0,"y":0,"w":64,"h":64},
+	"source_size": {"w":64,"h":64}
+},
+{
+	"name": "basket2",
+	"frame": {"x":64,"y":257,"w":64,"h":64},
+	"rotated": false,
+	"trimmed": false,
+	"sprite_source_size": {"x":0,"y":0,"w":64,"h":64},
+	"source_size": {"w":64,"h":64}
+},
+{
+	"name": "basket3",
+	"frame": {"x":128,"y":257,"w":64,"h":64},
+	"rotated": false,
+	"trimmed": false,
+	"sprite_source_size": {"x":0,"y":0,"w":64,"h":64},
+	"source_size": {"w":64,"h":64}
+},
+{
+	"name": "basket4",
+	"frame": {"x":192,"y":257,"w":64,"h":64},
+	"rotated": false,
+	"trimmed": false,
+	"sprite_source_size": {"x":0,"y":0,"w":64,"h":64},
+	"source_size": {"w":64,"h":64}
+}]
