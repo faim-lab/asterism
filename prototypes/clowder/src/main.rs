@@ -5,8 +5,15 @@ use asterism::{
     collision::AabbCollision, control::KeyboardControl, control::WinitKeyboardControl,
     physics::PointPhysics, resources::PoolInfo, resources::QueuedResources, resources::Transaction,
 };
+use json::*;
+use macroquad::prelude::*;
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use rand::Rng;
+use serde;
+use serde::Deserialize;
+use serde_json;
+use std::fs::File;
+use std::io::{self, Write};
 use ultraviolet::Vec2;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
@@ -71,6 +78,60 @@ impl PoolInfo for PoolID {
             Self::Points(_) => std::u8::MIN as f64,
         }
     }
+}
+
+struct SpriteSheet {
+    image: Texture2D,
+    data: Vec<Sprite>,
+}
+
+impl SpriteSheet {
+    async fn new(image_file: &str, data_file: Vec<Sprite>) -> Self {
+        Self {
+            image: load_texture(image_file).await,
+            data: data_file,
+        }
+    }
+
+    fn create_param(&self, index: usize) -> DrawTextureParams {
+        let mut texture = DrawTextureParams::default();
+        texture.dest_size = Some(Vec2::new(
+            self.data[index].source_size.w as f32,
+            self.data[index].source_size.h as f32,
+        ));
+        texture.source = Some(Rect::new(
+            self.data[index].frame.x as f32,
+            self.data[index].frame.y as f32,
+            self.data[index].frame.w as f32,
+            self.data[index].frame.h as f32,
+        ));
+
+        return texture;
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct Rectangle {
+    x: u64,
+    y: u64,
+    w: u64,
+    h: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct Size {
+    w: u64,
+    h: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct Sprite {
+    name: String,
+    frame: Rectangle,
+    rotated: bool,
+    trimmed: bool,
+    sprite_source_size: Rectangle,
+    source_size: Size,
 }
 
 struct Logics {
@@ -198,6 +259,12 @@ fn main() -> Result<(), Error> {
         let surface_texture = SurfaceTexture::new(WIDTH as u32, HEIGHT as u32, surface);
         Pixels::new(WIDTH as u32, HEIGHT as u32, surface_texture)?
     };
+
+    let file = File::open("src/apple_tree_sprite.json").unwrap();
+    let sprite_info: Vec<Sprite> =
+        serde_json::from_reader(file).expect("error while reading or parsing");
+    let mut sprites = SpriteSheet::new("src/apple_tree_sprite.png", sprite_info).await;
+
     let mut world = World::new();
     let mut logics = Logics::new();
     let mut rng = rand::thread_rng();
