@@ -1,3 +1,4 @@
+#![allow(clippy::upper_case_acronyms)]
 use asterism::resources::PoolInfo;
 
 #[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Debug)]
@@ -8,15 +9,15 @@ pub enum Player {
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ActionID {
-    MoveUp(Player),
-    MoveDown(Player),
-    Serve(Player),
+    MoveUp,
+    MoveDown,
+    Serve,
     Quit,
 }
 
 impl Default for ActionID {
     fn default() -> Self {
-        Self::MoveDown(Player::P1)
+        Self::MoveDown
     }
 }
 

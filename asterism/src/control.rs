@@ -16,7 +16,7 @@ trait Input {
 
 /// A keyboard control logic.
 ///
-/// Note that an InputHelper is the struct sometimes provided by a game engine to keep track of inputs, ex. Bevy's `bevy_input::Input` and Winit's `WinitInputHelper`. Macroquad doesn't provide such a struct, so you may want to pass in the unit type `()`. A Wrapper is a helper struct that helps keep track of information that InputHelper structs may not, but we want, such as [BevyInputWrapper], [MacroquadInputWrapper], or [WinitInputWrapper].
+/// A Wrapper is a helper struct that helps keep track of information that libraries may not but we do want, such as [BevyInputWrapper], [MacroquadInputWrapper], or [WinitInputWrapper].
 pub struct KeyboardControl<ID, Wrapper>
 where
     ID: Copy + Eq + Ord,
@@ -50,13 +50,39 @@ where
     Wrapper: InputWrapper,
 {
     type Event = ControlEvent<ID>;
-    type Reaction = ControlReaction;
-    /// use KeyboardControl::update() instead (for now???)
+    type Reaction = ControlReaction<ID, Wrapper::KeyCode>;
+
+    /// use KeyboardControl::update() instead???? maybe
     fn update(&mut self) {
         unimplemented!();
     }
 
-    fn react(&mut self, _reaction_type: Self::Reaction) {}
+    // eventually should do actual error handling for this, probably
+    fn react(&mut self, reaction_type: Self::Reaction) {
+        match reaction_type {
+            ControlReaction::AddKeyToSet(idx, id, keycode, input_type) => {
+                self.mapping[idx].push(Action::new(id, keycode, input_type))
+            }
+            ControlReaction::RemoveKeyFromSet(set_idx, id) => {
+                if let Some(action_idx) = self.mapping[set_idx].iter().position(|act| act.id == id)
+                {
+                    self.mapping[set_idx].remove(action_idx);
+                }
+            }
+            ControlReaction::SetKeyValid(set_idx, id) => {
+                if let Some(action_idx) = self.mapping[set_idx].iter().position(|act| act.id == id)
+                {
+                    self.mapping[set_idx][action_idx].is_valid = true;
+                }
+            }
+            ControlReaction::SetKeyInvalid(set_idx, id) => {
+                if let Some(action_idx) = self.mapping[set_idx].iter().position(|act| act.id == id)
+                {
+                    self.mapping[set_idx][action_idx].is_valid = false;
+                }
+            }
+        }
+    }
 }
 
 impl<ID, Wrapper> KeyboardControl<ID, Wrapper>
@@ -80,24 +106,29 @@ where
                     ..
                 } = action;
                 let Values { value, changed_by } = &mut values;
+                // if not valid, reset and skip check. could cause problems if a key were pressed before it became valid then the key became valid while still being held. this is probably semi-reasonable, actually
+                if !*is_valid {
+                    *value = 0.0;
+                    *changed_by = 0.0;
+                    continue;
+                }
                 match input_type {
                     InputType::Digital => {
                         // NOTE: if update_held isn't called for every key in the mappings, it can completely break some of the input wrappers.
                         //
-                        // This doesn't feel super safe... but it feels less weird than filtering out and looping through all inputs beforehand to see if they're held, _then_ calling is_held again---which is just doing the same thing twice?
+                        // This feels easily broken... but it feels less weird than filtering out and looping through all inputs beforehand to see if they're held, _then_ calling is_held again---which is just doing the same thing twice?
                         if self.input_wrapper.update_held(&key_input.keycode, events) {
-                            if !self.input_wrapper.is_pressed(&key_input.keycode, events) {
-                                if *is_valid {
-                                    *changed_by = 0.0;
-                                }
-                            } else if *is_valid {
+                            if self.input_wrapper.is_pressed(&key_input.keycode, events) {
                                 *changed_by = 1.0;
+                            } else {
+                                *changed_by = 0.0;
                             }
-                        } else if self.input_wrapper.is_released(&key_input.keycode, events) {
-                            if *is_valid {
-                                *changed_by = -1.0;
-                            }
-                        } else if *is_valid {
+                        } else if self.input_wrapper.is_released(&key_input.keycode, events)
+                        // see comment earlier about keypresses that are invalid. logic may not be correct though
+                            && *value != 0.0
+                        {
+                            *changed_by = -1.0;
+                        } else {
                             *changed_by = 0.0;
                         }
                     }
@@ -134,12 +165,7 @@ where
             self.mapping.resize_with(locus_idx + 1, Default::default);
             self.values.resize_with(locus_idx + 1, Default::default);
         }
-        self.mapping[locus_idx].push(Action {
-            id,
-            key_input: KeyInput { keycode },
-            is_valid: false,
-            input_type: InputType::Digital,
-        });
+        self.mapping[locus_idx].push(Action::new(id, keycode, InputType::Digital));
         self.values[locus_idx].push(Values {
             value: 0.0,
             changed_by: 0.0,
@@ -164,6 +190,7 @@ impl<KeyCode> Input for KeyInput<KeyCode> {
     }
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum InputType {
     Analog,
     Digital,
@@ -189,10 +216,26 @@ pub struct Action<ID, KeyCode> {
     pub input_type: InputType,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum ControlReaction {}
+impl<ID, KeyCode> Action<ID, KeyCode> {
+    pub fn new(id: ID, keycode: KeyCode, input_type: InputType) -> Self {
+        Self {
+            id,
+            key_input: KeyInput { keycode },
+            is_valid: true,
+            input_type,
+        }
+    }
+}
 
-impl Reaction for ControlReaction {
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ControlReaction<ID: Copy + Eq, KeyCode: Copy + Eq> {
+    AddKeyToSet(usize, ID, KeyCode, InputType),
+    RemoveKeyFromSet(usize, ID),
+    SetKeyValid(usize, ID),
+    SetKeyInvalid(usize, ID),
+}
+
+impl<ID: Copy + Eq, KeyCode: Copy + Eq> Reaction for ControlReaction<ID, KeyCode> {
     fn for_logic(&self) -> LogicType {
         LogicType::Control
     }
@@ -216,7 +259,7 @@ impl<ID: Copy + Eq + Ord> Event for ControlEvent<ID> {
 
 /// A wrapper to help keep track of input information that preexisting input handlers may not offer, but that we need.
 pub trait InputWrapper {
-    type KeyCode: Copy;
+    type KeyCode: Copy + Eq;
     type InputHelper;
     fn new() -> Self;
 

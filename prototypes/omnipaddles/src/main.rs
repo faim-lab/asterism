@@ -5,7 +5,7 @@ use std::io::{self, Write};
 use asterism::{
     collision::{AabbCollision, Vec2 as AstVec2},
     control::{KeyboardControl, MacroquadInputWrapper},
-    data::{Data, EventWrapper, ReactionWrapper},
+    data::{EventWrapper, ReactionWrapper},
     physics::PointPhysics,
     resources::QueuedResources, //, Transaction},
     GameState,
@@ -13,10 +13,10 @@ use asterism::{
 };
 use macroquad::prelude::*;
 
-// mod game_data;
+mod data;
 mod ids;
 
-// use game_data::*;
+use crate::data::{define_data, Data};
 use ids::*;
 
 const WIDTH: u8 = 255;
@@ -69,11 +69,11 @@ struct World {
 impl GameState for World {}
 
 struct Logics {
-    control: KeyboardControl<ActionID, KeyCode, (), MacroquadInputWrapper>,
+    control: KeyboardControl<ActionID, MacroquadInputWrapper>,
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
-    data: Data<CollisionID, PoolID>,
+    data: Data,
 }
 
 impl Logics {
@@ -81,12 +81,12 @@ impl Logics {
         Self {
             control: {
                 let mut control = KeyboardControl::new();
-                control.add_key_map(0, KeyCode::Q, ActionID::MoveUp(Player::P1));
-                control.add_key_map(0, KeyCode::A, ActionID::MoveDown(Player::P1));
-                control.add_key_map(0, KeyCode::W, ActionID::Serve(Player::P1));
-                control.add_key_map(1, KeyCode::O, ActionID::MoveUp(Player::P2));
-                control.add_key_map(1, KeyCode::L, ActionID::MoveDown(Player::P2));
-                control.add_key_map(1, KeyCode::I, ActionID::Serve(Player::P2));
+                control.add_key_map(0, KeyCode::Q, ActionID::MoveUp);
+                control.add_key_map(0, KeyCode::A, ActionID::MoveDown);
+                control.add_key_map(0, KeyCode::W, ActionID::Serve);
+                control.add_key_map(1, KeyCode::O, ActionID::MoveUp);
+                control.add_key_map(1, KeyCode::L, ActionID::MoveDown);
+                control.add_key_map(1, KeyCode::I, ActionID::Serve);
                 control.add_key_map(2, KeyCode::Escape, ActionID::Quit);
                 control
             },
@@ -137,56 +137,7 @@ impl Logics {
                 resources.items.insert(PoolID::Points(Player::P2), 0.0);
                 resources
             },
-            data: {
-                let mut data = Data::new();
-                data.add_interaction(
-                    EventWrapper::Collision((
-                        CollisionID::Ball(0),
-                        CollisionID::ScoreWall(Player::P1),
-                    )),
-                    ReactionWrapper::Resource((PoolID::Points(Player::P2), 1.0)),
-                );
-                data.add_interaction(
-                    EventWrapper::Collision((
-                        CollisionID::Ball(0),
-                        CollisionID::ScoreWall(Player::P2),
-                    )),
-                    ReactionWrapper::Resource((PoolID::Points(Player::P1), 1.0)),
-                );
-                data.add_interaction(
-                    EventWrapper::Collision((
-                        CollisionID::Ball(0),
-                        CollisionID::ScoreWall(Player::P1),
-                    )),
-                    ReactionWrapper::GameState,
-                );
-                data.add_interaction(
-                    EventWrapper::Collision((
-                        CollisionID::Ball(0),
-                        CollisionID::ScoreWall(Player::P2),
-                    )),
-                    ReactionWrapper::GameState,
-                );
-                data.add_interaction(
-                    EventWrapper::Collision((CollisionID::Ball(0), CollisionID::BounceWall)),
-                    ReactionWrapper::GameState,
-                );
-                data.add_interaction(
-                    EventWrapper::Collision((
-                        CollisionID::Ball(0),
-                        CollisionID::Paddle(Player::P1),
-                    )),
-                    ReactionWrapper::GameState,
-                );
-                data.add_interaction(
-                    EventWrapper::Collision((
-                        CollisionID::Ball(0),
-                        CollisionID::Paddle(Player::P2),
-                    )),
-                    ReactionWrapper::GameState,
-                );
-                data
-            },
+            data: define_data(),
         }
     }
 }
@@ -230,7 +181,7 @@ async fn main() {
 
     loop {
         world.project_control(&mut logics.control);
-        logics.control.update(&());
+        logics.control.update_input(&());
         world.unproject_control(&logics.control);
 
         if logics.control.values[2][0].value != 0.0 {
@@ -254,6 +205,9 @@ async fn main() {
                         ReactionWrapper::Physics(_) => {}
                         ReactionWrapper::Resource(reaction) => {
                             logics.resources.react(reaction);
+                        }
+                        ReactionWrapper::Control(reaction) => {
+                            logics.control.react(reaction);
                         }
                         ReactionWrapper::GameState => match ids {
                             (CollisionID::Ball(i), CollisionID::ScoreWall(player)) => {
@@ -299,17 +253,31 @@ async fn main() {
         logics.resources.update();
         world.unproject_resources(&logics.resources);
 
+        use asterism::resources::ResourceEvent;
         for completed in logics.resources.completed.iter() {
             match completed {
                 Ok(item_types) => {
                     for item_type in item_types {
-                        match item_type {
-                            PoolID::Points(player) => {
-                                match player {
-                                    Player::P1 => print!("p1"),
-                                    Player::P2 => print!("p2"),
+                        let event = EventWrapper::Resource(ResourceEvent::PoolUpdated(*item_type));
+                        // honestly this should be in draw not update game state lol
+                        if let Some(reactions) = logics.data.get_reaction(event) {
+                            for reaction in reactions {
+                                match reaction {
+                                    ReactionWrapper::GameState => {
+                                        #[allow(irrefutable_let_patterns)]
+                                        if let PoolID::Points(player) = item_type {
+                                            match player {
+                                                Player::P1 => print!("p1"),
+                                                Player::P2 => print!("p2"),
+                                            }
+                                            println!(
+                                                " scores! p1: {}, p2: {}",
+                                                world.score.0, world.score.1
+                                            );
+                                        }
+                                    }
+                                    _ => {}
                                 }
-                                println!(" scores! p1: {}, p2: {}", world.score.0, world.score.1);
                             }
                         }
                     }
@@ -346,41 +314,36 @@ impl World {
         }
     }
 
-    fn project_control(
-        &self,
-        control: &mut KeyboardControl<ActionID, KeyCode, (), MacroquadInputWrapper>,
-    ) {
+    fn project_control(&self, control: &mut KeyboardControl<ActionID, MacroquadInputWrapper>) {
         control.mapping[0][0].is_valid = true;
         control.mapping[0][1].is_valid = true;
         control.mapping[1][0].is_valid = true;
         control.mapping[1][1].is_valid = true;
         control.mapping[2][0].is_valid = true;
-
-        for Ball { vel, .. } in self.balls.iter() {
-            if (vel.x, vel.y) == (0.0, 0.0) {
-                match self.serving {
-                    Some(Player::P1) => control.mapping[0][2].is_valid = true,
-                    Some(Player::P2) => control.mapping[1][2].is_valid = true,
-                    None => {}
-                }
-            } else {
+        match self.serving {
+            Some(Player::P1) => {
+                control.mapping[0][2].is_valid = true;
+                control.mapping[1][2].is_valid = false;
+            }
+            Some(Player::P2) => {
+                control.mapping[1][2].is_valid = true;
+                control.mapping[0][2].is_valid = false;
+            }
+            None => {
                 control.mapping[0][2].is_valid = false;
                 control.mapping[1][2].is_valid = false;
             }
         }
     }
 
-    fn unproject_control(
-        &mut self,
-        control: &KeyboardControl<ActionID, KeyCode, (), MacroquadInputWrapper>,
-    ) {
+    fn unproject_control(&mut self, control: &KeyboardControl<ActionID, MacroquadInputWrapper>) {
         self.paddles.0.pos = ((self.paddles.0.pos as i16
             + ((control
-                .get_action_in_set(0, ActionID::MoveDown(Player::P1))
+                .get_action_in_set(0, ActionID::MoveDown)
                 .unwrap()
                 .value
                 - control
-                    .get_action_in_set(0, ActionID::MoveUp(Player::P1))
+                    .get_action_in_set(0, ActionID::MoveUp)
                     .unwrap()
                     .value)
                 * self.paddles.0.speed) as i16)
@@ -388,11 +351,11 @@ impl World {
             .min(255 - PADDLE_HEIGHT);
         self.paddles.1.pos = ((self.paddles.1.pos as i16
             + ((control
-                .get_action_in_set(1, ActionID::MoveDown(Player::P2))
+                .get_action_in_set(1, ActionID::MoveDown)
                 .unwrap()
                 .value
                 - control
-                    .get_action_in_set(1, ActionID::MoveUp(Player::P2))
+                    .get_action_in_set(1, ActionID::MoveUp)
                     .unwrap()
                     .value)
                 * self.paddles.1.speed) as i16)
@@ -400,28 +363,17 @@ impl World {
             .min(255 - PADDLE_HEIGHT);
 
         for Ball { vel, .. } in self.balls.iter_mut() {
-            if (vel.x, vel.y) == (0.0, 0.0) {
-                match self.serving {
-                    Some(Player::P1) => {
-                        let values = control
-                            .get_action_in_set(0, ActionID::Serve(Player::P1))
-                            .unwrap();
-                        if values.changed_by >= 1.0 && values.value != 0.0 {
-                            vel.x = 1.0;
-                            vel.y = 1.0;
-                        }
-                    }
-                    Some(Player::P2) => {
-                        let values = control
-                            .get_action_in_set(1, ActionID::Serve(Player::P2))
-                            .unwrap();
-                        if values.changed_by >= 1.0 && values.value != 0.0 {
-                            vel.x = -1.0;
-                            vel.y = -1.0;
-                        }
-                    }
-                    None => {}
-                }
+            let values = control.get_action_in_set(0, ActionID::Serve).unwrap();
+            if values.changed_by >= 1.0 && values.value != 0.0 {
+                vel.x = 1.0;
+                vel.y = 1.0;
+                self.serving = None;
+            }
+            let values = control.get_action_in_set(1, ActionID::Serve).unwrap();
+            if values.changed_by >= 1.0 && values.value != 0.0 {
+                vel.x = -1.0;
+                vel.y = -1.0;
+                self.serving = None;
             }
         }
     }
