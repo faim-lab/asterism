@@ -8,13 +8,12 @@ use asterism::{
 use json::*;
 use macroquad::prelude::*;
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
-use rand::Rng;
+use rand::prelude::*;
 use serde;
 use serde::Deserialize;
 use serde_json;
 use std::fs::File;
 use std::io::{self, Write};
-use ultraviolet::Vec2;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -134,6 +133,16 @@ struct Sprite {
     source_size: Size,
 }
 
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "clowder".to_owned(),
+        window_width: WIDTH as i32,
+        window_height: HEIGHT as i32,
+        fullscreen: false,
+        ..Default::default()
+    }
+}
+
 struct Logics {
     control: WinitKeyboardControl<ActionID>,
     physics: PointPhysics<Vec2>,
@@ -240,7 +249,36 @@ struct World {
     score: (u8, u8),
 }
 
-fn main() -> Result<(), Error> {
+#[macroquad::main(window_conf)]
+async fn main() {
+    let file = File::open("src/clowder_sprite.json").unwrap();
+    let sprite_info: Vec<Sprite> =
+        serde_json::from_reader(file).expect("error while reading or parsing");
+    let mut sprites = SpriteSheet::new("src/clowder_sprite.png", sprite_info).await;
+
+    let mut world = World::new();
+    let mut logics = Logics::new();
+    let mut rng = rand::thread_rng();
+
+    for _i in 0..BALL_NUM {
+        world.balls.push(Ball::new(Vec2::new(
+            rng.gen_range((BALL_SIZE as f32)..((WIDTH - BALL_SIZE) as f32)),
+            rng.gen_range(((BALL_SIZE * 2) as f32)..((HEIGHT - BALL_SIZE) as f32)),
+        )));
+    }
+
+    loop {
+        if let Ok(cont) = world.update(&mut logics) {
+            if !cont {
+                break;
+            }
+        }
+        world.draw(&mut sprites);
+        next_frame().await;
+    }
+}
+
+/*fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
     let window = {
@@ -313,7 +351,7 @@ fn main() -> Result<(), Error> {
             window.request_redraw();
         }
     });
-}
+}*/
 
 impl World {
     fn new() -> Self {
@@ -331,7 +369,7 @@ impl World {
         }
     }
 
-    fn update(&mut self, logics: &mut Logics, input: &WinitInputHelper) {
+    fn update(&mut self, logics: &mut Logics) -> Result<bool> {
         self.project_control(&mut logics.control);
         logics.control.update(input);
         self.unproject_control(&logics.control);
@@ -343,6 +381,10 @@ impl World {
         self.project_collision(&mut logics.collision, &logics.control);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
+
+        if logics.control.values[0][2].value != 0.0 {
+            return Ok(false);
+        }
 
         for contact in logics.collision.contacts.iter() {
             match (
@@ -413,6 +455,7 @@ impl World {
                             self.balls[i].vel.y *= -1.0;
                             self.balls[j].vel.y *= -1.0;
                         }
+                        x
                     }
                 }
 
@@ -462,6 +505,7 @@ impl World {
                 Err(_) => {}
             }
         }
+        Ok(true)
     }
 
     fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
@@ -592,64 +636,77 @@ impl World {
     /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
-    fn draw(&self, frame: &mut [u8]) {
-        for pixel in frame.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&[0, 0, 128, 255]);
+    fn draw(&self, sheet: &SpriteSheet) {
+        let frame = get_frame_time() % 5.0; //change frame every 5 secs
+
+        if frame == 0.0 {
+            draw_texture_ex(
+                sheet.image,
+                self.paddles.0.x as f32,
+                self.paddles.0.y as f32,
+                WHITE,
+                sheet.create_param(8),
+            );
+        } else {
+            draw_texture_ex(
+                sheet.image,
+                self.paddles.0.x as f32,
+                self.paddles.0.y as f32,
+                WHITE,
+                sheet.create_param(9),
+            );
         }
-        //paddle
-        draw_rect(
+
+        /*//paddle
+        draw_rectangle(
             self.paddles.0.x as u8,
             self.paddles.0.y as u8,
             PADDLE_WIDTH,
             PADDLE_HEIGHT,
             [255, 255, 255, 255],
             frame,
-        );
+        );*/
 
         //top 1 (left)
-        draw_rect(
-            0,
-            0,
-            (WIDTH / 2) - BALL_SIZE,
-            BALL_SIZE,
-            [255, 255, 255, 255],
-            frame,
+        draw_rectangle(
+            0.0,
+            0.0,
+            ((WIDTH / 2) - BALL_SIZE) as f32,
+            BALL_SIZE as f32,
+            WHITE,
         );
 
         //top 2 (right)
-        draw_rect(
-            (WIDTH / 2) + (BALL_SIZE * 2),
-            0,
-            (WIDTH / 2) - BALL_SIZE,
-            BALL_SIZE,
-            [255, 255, 255, 255],
-            frame,
+        draw_rectangle(
+            ((WIDTH / 2) + (BALL_SIZE * 2)) as f32,
+            0.0,
+            ((WIDTH / 2) - BALL_SIZE) as f32,
+            BALL_SIZE as f32,
+            WHITE,
         );
 
         //left wall
-        draw_rect(0, 0, BALL_SIZE, HEIGHT, [255, 255, 255, 255], frame);
+        draw_rectangle(0.0, 0.0, BALL_SIZE as f32, HEIGHT as f32, WHITE);
 
         //right wall
-        draw_rect(
-            WIDTH - BALL_SIZE,
-            0,
-            BALL_SIZE,
-            HEIGHT,
-            [255, 255, 255, 255],
-            frame,
+        draw_rectangle(
+            (WIDTH - BALL_SIZE) as f32,
+            0.0,
+            BALL_SIZE as f32,
+            HEIGHT as f32,
+            WHITE,
         );
 
         //bottom wall
-        draw_rect(
-            0,
-            HEIGHT - BALL_SIZE,
-            WIDTH,
-            BALL_SIZE,
-            [255, 255, 255, 255],
-            frame,
+        draw_rectangle(
+            0.0,
+            (HEIGHT - BALL_SIZE) as f32,
+            WIDTH as f32,
+            BALL_SIZE as f32,
+            WHITE,
         );
 
-        //balls
+        /* //balls
         for ball in self.balls.iter() {
             draw_rect(
                 ball.pos.x as u8,
@@ -659,7 +716,7 @@ impl World {
                 [255, 200, 0, 255],
                 frame,
             );
-        }
+        }*/
     }
 }
 
