@@ -558,7 +558,7 @@ impl World {
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
     fn draw(&self, sheet: &SpriteSheet) {
         let frame = get_frame_time() % 5.0; //change frame every 5 secs
-
+        clear_background(Color::new(0., 0., 0.5, 1.));
         if frame == 0.0 {
             draw_texture_ex(
                 sheet.image,
@@ -576,16 +576,6 @@ impl World {
                 sheet.create_param(9),
             );
         }
-
-        /*//paddle
-        draw_rectangle(
-            self.paddles.0.x as u8,
-            self.paddles.0.y as u8,
-            PADDLE_WIDTH,
-            PADDLE_HEIGHT,
-            [255, 255, 255, 255],
-            frame,
-        );*/
 
         //top 1 (left)
         draw_rectangle(
@@ -626,30 +616,15 @@ impl World {
             WHITE,
         );
 
-        /* //balls
+        //balls
         for ball in self.balls.iter() {
-            draw_rect(
-                ball.pos.x as u8,
-                ball.pos.y as u8,
-                BALL_SIZE,
-                BALL_SIZE,
-                [255, 200, 0, 255],
-                frame,
+            draw_texture_ex(
+                sheet.image,
+                ball.pos.x as f32,
+                ball.pos.y as f32,
+                WHITE,
+                sheet.create_param(0),
             );
-        }*/
-    }
-}
-
-fn draw_rect(x: u8, y: u8, w: u8, h: u8, color: [u8; 4], frame: &mut [u8]) {
-    let x = x.min(WIDTH - 1) as usize;
-    let w = (w as usize).min(WIDTH as usize - x);
-    let y = y.min(HEIGHT - 1) as usize;
-    let h = (h as usize).min(HEIGHT as usize - y);
-    for row in 0..h {
-        let row_start = (WIDTH as usize) * 4 * (y + row);
-        let slice = &mut frame[(row_start + x * 4)..(row_start + (x + w) * 4)];
-        for pixel in slice.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&color);
         }
     }
 }
