@@ -16,10 +16,11 @@ use std::fs::File;
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
 const PADDLE_OFF_Y: u8 = 36;
-const PADDLE_HEIGHT: u8 = 16;
-const PADDLE_WIDTH: u8 = 24;
-const BALL_SIZE: u8 = 8;
+const PADDLE_HEIGHT: u8 = 48;
+const PADDLE_WIDTH: u8 = 48;
+const BALL_SIZE: u8 = 48;
 const BALL_NUM: u8 = 3;
+const WALL_DEPTH: u8 = 8;
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum ActionID {
@@ -161,9 +162,9 @@ impl Logics {
                 let mut collision = AabbCollision::new();
                 collision.add_entity_as_xywh(
                     0.0,
-                    (HEIGHT - BALL_SIZE) as f32, //bottom wall
+                    (HEIGHT - WALL_DEPTH) as f32, //bottom wall
                     WIDTH as f32,
-                    BALL_SIZE as f32,
+                    WALL_DEPTH as f32,
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
@@ -173,7 +174,7 @@ impl Logics {
                 collision.add_entity_as_xywh(
                     0.0, //left wall
                     0.0,
-                    BALL_SIZE as f32,
+                    WALL_DEPTH as f32,
                     HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true,
@@ -184,7 +185,7 @@ impl Logics {
                     0.0, //top 1
                     0.0,
                     ((WIDTH / 2) - BALL_SIZE) as f32,
-                    BALL_SIZE as f32,
+                    WALL_DEPTH as f32,
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
@@ -192,7 +193,7 @@ impl Logics {
                 );
                 collision.add_entity_as_xywh(
                     ((WIDTH / 2) + (BALL_SIZE * 2)) as f32, //top 2
-                    BALL_SIZE as f32,
+                    WALL_DEPTH as f32,
                     ((WIDTH / 2) - BALL_SIZE) as f32,
                     0.0,
                     Vec2::new(0.0, 0.0),
@@ -211,9 +212,9 @@ impl Logics {
                     CollisionID::Goal(Player::P1),
                 );
                 collision.add_entity_as_xywh(
-                    (WIDTH - BALL_SIZE) as f32, //right wall
+                    (WIDTH - WALL_DEPTH) as f32, //right wall
                     0.0,
-                    BALL_SIZE as f32,
+                    WALL_DEPTH as f32,
                     HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true,
@@ -582,7 +583,7 @@ impl World {
             0.0,
             0.0,
             ((WIDTH / 2) - BALL_SIZE) as f32,
-            BALL_SIZE as f32,
+            WALL_DEPTH as f32,
             WHITE,
         );
 
@@ -591,18 +592,18 @@ impl World {
             ((WIDTH / 2) + (BALL_SIZE * 2)) as f32,
             0.0,
             ((WIDTH / 2) - BALL_SIZE) as f32,
-            BALL_SIZE as f32,
+            WALL_DEPTH as f32,
             WHITE,
         );
 
         //left wall
-        draw_rectangle(0.0, 0.0, BALL_SIZE as f32, HEIGHT as f32, WHITE);
+        draw_rectangle(0.0, 0.0, WALL_DEPTH as f32, HEIGHT as f32, WHITE);
 
         //right wall
         draw_rectangle(
-            (WIDTH - BALL_SIZE) as f32,
+            (WIDTH - WALL_DEPTH) as f32,
             0.0,
-            BALL_SIZE as f32,
+            WALL_DEPTH as f32,
             HEIGHT as f32,
             WHITE,
         );
@@ -610,9 +611,9 @@ impl World {
         //bottom wall
         draw_rectangle(
             0.0,
-            (HEIGHT - BALL_SIZE) as f32,
+            (HEIGHT - WALL_DEPTH) as f32,
             WIDTH as f32,
-            BALL_SIZE as f32,
+            WALL_DEPTH as f32,
             WHITE,
         );
 
