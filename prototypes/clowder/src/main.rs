@@ -21,6 +21,8 @@ const PADDLE_WIDTH: u8 = 48;
 const BALL_SIZE: u8 = 48;
 const BALL_NUM: u8 = 3;
 const WALL_DEPTH: u8 = 8;
+const BASE_COLOR: Color = Color::new(0.86, 1., 0.86, 1.);
+const FENCE_COLOR: Color = Color::new(0.94, 0.9, 0.54, 1.);
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum ActionID {
@@ -559,13 +561,13 @@ impl World {
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
     fn draw(&self, sheet: &SpriteSheet) {
         let frame = get_frame_time() % 5.0; //change frame every 5 secs
-        clear_background(Color::new(0., 0., 0.5, 1.));
+        clear_background(BASE_COLOR);
         if frame == 0.0 {
             draw_texture_ex(
                 sheet.image,
                 self.paddles.0.x as f32,
                 self.paddles.0.y as f32,
-                WHITE,
+                FENCE_COLOR,
                 sheet.create_param(8),
             );
         } else {
@@ -573,7 +575,7 @@ impl World {
                 sheet.image,
                 self.paddles.0.x as f32,
                 self.paddles.0.y as f32,
-                WHITE,
+                FENCE_COLOR,
                 sheet.create_param(9),
             );
         }
@@ -584,7 +586,7 @@ impl World {
             0.0,
             ((WIDTH / 2) - (BALL_SIZE / 2)) as f32,
             WALL_DEPTH as f32,
-            WHITE,
+            FENCE_COLOR,
         );
 
         //top 2 (right)
@@ -593,11 +595,11 @@ impl World {
             0.0,
             ((WIDTH / 2) - (BALL_SIZE / 2)) as f32,
             WALL_DEPTH as f32,
-            WHITE,
+            FENCE_COLOR,
         );
 
         //left wall
-        draw_rectangle(0.0, 0.0, WALL_DEPTH as f32, HEIGHT as f32, WHITE);
+        draw_rectangle(0.0, 0.0, WALL_DEPTH as f32, HEIGHT as f32, FENCE_COLOR);
 
         //right wall
         draw_rectangle(
@@ -605,7 +607,7 @@ impl World {
             0.0,
             WALL_DEPTH as f32,
             HEIGHT as f32,
-            WHITE,
+            FENCE_COLOR,
         );
 
         //bottom wall
@@ -614,18 +616,20 @@ impl World {
             (HEIGHT - WALL_DEPTH) as f32,
             WIDTH as f32,
             WALL_DEPTH as f32,
-            WHITE,
+            FENCE_COLOR,
         );
 
         //balls
+        let mut cat = 0;
         for ball in self.balls.iter() {
             draw_texture_ex(
                 sheet.image,
                 ball.pos.x as f32,
                 ball.pos.y as f32,
                 WHITE,
-                sheet.create_param(0),
+                sheet.create_param(cat),
             );
+            cat = cat + 2; //TEMPORARY DO NOT KEEP AS THIS
         }
     }
 }
