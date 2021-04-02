@@ -1,24 +1,17 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
-
 use asterism::{
-    collision::AabbCollision, control::KeyboardControl, control::WinitKeyboardControl,
-    physics::PointPhysics, resources::PoolInfo, resources::QueuedResources, resources::Transaction,
+    collision::AabbCollision,
+    control::{KeyboardControl, MacroQuadKeyboardControl},
+    physics::PointPhysics,
+    resources::{PoolInfo, QueuedResources, Transaction},
 };
 use json::*;
 use macroquad::prelude::*;
-use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
-use rand::prelude::*;
 use serde;
 use serde::Deserialize;
 use serde_json;
 use std::fs::File;
-use std::io::{self, Write};
-use winit::dpi::LogicalSize;
-use winit::event::{Event, VirtualKeyCode};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::WindowBuilder;
-use winit_input_helper::WinitInputHelper;
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -34,6 +27,7 @@ enum ActionID {
     MoveLeft(Player),
     MoveUp(Player),
     MoveDown(Player),
+    Quit,
 }
 
 impl Default for ActionID {
@@ -144,7 +138,7 @@ fn window_conf() -> Conf {
 }
 
 struct Logics {
-    control: WinitKeyboardControl<ActionID>,
+    control: MacroQuadKeyboardControl<ActionID>,
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
@@ -154,11 +148,12 @@ impl Logics {
     fn new() -> Self {
         Self {
             control: {
-                let mut control = WinitKeyboardControl::new();
-                control.add_key_map(0, VirtualKeyCode::J, ActionID::MoveRight(Player::P1));
-                control.add_key_map(0, VirtualKeyCode::L, ActionID::MoveLeft(Player::P1));
-                control.add_key_map(0, VirtualKeyCode::I, ActionID::MoveUp(Player::P1));
-                control.add_key_map(0, VirtualKeyCode::K, ActionID::MoveDown(Player::P1));
+                let mut control = MacroQuadKeyboardControl::new();
+                control.add_key_map(0, KeyCode::J, ActionID::MoveRight(Player::P1));
+                control.add_key_map(0, KeyCode::L, ActionID::MoveLeft(Player::P1));
+                control.add_key_map(0, KeyCode::I, ActionID::MoveUp(Player::P1));
+                control.add_key_map(0, KeyCode::K, ActionID::MoveDown(Player::P1));
+                control.add_key_map(0, KeyCode::Escape, ActionID::Quit);
                 control
             },
             physics: PointPhysics::new(),
@@ -258,12 +253,12 @@ async fn main() {
 
     let mut world = World::new();
     let mut logics = Logics::new();
-    let mut rng = rand::thread_rng();
+    //let mut rng = rand::thread_rng();
 
     for _i in 0..BALL_NUM {
         world.balls.push(Ball::new(Vec2::new(
-            rng.gen_range((BALL_SIZE as f32)..((WIDTH - BALL_SIZE) as f32)),
-            rng.gen_range(((BALL_SIZE * 2) as f32)..((HEIGHT - BALL_SIZE) as f32)),
+            rand::gen_range(BALL_SIZE as f32, (WIDTH - BALL_SIZE) as f32),
+            rand::gen_range((BALL_SIZE * 2) as f32, (HEIGHT - BALL_SIZE) as f32),
         )));
     }
 
@@ -277,81 +272,6 @@ async fn main() {
         next_frame().await;
     }
 }
-
-/*fn main() -> Result<(), Error> {
-    let event_loop = EventLoop::new();
-    let mut input = WinitInputHelper::new();
-    let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
-        WindowBuilder::new()
-            .with_title("clowder")
-            .with_inner_size(size)
-            .with_min_inner_size(size)
-            .build(&event_loop)
-            .unwrap()
-    };
-    let mut hidpi_factor = window.scale_factor();
-
-    let mut pixels = {
-        let surface = Surface::create(&window);
-        let surface_texture = SurfaceTexture::new(WIDTH as u32, HEIGHT as u32, surface);
-        Pixels::new(WIDTH as u32, HEIGHT as u32, surface_texture)?
-    };
-
-    let file = File::open("src/apple_tree_sprite.json").unwrap();
-    let sprite_info: Vec<Sprite> =
-        serde_json::from_reader(file).expect("error while reading or parsing");
-    let mut sprites = SpriteSheet::new("src/apple_tree_sprite.png", sprite_info).await;
-
-    let mut world = World::new();
-    let mut logics = Logics::new();
-    let mut rng = rand::thread_rng();
-
-    for _i in 0..BALL_NUM {
-        world.balls.push(Ball::new(Vec2::new(
-            rng.gen_range((BALL_SIZE as f32)..((WIDTH - BALL_SIZE) as f32)),
-            rng.gen_range(((BALL_SIZE * 2) as f32)..((HEIGHT - BALL_SIZE) as f32)),
-        )));
-    }
-
-    event_loop.run(move |event, _, control_flow| {
-        // Draw the current frame
-        if let Event::RedrawRequested(_) = event {
-            world.draw(pixels.get_frame());
-            if pixels
-                .render()
-                .map_err(|e| panic!("pixels.render() failed: {}", e))
-                .is_err()
-            {
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-        }
-
-        // Handle input events
-        if input.update(&event) {
-            // Close events
-            if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-
-            // Adjust high DPI factor
-            if let Some(factor) = input.scale_factor_changed() {
-                hidpi_factor = factor;
-            }
-
-            // Resize the window
-            if let Some(size) = input.window_resized() {
-                pixels.resize(size.width, size.height);
-            }
-
-            // Update internal state and request a redraw
-            world.update(&mut logics, &input);
-            window.request_redraw();
-        }
-    });
-}*/
 
 impl World {
     fn new() -> Self {
@@ -371,18 +291,18 @@ impl World {
 
     fn update(&mut self, logics: &mut Logics) -> Result<bool> {
         self.project_control(&mut logics.control);
-        logics.control.update(input);
+        logics.control.update(&());
         self.unproject_control(&logics.control);
 
         self.project_physics(&mut logics.physics);
         logics.physics.update();
         self.unproject_physics(&logics.physics);
 
-        self.project_collision(&mut logics.collision, &logics.control);
+        self.project_collision(&mut logics.collision, &mut logics.control);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
-        if logics.control.values[0][2].value != 0.0 {
+        if logics.control.values[0][4].value != 0.0 {
             return Ok(false);
         }
 
@@ -455,7 +375,6 @@ impl World {
                             self.balls[i].vel.y *= -1.0;
                             self.balls[j].vel.y *= -1.0;
                         }
-                        x
                     }
                 }
 
@@ -508,14 +427,15 @@ impl World {
         Ok(true)
     }
 
-    fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
+    fn project_control(&self, control: &mut MacroQuadKeyboardControl<ActionID>) {
         control.mapping[0][0].is_valid = true;
         control.mapping[0][1].is_valid = true;
         control.mapping[0][2].is_valid = true;
         control.mapping[0][3].is_valid = true;
+        control.mapping[0][4].is_valid = true;
     }
 
-    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
+    fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
         self.paddles.0.x = ((self.paddles.0.x - control.values[0][0].value as f32
             + control.values[0][1].value as f32) //confusing, incorporate ActionIds
             .max(0.0) as f32)
@@ -550,7 +470,7 @@ impl World {
     fn project_collision(
         &self,
         collision: &mut AabbCollision<CollisionID, Vec2>,
-        control: &WinitKeyboardControl<ActionID>,
+        control: &mut MacroQuadKeyboardControl<ActionID>,
     ) {
         collision.centers.resize_with(6, Default::default);
         collision.half_sizes.resize_with(6, Default::default);
