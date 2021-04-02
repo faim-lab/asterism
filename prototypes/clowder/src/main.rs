@@ -355,8 +355,7 @@ impl World {
                     }
                 }
 
-                (CollisionID::Ball(i), CollisionID::Ball(j))
-                | (CollisionID::Ball(j), CollisionID::Ball(i)) => {
+                (CollisionID::Ball(i), CollisionID::Ball(j)) => {
                     let sides_touched = logics
                         .collision
                         .sides_touched(contact, &CollisionID::Ball(i));
@@ -567,7 +566,7 @@ impl World {
                 sheet.image,
                 self.paddles.0.x as f32,
                 self.paddles.0.y as f32,
-                FENCE_COLOR,
+                WHITE,
                 sheet.create_param(8),
             );
         } else {
@@ -575,7 +574,7 @@ impl World {
                 sheet.image,
                 self.paddles.0.x as f32,
                 self.paddles.0.y as f32,
-                FENCE_COLOR,
+                WHITE,
                 sheet.create_param(9),
             );
         }
