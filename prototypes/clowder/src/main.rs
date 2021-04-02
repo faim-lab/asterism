@@ -184,7 +184,7 @@ impl Logics {
                 collision.add_entity_as_xywh(
                     0.0, //top 1
                     0.0,
-                    ((WIDTH / 2) - BALL_SIZE) as f32,
+                    ((WIDTH / 2) - (BALL_SIZE / 2)) as f32,
                     WALL_DEPTH as f32,
                     Vec2::new(0.0, 0.0),
                     true,
@@ -192,9 +192,9 @@ impl Logics {
                     CollisionID::InertWall,
                 );
                 collision.add_entity_as_xywh(
-                    ((WIDTH / 2) + (BALL_SIZE * 2)) as f32, //top 2
+                    ((WIDTH / 2) + (BALL_SIZE / 2)) as f32, //top 2
                     WALL_DEPTH as f32,
-                    ((WIDTH / 2) - BALL_SIZE) as f32,
+                    ((WIDTH / 2) - (BALL_SIZE / 2)) as f32,
                     0.0,
                     Vec2::new(0.0, 0.0),
                     true,
@@ -582,16 +582,16 @@ impl World {
         draw_rectangle(
             0.0,
             0.0,
-            ((WIDTH / 2) - BALL_SIZE) as f32,
+            ((WIDTH / 2) - (BALL_SIZE / 2)) as f32,
             WALL_DEPTH as f32,
             WHITE,
         );
 
         //top 2 (right)
         draw_rectangle(
-            ((WIDTH / 2) + (BALL_SIZE * 2)) as f32,
+            ((WIDTH / 2) + (BALL_SIZE / 2)) as f32,
             0.0,
-            ((WIDTH / 2) - BALL_SIZE) as f32,
+            ((WIDTH / 2) - (BALL_SIZE / 2)) as f32,
             WALL_DEPTH as f32,
             WHITE,
         );
