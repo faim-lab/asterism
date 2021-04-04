@@ -19,9 +19,10 @@ impl<ID: PoolInfo> Logic for QueuedResources<ID> {
     type Event = ResourceEvent<ID>;
     type Reaction = ResourceReaction<ID>;
 
-    /// Updates the values of resources based on the queued transactions. If a transaction cannot be completed (if the value goes below zero), a snapshot of the resources before the transaction occurred is restored, and the transaction is marked as incomplete, and we continue to process the remaining transactions.
+    /// Updates the values of resources based on the queued transactions. If a transaction cannot be completed (if the value goes below its min or max), a snapshot of the resources before the transaction occurred is restored, and the transaction is marked as incomplete, and we continue to process the remaining transactions.
     fn update(&mut self) {
         self.completed.clear();
+
         'exchange: for exchange in self.transactions.iter() {
             let mut snapshot = BTreeMap::new();
             for (item_type, ..) in exchange {

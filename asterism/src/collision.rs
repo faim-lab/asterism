@@ -452,6 +452,13 @@ impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
         }
     }
 
+    /// Clears vecs from last frame
+    pub fn clear(&mut self) {
+        self.centers.clear();
+        self.half_sizes.clear();
+        self.velocities.clear();
+    }
+
     fn intersects(&self, i: usize, j: usize) -> bool {
         (self.centers[i].x() - self.centers[j].x()).abs()
             <= self.half_sizes[i].x() + self.half_sizes[j].x()
