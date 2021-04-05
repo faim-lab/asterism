@@ -16,11 +16,13 @@ use std::fs::File;
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
 const PADDLE_OFF_Y: u8 = 36;
-const PADDLE_HEIGHT: u8 = 48;
-const PADDLE_WIDTH: u8 = 48;
-const BALL_SIZE: u8 = 48;
+const PADDLE_HEIGHT: u8 = 36;
+const PADDLE_WIDTH: u8 = 36;
+const BALL_SIZE: u8 = 36;
 const BALL_NUM: u8 = 3;
 const WALL_DEPTH: u8 = 8;
+const GOAL_WIDTH: u8 = 72;
+
 const BASE_COLOR: Color = Color::new(0.86, 1., 0.86, 1.);
 const FENCE_COLOR: Color = Color::new(0.94, 0.9, 0.54, 1.);
 
@@ -186,7 +188,7 @@ impl Logics {
                 collision.add_entity_as_xywh(
                     0.0, //top 1
                     0.0,
-                    ((WIDTH / 2) - (BALL_SIZE / 2)) as f32,
+                    ((WIDTH / 2) - (GOAL_WIDTH / 2)) as f32,
                     WALL_DEPTH as f32,
                     Vec2::new(0.0, 0.0),
                     true,
@@ -194,9 +196,9 @@ impl Logics {
                     CollisionID::InertWall,
                 );
                 collision.add_entity_as_xywh(
-                    ((WIDTH / 2) + (BALL_SIZE / 2)) as f32, //top 2
+                    ((WIDTH / 2) + (GOAL_WIDTH / 2)) as f32, //top 2
                     WALL_DEPTH as f32,
-                    ((WIDTH / 2) - (BALL_SIZE / 2)) as f32,
+                    ((WIDTH / 2) - (GOAL_WIDTH / 2)) as f32,
                     0.0,
                     Vec2::new(0.0, 0.0),
                     true,
@@ -583,16 +585,16 @@ impl World {
         draw_rectangle(
             0.0,
             0.0,
-            ((WIDTH / 2) - (BALL_SIZE / 2)) as f32,
+            ((WIDTH / 2) - (GOAL_WIDTH / 2)) as f32,
             WALL_DEPTH as f32,
             FENCE_COLOR,
         );
 
         //top 2 (right)
         draw_rectangle(
-            ((WIDTH / 2) + (BALL_SIZE / 2)) as f32,
+            ((WIDTH / 2) + (GOAL_WIDTH / 2)) as f32,
             0.0,
-            ((WIDTH / 2) - (BALL_SIZE / 2)) as f32,
+            ((WIDTH / 2) - (GOAL_WIDTH / 2)) as f32,
             WALL_DEPTH as f32,
             FENCE_COLOR,
         );
