@@ -13,15 +13,15 @@ use serde::Deserialize;
 use serde_json;
 use std::fs::File;
 
-const WIDTH: u8 = 255;
-const HEIGHT: u8 = 255;
-const PADDLE_OFF_Y: u8 = 36;
-const PADDLE_HEIGHT: u8 = 36;
-const PADDLE_WIDTH: u8 = 36;
-const BALL_SIZE: u8 = 36;
-const BALL_NUM: u8 = 3;
-const WALL_DEPTH: u8 = 8;
-const GOAL_WIDTH: u8 = 72;
+const WIDTH: u32 = 255;
+const HEIGHT: u32 = 255;
+const PADDLE_OFF_Y: u32 = 36;
+const PADDLE_HEIGHT: u32 = 36;
+const PADDLE_WIDTH: u32 = 36;
+const BALL_SIZE: u32 = 36;
+const BALL_NUM: u8 = 4;
+const WALL_DEPTH: u32 = 8;
+const GOAL_WIDTH: u32 = 72;
 
 const BASE_COLOR: Color = Color::new(0.86, 1., 0.86, 1.);
 const FENCE_COLOR: Color = Color::new(0.94, 0.9, 0.54, 1.);
@@ -130,6 +130,20 @@ struct Sprite {
     trimmed: bool,
     sprite_source_size: Rectangle,
     source_size: Size,
+}
+
+struct Animation {
+    sheet: SpriteSheet,
+    states: Vec<Boolean>,
+}
+
+impl Animation {
+    fn new(sprite_sheet: SpriteSheet, entities: Vec) -> Self {
+        Self {
+            sheet: sprite_sheet,
+            states: Vec::<Boolean>::new(),
+        }
+    }
 }
 
 fn window_conf() -> Conf {
@@ -247,6 +261,8 @@ struct World {
     balls: Vec<Ball>,
     ball_err: Vec2,
     score: (u8, u8),
+    time: f64,
+    interval: f64,
 }
 
 #[macroquad::main(window_conf)]
@@ -291,6 +307,8 @@ impl World {
             balls: Vec::new(),
             ball_err: Vec2::new(0.0, 0.0),
             score: (0, 0),
+            time: 0.0,
+            interval: 1.0,
         }
     }
 
