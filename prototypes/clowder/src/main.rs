@@ -35,6 +35,18 @@ enum ActionID {
     Quit,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+enum StateID {
+    PlayerRunning1,
+    PlayerRunning2,
+    PlayerResting,
+    BallRunning1,
+    BallRunning2,
+    BallResting,
+    Scored,
+    //^^makes non visible, might want to remove but then need to find way to not mess up displays
+}
+
 impl Default for ActionID {
     fn default() -> Self {
         Self::MoveLeft(Player::P1)
@@ -134,14 +146,14 @@ struct Sprite {
 
 struct Animation {
     sheet: SpriteSheet,
-    states: Vec<Boolean>,
+    frames_drawn: u8,
 }
 
 impl Animation {
-    fn new(sprite_sheet: SpriteSheet, entities: Vec) -> Self {
+    fn new(sprite_sheet: SpriteSheet) -> Self {
         Self {
             sheet: sprite_sheet,
-            states: Vec::<Boolean>::new(),
+            frames_drawn: 0,
         }
     }
 }
@@ -158,6 +170,7 @@ fn window_conf() -> Conf {
 
 struct Logics {
     control: MacroQuadKeyboardControl<ActionID>,
+    entity_state: FlatEntityState<StateID>,
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
@@ -247,6 +260,31 @@ impl Logics {
                 resources.items.insert(PoolID::Points(Player::P1), 0.0);
                 resources
             },
+            entity_state: {
+                let mut entity_state = FlatEntityState::new();
+
+                for _ in BALL_SIZE {
+                    entity_state.add_state_map(
+                        2,
+                        vec![
+                            (StateID::BallRunning1, vec![1, 2, 3]),
+                            (StateID::BallRunning2, vec![0, 2, 3]),
+                            (StateID::BallResting, vec![1]),
+                            (StateID::Scored, [0]),
+                        ],
+                    );
+                }
+
+                entity_state.add_state_map(
+                    2,
+                    vec![
+                        (StateID::PlayerRunning1, vec![1, 2]),
+                        (StateID::PlayerRunning2, vec![0]),
+                        (StateID::PlayerResting, vec![1]),
+                    ],
+                );
+                entity_state
+            },
         }
     }
 }
@@ -272,9 +310,9 @@ async fn main() {
         serde_json::from_reader(file).expect("error while reading or parsing");
     let mut sprites = SpriteSheet::new("src/clowder_sprite.png", sprite_info).await;
 
+    let mut animation = Animation::new(sprites);
     let mut world = World::new();
     let mut logics = Logics::new();
-    //let mut rng = rand::thread_rng();
 
     for _i in 0..BALL_NUM {
         world.balls.push(Ball::new(Vec2::new(
@@ -289,7 +327,8 @@ async fn main() {
                 break;
             }
         }
-        world.draw(&mut sprites);
+        world.draw(&mut logics.entity_state, &mut animation);
+        //world.draw(&mut sprites);
         next_frame().await;
     }
 }
@@ -325,6 +364,10 @@ impl World {
         logics.collision.update();
         self.unproject_collision(&logics.collision);
 
+        self.project_entity_state(&mut logics.entity_state, &logics.collision);
+        logics.entity_state.update();
+        self.unproject_entity_state(&logics.entity_state);
+
         if logics.control.values[0][4].value != 0.0 {
             return Ok(false);
         }
@@ -337,7 +380,7 @@ impl World {
                 (CollisionID::Goal(_player), CollisionID::Ball(i))
                 | (CollisionID::Ball(i), CollisionID::Goal(_player)) => {
                     if i <= self.balls.len() {
-                        self.balls.remove(i);
+                        // self.balls.remove(i);
                         logics
                             .resources
                             .transactions
@@ -551,44 +594,106 @@ impl World {
         *y = angle.to_radians().cos() * magnitude * if *y < 0.0 { -1.0 } else { 1.0 };
     }
 
-    fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
-        if !resources.items.contains_key(&PoolID::Points(Player::P1)) {
-            resources.items.insert(PoolID::Points(Player::P1), 0.0);
+    fn project_entity_state(
+        &self,
+        entity_state: &mut FlatEntityState<StateID>,
+        collision: &AabbCollision<CollisionID, Vec2>,
+    ) {
+        if self.paddles.vel.x != 0.0 || self.paddles.vel.y != 0.0 {
+            //running
+            entity_state.conditions[BALL_SIZE][1] = true;
+        } else {
+            //resting
+            entity_state.conditions[BALL_SIZE][0] = true;
+        }
+
+        for (ball, i) in self.balls.iter().enumerate() {
+            if ball.vel.y != 0.0 || ball.vel.x != 0.0 {
+                //running
+                entity_state.conditions[i][1] = true;
+            } else {
+                //resting
+                entity_state.conditions[i][0] = true;
+            }
+        }
+
+        for contact in collision.contacts.iter() {
+            match (
+                collision.metadata[contact.i].id,
+                collision.metadata[contact.j].id,
+            ) {
+                (CollisionID::Ball(i), CollisionID::Goal(_player)) => {
+                    entity_state.conditions[i][2] = true;
+                }
+
+                _ => {}
+            }
         }
     }
 
-    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
-        for completed in resources.completed.iter() {
-            match completed {
-                Ok(item_types) => {
-                    for item_type in item_types {
-                        let value = resources.get_value_by_itemtype(item_type).unwrap();
-                        match item_type {
-                            PoolID::Points(player) => match player {
-                                Player::P1 => self.score.0 = value as u8,
-                            },
-                        }
+    fn unproject_entity_state(&mut self, entity_state: &FlatEntityState<StateID>) {
+        for (i, state) in entity_state.states.iter().enumerate() {
+            match entity_state.maps[i].states[*state].id {
+                StateID::PlayerRunning1 | StateID::PlayerRunning2 | StateID::PlayerResting => {}
+
+                StateID::BallResting
+                | StateID::BallRunning1
+                | StateID::BallRunning2
+                | StateID::Scored => {}
+            }
+        }
+    }
+}
+
+fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
+    if !resources.items.contains_key(&PoolID::Points(Player::P1)) {
+        resources.items.insert(PoolID::Points(Player::P1), 0.0);
+    }
+}
+
+fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
+    for completed in resources.completed.iter() {
+        match completed {
+            Ok(item_types) => {
+                for item_type in item_types {
+                    let value = resources.get_value_by_itemtype(item_type).unwrap();
+                    match item_type {
+                        PoolID::Points(player) => match player {
+                            Player::P1 => self.score.0 = value as u8,
+                        },
                     }
                 }
-                Err(_) => {}
             }
+            Err(_) => {}
         }
     }
 
     /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
-    fn draw(&self, sheet: &SpriteSheet) {
-        let frame = get_frame_time() % 5.0; //change frame every 5 secs
+    fn draw(&self, state: &mut entity_state, animation: &mut Animation) {
+        //arbitrary value that resets frames to prevent overflow
+
+        if (animation.frames_drawn == 4) {
+            animation.frames_drawn = 0;
+        } else {
+            animation.frames_drawn = animation.frames_drawn + 1;
+        }
+
         clear_background(BASE_COLOR);
-        if frame == 0.0 {
+
+        if state.conditions[BALL_SIZE][0] || state.conditions[BALL_SIZE][2] {
             draw_texture_ex(
                 sheet.image,
                 self.paddles.0.x as f32,
                 self.paddles.0.y as f32,
                 WHITE,
-                sheet.create_param(8),
+                animation.sheet.create_param(8),
             );
+
+            if state.conditions[BALL_SIZE][0] && animation.frames_drawn == 0 {
+                state.conditions[BALL_SIZE][1] = true;
+            }
         } else {
             draw_texture_ex(
                 sheet.image,
@@ -597,6 +702,10 @@ impl World {
                 WHITE,
                 sheet.create_param(9),
             );
+
+            if animation.frames_drawn == 0 {
+                state.conditions[BALL_SIZE][1] = true;
+            }
         }
 
         //top 1 (left)
@@ -639,16 +748,33 @@ impl World {
         );
 
         //balls
-        let mut cat = 0;
-        for ball in self.balls.iter() {
-            draw_texture_ex(
-                sheet.image,
-                ball.pos.x as f32,
-                ball.pos.y as f32,
-                WHITE,
-                sheet.create_param(cat),
-            );
-            cat = cat + 2; //TEMPORARY DO NOT KEEP AS THIS
+        for (ball, i) in self.balls.iter().enumerate() {
+            if state.conditions[i][0] || state.conditions[i][2] {
+                draw_texture_ex(
+                    sheet.image,
+                    ball.pos.x as f32,
+                    ball.pos.y as f32,
+                    WHITE,
+                    sheet.create_param(i),
+                );
+
+                if state.conditions[i][0] && animation.frames_drawn == 0 {
+                    state.conditions[i][1] = true;
+                }
+            } else if state.conditions[i][1] {
+                draw_texture_ex(
+                    sheet.image,
+                    ball.pos.x as f32,
+                    ball.pos.y as f32,
+                    WHITE,
+                    sheet.create_param(i + 1),
+                );
+
+                if animation.frames_drawn == 0 {
+                    state.conditions[i][0] = true;
+                }
+            } else {
+            }
         }
     }
 }
