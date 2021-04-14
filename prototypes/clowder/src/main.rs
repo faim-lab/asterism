@@ -3,6 +3,7 @@
 use asterism::{
     collision::AabbCollision,
     control::{KeyboardControl, MacroQuadKeyboardControl},
+    entity_state::FlatEntityState,
     physics::PointPhysics,
     resources::{PoolInfo, QueuedResources, Transaction},
 };
@@ -263,14 +264,14 @@ impl Logics {
             entity_state: {
                 let mut entity_state = FlatEntityState::new();
 
-                for _ in BALL_SIZE {
+                for _i in 0..BALL_NUM {
                     entity_state.add_state_map(
                         2,
                         vec![
                             (StateID::BallRunning1, vec![1, 2, 3]),
                             (StateID::BallRunning2, vec![0, 2, 3]),
                             (StateID::BallResting, vec![1]),
-                            (StateID::Scored, [0]),
+                            (StateID::Scored, vec![0]),
                         ],
                     );
                 }
@@ -308,7 +309,7 @@ async fn main() {
     let file = File::open("src/clowder_sprite.json").unwrap();
     let sprite_info: Vec<Sprite> =
         serde_json::from_reader(file).expect("error while reading or parsing");
-    let mut sprites = SpriteSheet::new("src/clowder_sprite.png", sprite_info).await;
+    let sprites = SpriteSheet::new("src/clowder_sprite.png", sprite_info).await;
 
     let mut animation = Animation::new(sprites);
     let mut world = World::new();
@@ -599,21 +600,21 @@ impl World {
         entity_state: &mut FlatEntityState<StateID>,
         collision: &AabbCollision<CollisionID, Vec2>,
     ) {
-        if self.paddles.vel.x != 0.0 || self.paddles.vel.y != 0.0 {
+        if self.paddles.1.x != 0.0 || self.paddles.1.y != 0.0 {
             //running
-            entity_state.conditions[BALL_SIZE][1] = true;
+            entity_state.conditions[BALL_NUM as usize][1] = true;
         } else {
             //resting
-            entity_state.conditions[BALL_SIZE][0] = true;
+            entity_state.conditions[BALL_NUM as usize][0] = true;
         }
 
-        for (ball, i) in self.balls.iter().enumerate() {
+        for (i, ball) in self.balls.iter().enumerate() {
             if ball.vel.y != 0.0 || ball.vel.x != 0.0 {
                 //running
-                entity_state.conditions[i][1] = true;
+                entity_state.conditions[i as usize][1] = true;
             } else {
                 //resting
-                entity_state.conditions[i][0] = true;
+                entity_state.conditions[i as usize][0] = true;
             }
         }
 
@@ -643,38 +644,38 @@ impl World {
             }
         }
     }
-}
 
-fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
-    if !resources.items.contains_key(&PoolID::Points(Player::P1)) {
-        resources.items.insert(PoolID::Points(Player::P1), 0.0);
+    fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
+        if !resources.items.contains_key(&PoolID::Points(Player::P1)) {
+            resources.items.insert(PoolID::Points(Player::P1), 0.0);
+        }
     }
-}
 
-fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
-    for completed in resources.completed.iter() {
-        match completed {
-            Ok(item_types) => {
-                for item_type in item_types {
-                    let value = resources.get_value_by_itemtype(item_type).unwrap();
-                    match item_type {
-                        PoolID::Points(player) => match player {
-                            Player::P1 => self.score.0 = value as u8,
-                        },
+    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
+        for completed in resources.completed.iter() {
+            match completed {
+                Ok(item_types) => {
+                    for item_type in item_types {
+                        let value = resources.get_value_by_itemtype(item_type).unwrap();
+                        match item_type {
+                            PoolID::Points(player) => match player {
+                                Player::P1 => self.score.0 = value as u8,
+                            },
+                        }
                     }
                 }
+                Err(_) => {}
             }
-            Err(_) => {}
         }
     }
 
     /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
-    fn draw(&self, state: &mut entity_state, animation: &mut Animation) {
+    fn draw(&self, state: &mut FlatEntityState<StateID>, animation: &mut Animation) {
         //arbitrary value that resets frames to prevent overflow
 
-        if (animation.frames_drawn == 4) {
+        if animation.frames_drawn >= 4 {
             animation.frames_drawn = 0;
         } else {
             animation.frames_drawn = animation.frames_drawn + 1;
@@ -682,29 +683,29 @@ fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
 
         clear_background(BASE_COLOR);
 
-        if state.conditions[BALL_SIZE][0] || state.conditions[BALL_SIZE][2] {
+        if state.conditions[BALL_NUM as usize][0] || state.conditions[BALL_NUM as usize][2] {
             draw_texture_ex(
-                sheet.image,
+                animation.sheet.image,
                 self.paddles.0.x as f32,
                 self.paddles.0.y as f32,
                 WHITE,
                 animation.sheet.create_param(8),
             );
 
-            if state.conditions[BALL_SIZE][0] && animation.frames_drawn == 0 {
-                state.conditions[BALL_SIZE][1] = true;
+            if state.conditions[BALL_NUM as usize][0] && animation.frames_drawn == 0 {
+                state.conditions[BALL_NUM as usize][1] = true;
             }
         } else {
             draw_texture_ex(
-                sheet.image,
+                animation.sheet.image,
                 self.paddles.0.x as f32,
                 self.paddles.0.y as f32,
                 WHITE,
-                sheet.create_param(9),
+                animation.sheet.create_param(9),
             );
 
             if animation.frames_drawn == 0 {
-                state.conditions[BALL_SIZE][1] = true;
+                state.conditions[BALL_NUM as usize][1] = true;
             }
         }
 
@@ -748,30 +749,30 @@ fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
         );
 
         //balls
-        for (ball, i) in self.balls.iter().enumerate() {
+        for (i, ball) in self.balls.iter().enumerate() {
             if state.conditions[i][0] || state.conditions[i][2] {
                 draw_texture_ex(
-                    sheet.image,
+                    animation.sheet.image,
                     ball.pos.x as f32,
                     ball.pos.y as f32,
                     WHITE,
-                    sheet.create_param(i),
+                    animation.sheet.create_param(i),
                 );
 
-                if state.conditions[i][0] && animation.frames_drawn == 0 {
-                    state.conditions[i][1] = true;
+                if state.conditions[i as usize][0] && animation.frames_drawn == 0 {
+                    state.conditions[i as usize][1] = true;
                 }
             } else if state.conditions[i][1] {
                 draw_texture_ex(
-                    sheet.image,
+                    animation.sheet.image,
                     ball.pos.x as f32,
                     ball.pos.y as f32,
                     WHITE,
-                    sheet.create_param(i + 1),
+                    animation.sheet.create_param(i + 1),
                 );
 
                 if animation.frames_drawn == 0 {
-                    state.conditions[i][0] = true;
+                    state.conditions[i as usize][0] = true;
                 }
             } else {
             }
