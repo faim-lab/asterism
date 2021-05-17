@@ -276,8 +276,8 @@ impl Logics {
                     entity_state.add_state_map(
                         2,
                         vec![
-                            (StateID::BallRunning1, vec![1, 2, 3]),
-                            (StateID::BallRunning2, vec![0, 2, 3]),
+                            (StateID::BallRunning1, vec![1, 2]),
+                            (StateID::BallRunning2, vec![0, 2]),
                             (StateID::BallResting, vec![1]),
                         ],
                     );
@@ -349,7 +349,6 @@ async fn main() {
             }
         }
         world.draw(&mut logics.entity_state, &mut animation);
-        //world.draw(&mut sprites);
         next_frame().await;
     }
 }
@@ -628,7 +627,7 @@ impl World {
                 if ball.vel.x != 0.0 || ball.vel.y != 0.0
                 //has velocity
                 {
-                    entity_state.conditions[ball.id][0] = true; //move to running 1
+                    entity_state.conditions[ball.id][1] = true; //move to running 1
                     entity_state.conditions[ball.id][2] = false;
                 }
             }
@@ -772,7 +771,7 @@ impl World {
                     state.conditions[ball.id][0] = false;
                     state.conditions[ball.id][1] = true;
                 }
-            } else if state.states[ball.id] == 1 {
+            } else {
                 draw_texture_ex(
                     animation.sheet.image,
                     ball.pos.x as f32,
@@ -787,7 +786,6 @@ impl World {
                     state.conditions[ball.id][0] = true;
                     state.conditions[ball.id][1] = false;
                 }
-            } else {
             }
         }
     }
