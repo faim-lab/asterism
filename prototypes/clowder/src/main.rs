@@ -12,6 +12,7 @@ use macroquad::prelude::*;
 use serde;
 use serde::Deserialize;
 use serde_json;
+use std::convert::TryInto;
 use std::fs::File;
 
 const WIDTH: u32 = 255;
@@ -23,6 +24,8 @@ const BALL_SIZE: u32 = 36;
 const BALL_NUM: u8 = 4;
 const WALL_DEPTH: u32 = 8;
 const GOAL_WIDTH: u32 = 72;
+//number of distinct ball sprites, number of rows in spritesheet - paddle rows
+const DIST_BALL: u32 = 4;
 
 const BASE_COLOR: Color = Color::new(0.86, 1., 0.86, 1.);
 const FENCE_COLOR: Color = Color::new(0.94, 0.9, 0.54, 1.);
@@ -40,7 +43,6 @@ enum ActionID {
 enum StateID {
     PlayerRunning1,
     PlayerRunning2,
-    PlayerResting,
     BallRunning1,
     BallRunning2,
     BallResting,
@@ -94,6 +96,7 @@ impl PoolInfo for PoolID {
 struct SpriteSheet {
     image: Texture2D,
     data: Vec<Sprite>,
+    start_sprite: Vec<usize>,
 }
 
 impl SpriteSheet {
@@ -101,7 +104,13 @@ impl SpriteSheet {
         Self {
             image: load_texture(image_file).await,
             data: data_file,
+            start_sprite: Vec::new(),
         }
+    }
+
+    //the base/starting sprite for the sprite
+    fn assign_sprite(&mut self, assignment: usize) -> () {
+        self.start_sprite.push(assignment);
     }
 
     fn create_param(&self, index: usize) -> DrawTextureParams {
@@ -264,7 +273,7 @@ impl Logics {
             entity_state: {
                 let mut entity_state = FlatEntityState::new();
 
-                for _i in 0..BALL_NUM {
+                for _ in 0..BALL_NUM {
                     entity_state.add_state_map(
                         2,
                         vec![
@@ -277,11 +286,10 @@ impl Logics {
                 }
 
                 entity_state.add_state_map(
-                    2,
+                    0,
                     vec![
-                        (StateID::PlayerRunning1, vec![1, 2]),
+                        (StateID::PlayerRunning1, vec![1]),
                         (StateID::PlayerRunning2, vec![0]),
-                        (StateID::PlayerResting, vec![1]),
                     ],
                 );
                 entity_state
@@ -309,8 +317,19 @@ async fn main() {
     let file = File::open("src/clowder_sprite.json").unwrap();
     let sprite_info: Vec<Sprite> =
         serde_json::from_reader(file).expect("error while reading or parsing");
-    let sprites = SpriteSheet::new("src/clowder_sprite.png", sprite_info).await;
+    let mut sprites = SpriteSheet::new("src/clowder_sprite.png", sprite_info).await;
 
+    let mut ball_in = 0; //assigns a starting sprite in the sprite sheet for each ball (cat)
+    for _ in 0..BALL_NUM {
+        sprites.assign_sprite(ball_in);
+        ball_in += 2;
+
+        if ball_in / 2 >= DIST_BALL.try_into().unwrap() {
+            ball_in = 0;
+        }
+    }
+    //assigns a starting/base sprite for the paddle
+    sprites.assign_sprite((DIST_BALL * 2).try_into().unwrap());
     let mut animation = Animation::new(sprites);
     let mut world = World::new();
     let mut logics = Logics::new();
@@ -600,21 +619,15 @@ impl World {
         entity_state: &mut FlatEntityState<StateID>,
         collision: &AabbCollision<CollisionID, Vec2>,
     ) {
-        if self.paddles.1.x != 0.0 || self.paddles.1.y != 0.0 {
-            //running
-            entity_state.conditions[BALL_NUM as usize][1] = true;
-        } else {
-            //resting
-            entity_state.conditions[BALL_NUM as usize][0] = true;
-        }
-
         for (i, ball) in self.balls.iter().enumerate() {
-            if ball.vel.y != 0.0 || ball.vel.x != 0.0 {
-                //running
-                entity_state.conditions[i as usize][1] = true;
-            } else {
-                //resting
-                entity_state.conditions[i as usize][0] = true;
+            if entity_state.states[i] == 2
+            //if resting
+            {
+                if ball.vel.x != 0.0 || ball.vel.y != 0.0
+                //has velocity
+                {
+                    entity_state.conditions[i][0] = true; //move to running 1
+                }
             }
         }
 
@@ -624,7 +637,7 @@ impl World {
                 collision.metadata[contact.j].id,
             ) {
                 (CollisionID::Ball(i), CollisionID::Goal(_player)) => {
-                    entity_state.conditions[i][2] = true;
+                    entity_state.conditions[i][3] = true;
                 }
 
                 _ => {}
@@ -635,7 +648,7 @@ impl World {
     fn unproject_entity_state(&mut self, entity_state: &FlatEntityState<StateID>) {
         for (i, state) in entity_state.states.iter().enumerate() {
             match entity_state.maps[i].states[*state].id {
-                StateID::PlayerRunning1 | StateID::PlayerRunning2 | StateID::PlayerResting => {}
+                StateID::PlayerRunning1 | StateID::PlayerRunning2 => {}
 
                 StateID::BallResting
                 | StateID::BallRunning1
@@ -675,7 +688,7 @@ impl World {
     fn draw(&self, state: &mut FlatEntityState<StateID>, animation: &mut Animation) {
         //arbitrary value that resets frames to prevent overflow
 
-        if animation.frames_drawn >= 4 {
+        if animation.frames_drawn >= 10 {
             animation.frames_drawn = 0;
         } else {
             animation.frames_drawn = animation.frames_drawn + 1;
@@ -683,17 +696,21 @@ impl World {
 
         clear_background(BASE_COLOR);
 
-        if state.conditions[BALL_NUM as usize][0] || state.conditions[BALL_NUM as usize][2] {
+        //draw dog, resting/running1
+        if state.states[BALL_NUM as usize] == 0 {
             draw_texture_ex(
                 animation.sheet.image,
                 self.paddles.0.x as f32,
                 self.paddles.0.y as f32,
                 WHITE,
-                animation.sheet.create_param(8),
+                animation
+                    .sheet
+                    .create_param(animation.sheet.start_sprite[BALL_NUM as usize]),
             );
-
-            if state.conditions[BALL_NUM as usize][0] && animation.frames_drawn == 0 {
+            // swaps condiction from running 1 to running 2
+            if animation.frames_drawn == 0 {
                 state.conditions[BALL_NUM as usize][1] = true;
+                state.conditions[BALL_NUM as usize][0] = false;
             }
         } else {
             draw_texture_ex(
@@ -701,11 +718,14 @@ impl World {
                 self.paddles.0.x as f32,
                 self.paddles.0.y as f32,
                 WHITE,
-                animation.sheet.create_param(9),
+                animation
+                    .sheet
+                    .create_param(animation.sheet.start_sprite[BALL_NUM as usize] + 1),
             );
-
+            //swaps condition from running 1 to running 2
             if animation.frames_drawn == 0 {
-                state.conditions[BALL_NUM as usize][1] = true;
+                state.conditions[BALL_NUM as usize][0] = true;
+                state.conditions[BALL_NUM as usize][1] = false;
             }
         }
 
@@ -750,29 +770,35 @@ impl World {
 
         //balls
         for (i, ball) in self.balls.iter().enumerate() {
-            if state.conditions[i][0] || state.conditions[i][2] {
+            if state.states[i] == 0 || state.states[i] == 2 {
                 draw_texture_ex(
                     animation.sheet.image,
                     ball.pos.x as f32,
                     ball.pos.y as f32,
                     WHITE,
-                    animation.sheet.create_param(i),
+                    animation
+                        .sheet
+                        .create_param(animation.sheet.start_sprite[i]),
                 );
 
-                if state.conditions[i as usize][0] && animation.frames_drawn == 0 {
+                if state.states[i as usize] == 0 && animation.frames_drawn == 0 {
+                    state.conditions[i as usize][0] = false;
                     state.conditions[i as usize][1] = true;
                 }
-            } else if state.conditions[i][1] {
+            } else if state.states[i] == 1 {
                 draw_texture_ex(
                     animation.sheet.image,
                     ball.pos.x as f32,
                     ball.pos.y as f32,
                     WHITE,
-                    animation.sheet.create_param(i + 1),
+                    animation
+                        .sheet
+                        .create_param(animation.sheet.start_sprite[i] + 1),
                 );
 
                 if animation.frames_drawn == 0 {
                     state.conditions[i as usize][0] = true;
+                    state.conditions[i as usize][1] = false;
                 }
             } else {
             }
