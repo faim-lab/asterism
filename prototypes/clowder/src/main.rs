@@ -46,8 +46,6 @@ enum StateID {
     BallRunning1,
     BallRunning2,
     BallResting,
-    Scored,
-    //^^makes non visible, might want to remove but then need to find way to not mess up displays
 }
 
 impl Default for ActionID {
@@ -68,6 +66,7 @@ enum CollisionID {
 struct Ball {
     pos: Vec2,
     vel: Vec2,
+    id: usize,
 }
 
 impl Default for CollisionID {
@@ -234,9 +233,9 @@ impl Logics {
                 );
                 collision.add_entity_as_xywh(
                     ((WIDTH / 2) + (GOAL_WIDTH / 2)) as f32, //top 2
-                    WALL_DEPTH as f32,
-                    ((WIDTH / 2) - (GOAL_WIDTH / 2)) as f32,
                     0.0,
+                    ((WIDTH / 2) - (GOAL_WIDTH / 2)) as f32,
+                    WALL_DEPTH as f32,
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
@@ -280,7 +279,6 @@ impl Logics {
                             (StateID::BallRunning1, vec![1, 2, 3]),
                             (StateID::BallRunning2, vec![0, 2, 3]),
                             (StateID::BallResting, vec![1]),
-                            (StateID::Scored, vec![0]),
                         ],
                     );
                 }
@@ -334,11 +332,14 @@ async fn main() {
     let mut world = World::new();
     let mut logics = Logics::new();
 
-    for _i in 0..BALL_NUM {
-        world.balls.push(Ball::new(Vec2::new(
-            rand::gen_range(BALL_SIZE as f32, (WIDTH - BALL_SIZE) as f32),
-            rand::gen_range((BALL_SIZE * 2) as f32, (HEIGHT - BALL_SIZE) as f32),
-        )));
+    for i in 0..BALL_NUM {
+        world.balls.push(Ball::new(
+            Vec2::new(
+                rand::gen_range(BALL_SIZE as f32, (WIDTH - BALL_SIZE) as f32),
+                rand::gen_range((BALL_SIZE * 2) as f32, (HEIGHT - BALL_SIZE) as f32),
+            ),
+            i.into(),
+        ));
     }
 
     loop {
@@ -400,7 +401,8 @@ impl World {
                 (CollisionID::Goal(_player), CollisionID::Ball(i))
                 | (CollisionID::Ball(i), CollisionID::Goal(_player)) => {
                     if i <= self.balls.len() {
-                        // self.balls.remove(i);
+                        self.balls.remove(i);
+
                         logics
                             .resources
                             .transactions
@@ -619,28 +621,16 @@ impl World {
         entity_state: &mut FlatEntityState<StateID>,
         collision: &AabbCollision<CollisionID, Vec2>,
     ) {
-        for (i, ball) in self.balls.iter().enumerate() {
-            if entity_state.states[i] == 2
+        for ball in self.balls.iter() {
+            if entity_state.states[ball.id] == 2
             //if resting
             {
                 if ball.vel.x != 0.0 || ball.vel.y != 0.0
                 //has velocity
                 {
-                    entity_state.conditions[i][0] = true; //move to running 1
+                    entity_state.conditions[ball.id][0] = true; //move to running 1
+                    entity_state.conditions[ball.id][2] = false;
                 }
-            }
-        }
-
-        for contact in collision.contacts.iter() {
-            match (
-                collision.metadata[contact.i].id,
-                collision.metadata[contact.j].id,
-            ) {
-                (CollisionID::Ball(i), CollisionID::Goal(_player)) => {
-                    entity_state.conditions[i][3] = true;
-                }
-
-                _ => {}
             }
         }
     }
@@ -650,10 +640,7 @@ impl World {
             match entity_state.maps[i].states[*state].id {
                 StateID::PlayerRunning1 | StateID::PlayerRunning2 => {}
 
-                StateID::BallResting
-                | StateID::BallRunning1
-                | StateID::BallRunning2
-                | StateID::Scored => {}
+                StateID::BallResting | StateID::BallRunning1 | StateID::BallRunning2 => {}
             }
         }
     }
@@ -769,8 +756,8 @@ impl World {
         );
 
         //balls
-        for (i, ball) in self.balls.iter().enumerate() {
-            if state.states[i] == 0 || state.states[i] == 2 {
+        for ball in self.balls.iter() {
+            if state.states[ball.id] == 0 || state.states[ball.id] == 2 {
                 draw_texture_ex(
                     animation.sheet.image,
                     ball.pos.x as f32,
@@ -778,14 +765,14 @@ impl World {
                     WHITE,
                     animation
                         .sheet
-                        .create_param(animation.sheet.start_sprite[i]),
+                        .create_param(animation.sheet.start_sprite[ball.id]),
                 );
 
-                if state.states[i as usize] == 0 && animation.frames_drawn == 0 {
-                    state.conditions[i as usize][0] = false;
-                    state.conditions[i as usize][1] = true;
+                if state.states[ball.id] == 0 && animation.frames_drawn == 0 {
+                    state.conditions[ball.id][0] = false;
+                    state.conditions[ball.id][1] = true;
                 }
-            } else if state.states[i] == 1 {
+            } else if state.states[ball.id] == 1 {
                 draw_texture_ex(
                     animation.sheet.image,
                     ball.pos.x as f32,
@@ -793,12 +780,12 @@ impl World {
                     WHITE,
                     animation
                         .sheet
-                        .create_param(animation.sheet.start_sprite[i] + 1),
+                        .create_param(animation.sheet.start_sprite[ball.id] + 1),
                 );
 
                 if animation.frames_drawn == 0 {
-                    state.conditions[i as usize][0] = true;
-                    state.conditions[i as usize][1] = false;
+                    state.conditions[ball.id][0] = true;
+                    state.conditions[ball.id][1] = false;
                 }
             } else {
             }
@@ -807,10 +794,11 @@ impl World {
 }
 
 impl Ball {
-    fn new(newpos: Vec2) -> Self {
+    fn new(newpos: Vec2, newid: usize) -> Self {
         Self {
             pos: newpos,
             vel: Vec2::new(0.0, 0.0),
+            id: newid,
         }
     }
 }
