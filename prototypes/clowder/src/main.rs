@@ -665,8 +665,7 @@ impl World {
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
     fn draw(&self, state: &mut FlatEntityState<StateID>, animation: &mut Animation) {
-        //arbitrary value that resets frames to prevent overflow
-
+        //arbitrary value that resets frames to create cycle
         if animation.frames_drawn >= 10 {
             animation.frames_drawn = 0;
         } else {
@@ -674,71 +673,89 @@ impl World {
         }
 
         clear_background(BASE_COLOR);
-
-        //draw dog, resting/running1
-        if state.states[BALL_NUM as usize] == 0 {
-            draw_texture_ex(
-                animation.sheet.image,
-                self.paddles.0.x as f32,
-                self.paddles.0.y as f32,
-                WHITE,
-                animation
-                    .sheet
-                    .create_param(animation.sheet.start_sprite[BALL_NUM as usize]),
-            );
-            // swaps condiction from running 1 to running 2
-            if animation.frames_drawn == 0 {
-                state.conditions[BALL_NUM as usize][1] = true;
-                state.conditions[BALL_NUM as usize][0] = false;
+        //dog (paddle)
+        match state.get_id_for_entity(BALL_NUM as usize) {
+            StateID::Running1 => {
+                draw_texture_ex(
+                    animation.sheet.image,
+                    self.paddles.0.x as f32,
+                    self.paddles.0.y as f32,
+                    WHITE,
+                    animation
+                        .sheet
+                        .create_param(animation.sheet.start_sprite[BALL_NUM as usize]),
+                );
+                // swaps condiction from running 1 to running 2
+                if animation.frames_drawn == 0 {
+                    state.conditions[BALL_NUM as usize][1] = true;
+                    state.conditions[BALL_NUM as usize][0] = false;
+                }
             }
-        } else {
-            draw_texture_ex(
-                animation.sheet.image,
-                self.paddles.0.x as f32,
-                self.paddles.0.y as f32,
-                WHITE,
-                animation
-                    .sheet
-                    .create_param(animation.sheet.start_sprite[BALL_NUM as usize] + 1),
-            );
-            //swaps condition from running 1 to running 2
-            if animation.frames_drawn == 0 {
-                state.conditions[BALL_NUM as usize][0] = true;
-                state.conditions[BALL_NUM as usize][1] = false;
+            StateID::Running2 => {
+                draw_texture_ex(
+                    animation.sheet.image,
+                    self.paddles.0.x as f32,
+                    self.paddles.0.y as f32,
+                    WHITE,
+                    animation
+                        .sheet
+                        .create_param(animation.sheet.start_sprite[BALL_NUM as usize] + 1),
+                );
+                //swaps condition from running 2 to running 1
+                if animation.frames_drawn == 0 {
+                    state.conditions[BALL_NUM as usize][0] = true;
+                    state.conditions[BALL_NUM as usize][1] = false;
+                }
             }
+            StateID::Resting => {}
         }
 
         //balls
         for ball in self.balls.iter() {
-            if state.states[ball.id] == 0 || state.states[ball.id] == 2 {
-                draw_texture_ex(
-                    animation.sheet.image,
-                    ball.pos.x as f32,
-                    ball.pos.y as f32,
-                    WHITE,
-                    animation
-                        .sheet
-                        .create_param(animation.sheet.start_sprite[ball.id]),
-                );
+            match state.get_id_for_entity(ball.id) {
+                StateID::Running1 => {
+                    draw_texture_ex(
+                        animation.sheet.image,
+                        ball.pos.x as f32,
+                        ball.pos.y as f32,
+                        WHITE,
+                        animation
+                            .sheet
+                            .create_param(animation.sheet.start_sprite[ball.id]),
+                    );
 
-                if state.states[ball.id] == 0 && animation.frames_drawn == 0 {
-                    state.conditions[ball.id][0] = false;
-                    state.conditions[ball.id][1] = true;
+                    //swaps running1 to running2
+                    if animation.frames_drawn == 0 {
+                        state.conditions[ball.id][0] = false;
+                        state.conditions[ball.id][1] = true;
+                    }
                 }
-            } else {
-                draw_texture_ex(
-                    animation.sheet.image,
-                    ball.pos.x as f32,
-                    ball.pos.y as f32,
-                    WHITE,
-                    animation
-                        .sheet
-                        .create_param(animation.sheet.start_sprite[ball.id] + 1),
-                );
-
-                if animation.frames_drawn == 0 {
-                    state.conditions[ball.id][0] = true;
-                    state.conditions[ball.id][1] = false;
+                StateID::Running2 => {
+                    draw_texture_ex(
+                        animation.sheet.image,
+                        ball.pos.x as f32,
+                        ball.pos.y as f32,
+                        WHITE,
+                        animation
+                            .sheet
+                            .create_param(animation.sheet.start_sprite[ball.id] + 1),
+                    );
+                    //swaps from running2 to running1
+                    if animation.frames_drawn == 0 {
+                        state.conditions[ball.id][0] = true;
+                        state.conditions[ball.id][1] = false;
+                    }
+                }
+                StateID::Resting => {
+                    draw_texture_ex(
+                        animation.sheet.image,
+                        ball.pos.x as f32,
+                        ball.pos.y as f32,
+                        WHITE,
+                        animation
+                            .sheet
+                            .create_param(animation.sheet.start_sprite[ball.id]),
+                    );
                 }
             }
         }
