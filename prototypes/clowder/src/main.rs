@@ -708,6 +708,40 @@ impl World {
             }
         }
 
+        //balls
+        for ball in self.balls.iter() {
+            if state.states[ball.id] == 0 || state.states[ball.id] == 2 {
+                draw_texture_ex(
+                    animation.sheet.image,
+                    ball.pos.x as f32,
+                    ball.pos.y as f32,
+                    WHITE,
+                    animation
+                        .sheet
+                        .create_param(animation.sheet.start_sprite[ball.id]),
+                );
+
+                if state.states[ball.id] == 0 && animation.frames_drawn == 0 {
+                    state.conditions[ball.id][0] = false;
+                    state.conditions[ball.id][1] = true;
+                }
+            } else {
+                draw_texture_ex(
+                    animation.sheet.image,
+                    ball.pos.x as f32,
+                    ball.pos.y as f32,
+                    WHITE,
+                    animation
+                        .sheet
+                        .create_param(animation.sheet.start_sprite[ball.id] + 1),
+                );
+
+                if animation.frames_drawn == 0 {
+                    state.conditions[ball.id][0] = true;
+                    state.conditions[ball.id][1] = false;
+                }
+            }
+        }
         //top 1 (left)
         draw_rectangle(
             0.0,
@@ -746,41 +780,6 @@ impl World {
             WALL_DEPTH as f32,
             FENCE_COLOR,
         );
-
-        //balls
-        for ball in self.balls.iter() {
-            if state.states[ball.id] == 0 || state.states[ball.id] == 2 {
-                draw_texture_ex(
-                    animation.sheet.image,
-                    ball.pos.x as f32,
-                    ball.pos.y as f32,
-                    WHITE,
-                    animation
-                        .sheet
-                        .create_param(animation.sheet.start_sprite[ball.id]),
-                );
-
-                if state.states[ball.id] == 0 && animation.frames_drawn == 0 {
-                    state.conditions[ball.id][0] = false;
-                    state.conditions[ball.id][1] = true;
-                }
-            } else {
-                draw_texture_ex(
-                    animation.sheet.image,
-                    ball.pos.x as f32,
-                    ball.pos.y as f32,
-                    WHITE,
-                    animation
-                        .sheet
-                        .create_param(animation.sheet.start_sprite[ball.id] + 1),
-                );
-
-                if animation.frames_drawn == 0 {
-                    state.conditions[ball.id][0] = true;
-                    state.conditions[ball.id][1] = false;
-                }
-            }
-        }
     }
 }
 
