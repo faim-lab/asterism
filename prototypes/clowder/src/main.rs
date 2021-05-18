@@ -41,11 +41,9 @@ enum ActionID {
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum StateID {
-    PlayerRunning1,
-    PlayerRunning2,
-    BallRunning1,
-    BallRunning2,
-    BallResting,
+    Running1,
+    Running2,
+    Resting,
 }
 
 impl Default for ActionID {
@@ -276,19 +274,16 @@ impl Logics {
                     entity_state.add_state_map(
                         2,
                         vec![
-                            (StateID::BallRunning1, vec![1, 2]),
-                            (StateID::BallRunning2, vec![0, 2]),
-                            (StateID::BallResting, vec![1]),
+                            (StateID::Running1, vec![1, 2]),
+                            (StateID::Running2, vec![0, 2]),
+                            (StateID::Resting, vec![1]),
                         ],
                     );
                 }
 
                 entity_state.add_state_map(
                     0,
-                    vec![
-                        (StateID::PlayerRunning1, vec![1]),
-                        (StateID::PlayerRunning2, vec![0]),
-                    ],
+                    vec![(StateID::Running1, vec![1]), (StateID::Running2, vec![0])],
                 );
                 entity_state
             },
@@ -637,9 +632,7 @@ impl World {
     fn unproject_entity_state(&mut self, entity_state: &FlatEntityState<StateID>) {
         for (i, state) in entity_state.states.iter().enumerate() {
             match entity_state.maps[i].states[*state].id {
-                StateID::PlayerRunning1 | StateID::PlayerRunning2 => {}
-
-                StateID::BallResting | StateID::BallRunning1 | StateID::BallRunning2 => {}
+                StateID::Running1 | StateID::Running2 | StateID::Resting => {}
             }
         }
     }
