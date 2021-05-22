@@ -2,7 +2,7 @@
 //!
 //! Physics logics communicate that physical laws govern the movement of some in-game entities. They update and honor objects' physical properties like position, velocity, density, etc., according to physical laws integrated over time.
 
-use crate::{collision::Vec2, Event, Logic, LogicType, Reaction};
+use crate::{collision::Vec2, Event, Logic, Reaction};
 
 /// A physics logic using 2d points.
 pub struct PointPhysics<V2: Vec2> {
@@ -14,9 +14,18 @@ pub struct PointPhysics<V2: Vec2> {
 impl<V2: Vec2> Logic for PointPhysics<V2> {
     type Reaction = PhysicsReaction<V2>;
     type Event = PhysicsEvent;
+}
 
+impl<V2: Vec2> PointPhysics<V2> {
+    pub fn new() -> Self {
+        Self {
+            positions: Vec::new(),
+            velocities: Vec::new(),
+            accelerations: Vec::new(),
+        }
+    }
     /// Update the physics logic: changes the velocities of entities based on acceleration, then changes entities' positions based on updated velocities.
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         for (pos, (vel, acc)) in self
             .positions
             .iter_mut()
@@ -25,23 +34,6 @@ impl<V2: Vec2> Logic for PointPhysics<V2> {
             *vel += *acc;
             *pos += *vel;
         }
-    }
-
-    fn react(&mut self, reaction_type: Self::Reaction) {
-        match reaction_type {
-            Self::Reaction::SetVel(idx, new_vel) => {
-                self.velocities[idx] = new_vel;
-            }
-            Self::Reaction::SetAcc(idx, new_acc) => {
-                self.accelerations[idx] = new_acc;
-            }
-        }
-    }
-}
-
-impl<V2: Vec2> PointPhysics<V2> {
-    pub fn new() -> Self {
-        Self::default()
     }
 
     /// Adds a physics entity to the logic with the given position, velocity, and acceleration.
@@ -59,16 +51,6 @@ impl<V2: Vec2> PointPhysics<V2> {
     }
 }
 
-impl<V2: Vec2> Default for PointPhysics<V2> {
-    fn default() -> Self {
-        Self {
-            positions: Vec::new(),
-            velocities: Vec::new(),
-            accelerations: Vec::new(),
-        }
-    }
-}
-
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum PhysicsReaction<V2: Vec2> {
     SetVel(usize, V2),
@@ -77,14 +59,6 @@ pub enum PhysicsReaction<V2: Vec2> {
 #[derive(PartialEq, Eq, Debug)]
 pub enum PhysicsEvent {}
 
-impl<V2: Vec2> Reaction for PhysicsReaction<V2> {
-    fn for_logic(&self) -> LogicType {
-        LogicType::Physics
-    }
-}
+impl<V2: Vec2> Reaction for PhysicsReaction<V2> {}
 
-impl Event for PhysicsEvent {
-    fn for_logic(&self) -> LogicType {
-        LogicType::Physics
-    }
-}
+impl Event for PhysicsEvent {}

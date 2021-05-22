@@ -2,7 +2,7 @@
 //!
 //! Resource logics communicate that generic or specific resources can be created, destroyed, converted, or transferred between abstract or concrete locations. They create, destroy, and exchange (usually) discrete quantities of generic or specific resources in or between abstract or concrete locations on demand or over time, and trigger other actions when these transactions take place.
 
-use crate::{Event, Logic, LogicType, Reaction};
+use crate::{Event, Logic, Reaction};
 use std::collections::BTreeMap;
 
 /// A resource logic that queues transactions, then applies them all at once when updating.
@@ -18,9 +18,25 @@ pub struct QueuedResources<ID: PoolInfo> {
 impl<ID: PoolInfo> Logic for QueuedResources<ID> {
     type Event = ResourceEvent<ID>;
     type Reaction = ResourceReaction<ID>;
+}
+
+impl<ID: PoolInfo> Default for QueuedResources<ID> {
+    fn default() -> Self {
+        Self {
+            items: BTreeMap::new(),
+            transactions: Vec::new(),
+            completed: Vec::new(),
+        }
+    }
+}
+
+impl<ID: PoolInfo> QueuedResources<ID> {
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Updates the values of resources based on the queued transactions. If a transaction cannot be completed (if the value goes below its min or max), a snapshot of the resources before the transaction occurred is restored, and the transaction is marked as incomplete, and we continue to process the remaining transactions.
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         self.completed.clear();
 
         'exchange: for exchange in self.transactions.iter() {
@@ -51,27 +67,6 @@ impl<ID: PoolInfo> Logic for QueuedResources<ID> {
             self.completed.push(Ok(item_types));
         }
         self.transactions.clear();
-    }
-
-    fn react(&mut self, (pool, amt): Self::Reaction) {
-        self.transactions
-            .push(vec![(pool, Transaction::Change(amt))]);
-    }
-}
-
-impl<ID: PoolInfo> Default for QueuedResources<ID> {
-    fn default() -> Self {
-        Self {
-            items: BTreeMap::new(),
-            transactions: Vec::new(),
-            completed: Vec::new(),
-        }
-    }
-}
-
-impl<ID: PoolInfo> QueuedResources<ID> {
-    pub fn new() -> Self {
-        Self::default()
     }
 
     /// Checks if the transaction is possible or not
@@ -136,13 +131,5 @@ pub enum ResourceEvent<ID: PoolInfo> {
     TransactionUnsuccessful(ResourceError<ID>),
 }
 
-impl<ID: Eq + Copy> Reaction for ResourceReaction<ID> {
-    fn for_logic(&self) -> LogicType {
-        LogicType::Resource
-    }
-}
-impl<ID: PoolInfo> Event for ResourceEvent<ID> {
-    fn for_logic(&self) -> LogicType {
-        LogicType::Resource
-    }
-}
+impl<ID: Eq + Copy> Reaction for ResourceReaction<ID> {}
+impl<ID: PoolInfo> Event for ResourceEvent<ID> {}

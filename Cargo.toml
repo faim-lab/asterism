@@ -1,21 +1,5 @@
 [workspace]
 
-members = [
-    "prototypes/archer_game",
-    "prototypes/jumper",
-    "prototypes/quest",
-    "prototypes/yarn",
-    "prototypes/paddles-macroquad",
-    "prototypes/air_hockey",
-    "prototypes/breakout",
-    "prototypes/apple-catching",
-    "prototypes/maze-macroquad",
-    "prototypes/trick-ball",
-    "prototypes/trick-paddle",
-    "prototypes/wall-breaker",
-    "prototypes/paddle-ball-mania",
-    "prototypes/omnipaddles"
-    # "prototypes/maze-minigame",
-    # "prototypes/paddles",
-]
+members = ["prototypes/*"]
+exclude = ["prototypes/.DS_Store", "prototypes/README.md"]
 

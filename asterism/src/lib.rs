@@ -1,3 +1,4 @@
+#![allow(clippy::new_without_default)]
 //! # Asterism
 //!
 //! An asterism is a pattern people can see in stars, and while there is a fixed set of true constellations we can come up with as many asterisms as we like.
@@ -8,7 +9,6 @@
 
 pub mod collision;
 pub mod control;
-pub mod data;
 pub mod entity_state;
 pub mod linking;
 pub mod physics;
@@ -17,25 +17,8 @@ pub mod resources;
 pub trait Logic {
     type Event: Event;
     type Reaction: Reaction;
-
-    fn update(&mut self);
-    fn react(&mut self, reaction_type: Self::Reaction);
 }
 
-pub trait GameState {}
+pub trait Event: PartialEq {}
 
-pub trait Event: PartialEq {
-    fn for_logic(&self) -> LogicType;
-}
-
-pub trait Reaction: PartialEq + Copy {
-    fn for_logic(&self) -> LogicType;
-}
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum LogicType {
-    Physics,
-    Resource,
-    Collision,
-    Control,
-}
+pub trait Reaction: PartialEq + Copy {}

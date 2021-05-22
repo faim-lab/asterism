@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::{Event, Logic, LogicType, Reaction};
+use crate::{Event, Logic, Reaction};
 
 /// Information for a key/button press.
 trait Input {
@@ -30,20 +30,6 @@ where
     input_wrapper: Wrapper,
 }
 
-impl<ID, Wrapper> Default for KeyboardControl<ID, Wrapper>
-where
-    ID: Copy + Eq + Ord,
-    Wrapper: InputWrapper,
-{
-    fn default() -> Self {
-        Self {
-            mapping: Vec::new(),
-            values: Vec::new(),
-            input_wrapper: Wrapper::new(),
-        }
-    }
-}
-
 impl<ID, Wrapper> Logic for KeyboardControl<ID, Wrapper>
 where
     ID: Copy + Eq + Ord,
@@ -51,38 +37,6 @@ where
 {
     type Event = ControlEvent<ID>;
     type Reaction = ControlReaction<ID, Wrapper::KeyCode>;
-
-    /// use KeyboardControl::update() instead???? maybe
-    fn update(&mut self) {
-        unimplemented!();
-    }
-
-    // eventually should do actual error handling for this, probably
-    fn react(&mut self, reaction_type: Self::Reaction) {
-        match reaction_type {
-            ControlReaction::AddKeyToSet(idx, id, keycode, input_type) => {
-                self.mapping[idx].push(Action::new(id, keycode, input_type))
-            }
-            ControlReaction::RemoveKeyFromSet(set_idx, id) => {
-                if let Some(action_idx) = self.mapping[set_idx].iter().position(|act| act.id == id)
-                {
-                    self.mapping[set_idx].remove(action_idx);
-                }
-            }
-            ControlReaction::SetKeyValid(set_idx, id) => {
-                if let Some(action_idx) = self.mapping[set_idx].iter().position(|act| act.id == id)
-                {
-                    self.mapping[set_idx][action_idx].is_valid = true;
-                }
-            }
-            ControlReaction::SetKeyInvalid(set_idx, id) => {
-                if let Some(action_idx) = self.mapping[set_idx].iter().position(|act| act.id == id)
-                {
-                    self.mapping[set_idx][action_idx].is_valid = false;
-                }
-            }
-        }
-    }
 }
 
 impl<ID, Wrapper> KeyboardControl<ID, Wrapper>
@@ -91,7 +45,11 @@ where
     Wrapper: InputWrapper,
 {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            mapping: Vec::new(),
+            values: Vec::new(),
+            input_wrapper: Wrapper::new(),
+        }
     }
 
     /// Checks and updates what inputs are being pressed every frame.
@@ -235,11 +193,7 @@ pub enum ControlReaction<ID: Copy + Eq, KeyCode: Copy + Eq> {
     SetKeyInvalid(usize, ID),
 }
 
-impl<ID: Copy + Eq, KeyCode: Copy + Eq> Reaction for ControlReaction<ID, KeyCode> {
-    fn for_logic(&self) -> LogicType {
-        LogicType::Control
-    }
-}
+impl<ID: Copy + Eq, KeyCode: Copy + Eq> Reaction for ControlReaction<ID, KeyCode> {}
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct ControlEvent<ID: Copy + Eq + Ord>(pub ID, pub ControlEventType);
@@ -251,11 +205,7 @@ pub enum ControlEventType {
     KeyHeld,
 }
 
-impl<ID: Copy + Eq + Ord> Event for ControlEvent<ID> {
-    fn for_logic(&self) -> LogicType {
-        LogicType::Control
-    }
-}
+impl<ID: Copy + Eq + Ord> Event for ControlEvent<ID> {}
 
 /// A wrapper to help keep track of input information that preexisting input handlers may not offer, but that we need.
 pub trait InputWrapper {

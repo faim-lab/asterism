@@ -7,7 +7,7 @@
 use std::cmp::Ordering;
 use std::ops::{Add, AddAssign};
 
-use crate::{Event, Logic, LogicType, Reaction};
+use crate::{Event, Logic, Reaction};
 use glam::Vec2 as GlamVec2;
 use ultraviolet::Vec2 as UVVec2;
 
@@ -136,8 +136,21 @@ pub struct AabbCollision<ID: Copy + Eq, V2: Vec2> {
     pub displacements: Vec<V2>,
 }
 
-impl<ID: Copy + Eq, V2: Vec2> Default for AabbCollision<ID, V2> {
-    fn default() -> Self {
+impl<ID: Copy + Eq, V2: Vec2> Logic for AabbCollision<ID, V2> {
+    type Event = CollisionEvent<ID>;
+    type Reaction = CollisionReaction;
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub enum CollisionReaction {}
+pub type CollisionEvent<ID> = (ID, ID);
+
+impl Reaction for CollisionReaction {}
+
+impl<ID: Eq> Event for CollisionEvent<ID> {}
+
+impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
+    pub fn new() -> Self {
         Self {
             centers: Vec::new(),
             half_sizes: Vec::new(),
@@ -147,12 +160,6 @@ impl<ID: Copy + Eq, V2: Vec2> Default for AabbCollision<ID, V2> {
             displacements: Vec::new(),
         }
     }
-}
-
-impl<ID: Copy + Eq, V2: Vec2> Logic for AabbCollision<ID, V2> {
-    type Event = CollisionEvent<ID>;
-    type Reaction = CollisionReaction;
-
     /// Checks collisions every frame and handles restitution (works most of the time).
     ///
     /// Uses the following algorithm:
@@ -163,7 +170,7 @@ impl<ID: Copy + Eq, V2: Vec2> Logic for AabbCollision<ID, V2> {
     /// 4. Process contacts vec in order: adding the displacement so far for each involved entity to the contact displacement, displace the correct entity the correct "remaining" amount (which might be 0) and add that to the vec of (3).
     ///
     /// Explanation of algorithm lightly modified from a message by Prof Osborn.
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         self.contacts.clear();
         self.displacements.clear();
         self.displacements
@@ -271,30 +278,6 @@ impl<ID: Copy + Eq, V2: Vec2> Logic for AabbCollision<ID, V2> {
         for (i, displacement) in self.displacements.iter().enumerate() {
             self.centers[i] += *displacement;
         }
-    }
-
-    fn react(&mut self, _reaction_type: Self::Reaction) {}
-}
-
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum CollisionReaction {}
-pub type CollisionEvent<ID> = (ID, ID);
-
-impl Reaction for CollisionReaction {
-    fn for_logic(&self) -> LogicType {
-        LogicType::Collision
-    }
-}
-
-impl<ID: Eq> Event for CollisionEvent<ID> {
-    fn for_logic(&self) -> LogicType {
-        LogicType::Collision
-    }
-}
-
-impl<ID: Copy + Eq, V2: Vec2> AabbCollision<ID, V2> {
-    pub fn new() -> Self {
-        Self::default()
     }
 
     pub fn find_displacement(&self, i: usize, j: usize) -> V2 {
