@@ -4,35 +4,42 @@
 
 use crate::{Event, Logic, Reaction};
 use std::collections::BTreeMap;
+use std::ops::{Add, AddAssign};
 
 /// A resource logic that queues transactions, then applies them all at once when updating.
-pub struct QueuedResources<ID: PoolInfo> {
+pub struct QueuedResources<ID, Value>
+where
+    ID: Copy + Ord,
+    Value: Add<Output = Value> + AddAssign + Ord + Copy,
+{
     /// The items involved, and their values.
-    pub items: BTreeMap<ID, f64>,
+    pub items: BTreeMap<ID, (Value, Value, Value)>, // value, min, max
     /// Each transaction is a list of items involved in the transaction and the amount they're being changed.
-    pub transactions: Vec<Vec<(ID, Transaction)>>,
+    pub transactions: Vec<Vec<(ID, Transaction<Value>)>>,
     /// A Vec of all transactions and if they were able to be completed or not. If yes, supply a Vec of the IDs of successful transactions; if no, supply the ID of the pool that caused the error and a reason (see [ResourceError]).
     pub completed: Vec<Result<Vec<ID>, ResourceError<ID>>>,
 }
 
-impl<ID: PoolInfo> Logic for QueuedResources<ID> {
+impl<ID, Value> Logic for QueuedResources<ID, Value>
+where
+    ID: Copy + Ord,
+    Value: Add<Output = Value> + AddAssign + Ord + Copy,
+{
     type Event = ResourceEvent<ID>;
-    type Reaction = ResourceReaction<ID>;
+    type Reaction = ResourceReaction<ID, Value>;
 }
 
-impl<ID: PoolInfo> Default for QueuedResources<ID> {
-    fn default() -> Self {
+impl<ID, Value> QueuedResources<ID, Value>
+where
+    ID: Copy + Ord,
+    Value: Add<Output = Value> + AddAssign + Ord + Copy,
+{
+    pub fn new() -> Self {
         Self {
             items: BTreeMap::new(),
             transactions: Vec::new(),
             completed: Vec::new(),
         }
-    }
-}
-
-impl<ID: PoolInfo> QueuedResources<ID> {
-    pub fn new() -> Self {
-        Self::default()
     }
 
     /// Updates the values of resources based on the queued transactions. If a transaction cannot be completed (if the value goes below its min or max), a snapshot of the resources before the transaction occurred is restored, and the transaction is marked as incomplete, and we continue to process the remaining transactions.
@@ -42,7 +49,7 @@ impl<ID: PoolInfo> QueuedResources<ID> {
         'exchange: for exchange in self.transactions.iter() {
             let mut snapshot = BTreeMap::new();
             for (item_type, ..) in exchange {
-                snapshot.insert(*item_type, *self.items.get(&item_type).unwrap());
+                snapshot.insert(*item_type, (*self.items.get(&item_type).unwrap()).0);
             }
 
             let mut item_types = Vec::new();
@@ -52,15 +59,22 @@ impl<ID: PoolInfo> QueuedResources<ID> {
                     Err(err) => {
                         self.completed.push(Err(err));
                         for (item_type, val) in snapshot.iter() {
-                            *self.items.get_mut(&item_type).unwrap() = *val;
+                            (*self.items.get_mut(&item_type).unwrap()).0 = *val;
                         }
                         continue 'exchange;
                     }
                 }
+                let (val, min, max) = self.items.get_mut(&item_type).unwrap();
                 match change {
                     Transaction::Change(amt) => {
-                        *self.items.get_mut(&item_type).unwrap() += *amt as f64;
+                        *val += *amt;
                         item_types.push(*item_type);
+                    }
+                    Transaction::SetMax(new_max) => {
+                        *max = *new_max;
+                    }
+                    Transaction::SetMin(new_min) => {
+                        *min = *new_min;
                     }
                 }
             }
@@ -73,19 +87,20 @@ impl<ID: PoolInfo> QueuedResources<ID> {
     fn is_possible(
         &self,
         item_type: &ID,
-        transaction: &Transaction,
+        transaction: &Transaction<Value>,
     ) -> Result<(), ResourceError<ID>> {
-        if let Some(value) = self.items.get(item_type) {
+        if let Some((value, min, max)) = self.items.get(item_type) {
             match transaction {
                 Transaction::Change(amt) => {
-                    if *value + *amt > item_type.max_value() {
+                    if *value + *amt > *max {
                         Err(ResourceError::TooBig(*item_type))
-                    } else if *value + *amt < item_type.min_value() {
+                    } else if *value + *amt < *min {
                         Err(ResourceError::TooSmall(*item_type))
                     } else {
                         Ok(())
                     }
                 }
+                _ => Ok(()),
             }
         } else {
             Err(ResourceError::PoolNotFound(*item_type))
@@ -93,25 +108,20 @@ impl<ID: PoolInfo> QueuedResources<ID> {
     }
 
     /// Gets the value of the item based on its ID.
-    pub fn get_value_by_itemtype(&self, item_type: &ID) -> Option<f64> {
-        self.items.get(item_type).cloned()
+    pub fn get_value_by_itemtype(&self, item_type: &ID) -> Option<Value> {
+        self.items.get(item_type).map(|(val, ..)| *val)
     }
 }
 
 /// A transaction holding the amount the value should change by.
 #[derive(Clone, Copy)]
-pub enum Transaction {
-    Change(f64),
-}
-
-/// information for the min/max values the entities in this pool can take, inclusive
-pub trait PoolInfo: Copy + Ord + Eq {
-    fn min_value(&self) -> f64 {
-        std::f64::MIN
-    }
-    fn max_value(&self) -> f64 {
-        std::f64::MAX
-    }
+pub enum Transaction<Value>
+where
+    Value: Add + AddAssign,
+{
+    Change(Value),
+    SetMax(Value),
+    SetMin(Value),
 }
 
 /// Errors possible when trying to complete a transaction.
@@ -122,14 +132,14 @@ pub enum ResourceError<ID> {
     TooSmall(ID),
 }
 
-pub type ResourceReaction<ID> = (ID, f64);
+pub type ResourceReaction<ID, Value> = (ID, Value);
 
 #[derive(PartialEq, Debug)]
-pub enum ResourceEvent<ID: PoolInfo> {
+pub enum ResourceEvent<ID> {
     PoolUpdated(ID),
     TransactionSuccessful(ID),
     TransactionUnsuccessful(ResourceError<ID>),
 }
 
-impl<ID: Eq + Copy> Reaction for ResourceReaction<ID> {}
-impl<ID: PoolInfo> Event for ResourceEvent<ID> {}
+impl<ID: Ord, Value: Add + AddAssign> Reaction for ResourceReaction<ID, Value> {}
+impl<ID: Ord> Event for ResourceEvent<ID> {}

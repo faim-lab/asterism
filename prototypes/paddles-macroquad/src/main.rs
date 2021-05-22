@@ -3,7 +3,7 @@ use asterism::{
     collision::{magnitude, AabbCollision},
     control::{KeyboardControl, MacroquadInputWrapper, Values},
     physics::PointPhysics,
-    resources::{PoolInfo, QueuedResources, Transaction},
+    resources::{QueuedResources, Transaction},
 };
 use macroquad::prelude::*;
 
@@ -33,27 +33,11 @@ type CollisionID = usize;
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 struct PoolID(usize);
 
-impl PoolInfo for PoolID {
-    fn max_value(&self) -> f64 {
-        match self.0 {
-            0 | 1 => std::u8::MAX as f64,
-            _ => panic!("not a valid pool number"),
-        }
-    }
-
-    fn min_value(&self) -> f64 {
-        match self.0 {
-            0 | 1 => std::u8::MIN as f64,
-            _ => panic!("not a valid pool number"),
-        }
-    }
-}
-
 struct Logics {
     control: KeyboardControl<ActionID, MacroquadInputWrapper>,
     physics: PointPhysics,
     collision: AabbCollision<CollisionID>,
-    resources: QueuedResources<PoolID>,
+    resources: QueuedResources<PoolID, u8>, // i hope you don't ever need more than 255 points
 }
 
 impl Logics {
@@ -91,7 +75,7 @@ struct World {
     collision_metadata: Vec<(bool, bool)>, // collision: (solid, fixed)
     mappings: Vec<Vec<bool>>,              // control
     keys_pressed: Vec<Vec<bool>>, // control. this is almost exactly what KeyboardControl.values is though
-    resources: Vec<f64>,          // rsrc
+    resources: Vec<(u8, u8, u8)>, // rsrc
 }
 
 fn window_conf() -> Conf {
@@ -176,7 +160,7 @@ impl World {
             collision_metadata,
             mappings,
             keys_pressed,
-            resources: vec![0.0, 0.0],
+            resources: vec![(0, 0, 255), (0, 0, 255)],
         }
     }
 
@@ -236,7 +220,7 @@ impl World {
                     logics
                         .resources
                         .transactions
-                        .push(vec![(PoolID(1), Transaction::Change(1.0))]);
+                        .push(vec![(PoolID(1), Transaction::Change(1))]);
                     self.mappings[1][2] = true;
                 }
                 (4, 1) => {
@@ -248,7 +232,7 @@ impl World {
                     logics
                         .resources
                         .transactions
-                        .push(vec![(PoolID(0), Transaction::Change(1.0))]);
+                        .push(vec![(PoolID(0), Transaction::Change(1))]);
                     self.mappings[0][2] = true;
                 }
 
@@ -295,8 +279,8 @@ impl World {
                         println!(
                             "p{} scores! p1: {}, p2: {}",
                             item_type.0 + 1,
-                            self.resources[0],
-                            self.resources[1]
+                            self.resources[0].0,
+                            self.resources[1].0
                         );
                     }
                 }
@@ -385,14 +369,14 @@ impl World {
             angle.to_radians().sin() * magnitude * if self.ball_vel.y < 0.0 { -1.0 } else { 1.0 };
     } */
 
-    fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
+    fn project_resources(&self, resources: &mut QueuedResources<PoolID, u8>) {
         for (i, res) in self.resources.iter().enumerate() {
             resources.items.insert(PoolID(i), *res);
         }
     }
 
     // "i hope this works!"
-    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
+    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID, u8>) {
         for (i, res) in self.resources.iter_mut().enumerate() {
             *res = *resources.items.get(&PoolID(i)).unwrap();
         }
