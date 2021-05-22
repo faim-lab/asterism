@@ -19,6 +19,6 @@ pub trait Logic {
     type Reaction: Reaction;
 }
 
-pub trait Event: PartialEq {}
+pub trait Event {}
 
-pub trait Reaction: PartialEq + Copy {}
+pub trait Reaction {}
