@@ -2,21 +2,22 @@
 //!
 //! Physics logics communicate that physical laws govern the movement of some in-game entities. They update and honor objects' physical properties like position, velocity, density, etc., according to physical laws integrated over time.
 
-use crate::{collision::Vec2, Event, Logic, Reaction};
+use crate::{Event, Logic, Reaction};
+use glam::Vec2;
 
 /// A physics logic using 2d points.
-pub struct PointPhysics<V2: Vec2> {
-    pub positions: Vec<V2>,
-    pub velocities: Vec<V2>,
-    pub accelerations: Vec<V2>,
+pub struct PointPhysics {
+    pub positions: Vec<Vec2>,
+    pub velocities: Vec<Vec2>,
+    pub accelerations: Vec<Vec2>,
 }
 
-impl<V2: Vec2> Logic for PointPhysics<V2> {
-    type Reaction = PhysicsReaction<V2>;
+impl Logic for PointPhysics {
+    type Reaction = PhysicsReaction;
     type Event = PhysicsEvent;
 }
 
-impl<V2: Vec2> PointPhysics<V2> {
+impl PointPhysics {
     pub fn new() -> Self {
         Self {
             positions: Vec::new(),
@@ -37,7 +38,7 @@ impl<V2: Vec2> PointPhysics<V2> {
     }
 
     /// Adds a physics entity to the logic with the given position, velocity, and acceleration.
-    pub fn add_physics_entity(&mut self, pos: V2, vel: V2, acc: V2) {
+    pub fn add_physics_entity(&mut self, pos: Vec2, vel: Vec2, acc: Vec2) {
         self.positions.push(pos);
         self.velocities.push(vel);
         self.accelerations.push(acc);
@@ -51,14 +52,14 @@ impl<V2: Vec2> PointPhysics<V2> {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum PhysicsReaction<V2: Vec2> {
-    SetVel(usize, V2),
-    SetAcc(usize, V2),
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum PhysicsReaction {
+    SetVel(usize, Vec2),
+    SetAcc(usize, Vec2),
 }
 #[derive(PartialEq, Eq, Debug)]
 pub enum PhysicsEvent {}
 
-impl<V2: Vec2> Reaction for PhysicsReaction<V2> {}
+impl Reaction for PhysicsReaction {}
 
 impl Event for PhysicsEvent {}

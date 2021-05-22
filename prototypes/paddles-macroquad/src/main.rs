@@ -1,10 +1,9 @@
 #![allow(clippy::upper_case_acronyms)]
 use asterism::{
-    collision::{AabbCollision, Vec2 as AstVec2},
+    collision::{magnitude, AabbCollision},
     control::{KeyboardControl, MacroquadInputWrapper, Values},
     physics::PointPhysics,
     resources::{PoolInfo, QueuedResources, Transaction},
-    Logic,
 };
 use macroquad::prelude::*;
 
@@ -52,8 +51,8 @@ impl PoolInfo for PoolID {
 
 struct Logics {
     control: KeyboardControl<ActionID, MacroquadInputWrapper>,
-    physics: PointPhysics<Vec2>,
-    collision: AabbCollision<CollisionID, Vec2>,
+    physics: PointPhysics,
+    collision: AabbCollision<CollisionID>,
     resources: QueuedResources<PoolID>,
 }
 
@@ -163,7 +162,7 @@ impl World {
 
         let mappings = vec![vec![true, true, true], vec![true, true, false], vec![true]];
 
-        let velocities = positions.iter().map(|_| Vec2::zero()).collect();
+        let velocities = positions.iter().map(|_| Vec2::ZERO).collect();
 
         let keys_pressed = mappings
             .iter()
@@ -232,7 +231,7 @@ impl World {
                         (WIDTH / 2 - BALL_SIZE / 2) as f32,
                         (HEIGHT / 2 - BALL_SIZE / 2) as f32,
                     );
-                    self.velocities[4] = Vec2::zero();
+                    self.velocities[4] = Vec2::ZERO;
                     // doing this seems so pointless when i can just go self.resources[0] += 1.0 lol. like i know the indirection is the point but there's so much of it
                     logics
                         .resources
@@ -245,7 +244,7 @@ impl World {
                         (WIDTH / 2 - BALL_SIZE / 2) as f32,
                         (HEIGHT / 2 - BALL_SIZE / 2) as f32,
                     );
-                    self.velocities[4] = Vec2::zero();
+                    self.velocities[4] = Vec2::ZERO;
                     logics
                         .resources
                         .transactions
@@ -265,7 +264,7 @@ impl World {
                         self.velocities[4].y *= -1.0;
                     }
                     // self.change_angle(player);
-                    if self.velocities[4].magnitude() < 4.0 {
+                    if magnitude(self.velocities[4]) < 4.0 {
                         self.velocities[4] *= 1.1;
                     }
                 }
@@ -277,7 +276,7 @@ impl World {
                         self.velocities[4].y *= -1.0;
                     }
                     // self.change_angle(player);
-                    if self.velocities[4].magnitude() < 4.0 {
+                    if magnitude(self.velocities[4]) < 4.0 {
                         self.velocities[4] *= 1.1;
                     }
                 }
@@ -324,22 +323,22 @@ impl World {
         }
     }
 
-    fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
+    fn project_physics(&self, physics: &mut PointPhysics) {
         physics.clear();
         physics.accelerations.clear();
         for (pos, vel) in self.positions.iter().zip(self.velocities.iter()) {
-            physics.add_physics_entity(*pos, *vel, Vec2::zero());
+            physics.add_physics_entity(*pos, *vel, Vec2::ZERO);
         }
     }
 
-    fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
+    fn unproject_physics(&mut self, physics: &PointPhysics) {
         // only have to unproject positions bc all accelerations above are zero
         for (logic_pos, pos) in physics.positions.iter().zip(self.positions.iter_mut()) {
             *pos = *logic_pos;
         }
     }
 
-    fn project_collision(&self, collision: &mut AabbCollision<CollisionID, Vec2>) {
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>) {
         collision.clear();
         // this iterator stuff is mildly horrifying
         for (i, (((pos, size), vel), (solid, fixed))) in self
@@ -354,7 +353,7 @@ impl World {
         }
     }
 
-    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
+    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
         // honestly i regret the centers/half sizes thing lol
         // it was 90% because of bevy and i think i assumed that macroquad did a similar thing with drawing
         // which it super doesn't. i should take it out/move some 181g stuff over
