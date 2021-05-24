@@ -2,7 +2,7 @@
 //!
 //! Resource logics communicate that generic or specific resources can be created, destroyed, converted, or transferred between abstract or concrete locations. They create, destroy, and exchange (usually) discrete quantities of generic or specific resources in or between abstract or concrete locations on demand or over time, and trigger other actions when these transactions take place.
 
-use crate::{Event, Logic, Reaction};
+use crate::{Event, EventType, Logic, Reaction};
 use std::collections::BTreeMap;
 use std::ops::{Add, AddAssign};
 
@@ -17,7 +17,7 @@ where
     /// Each transaction is a list of items involved in the transaction and the amount they're being changed.
     pub transactions: Vec<Vec<(ID, Transaction<Value>)>>,
     /// A Vec of all transactions and if they were able to be completed or not. If yes, supply a Vec of the IDs of successful transactions; if no, supply the ID of the pool that caused the error and a reason (see [ResourceError]).
-    pub completed: Vec<Result<Vec<ID>, ResourceError<ID>>>,
+    pub completed: Vec<Result<Vec<ID>, (ID, ResourceError)>>,
 }
 
 impl<ID, Value> Logic for QueuedResources<ID, Value>
@@ -88,14 +88,14 @@ where
         &self,
         item_type: &ID,
         transaction: &Transaction<Value>,
-    ) -> Result<(), ResourceError<ID>> {
+    ) -> Result<(), (ID, ResourceError)> {
         if let Some((value, min, max)) = self.items.get(item_type) {
             match transaction {
                 Transaction::Change(amt) => {
                     if *value + *amt > *max {
-                        Err(ResourceError::TooBig(*item_type))
+                        Err((*item_type, ResourceError::TooBig))
                     } else if *value + *amt < *min {
-                        Err(ResourceError::TooSmall(*item_type))
+                        Err((*item_type, ResourceError::TooSmall))
                     } else {
                         Ok(())
                     }
@@ -103,7 +103,7 @@ where
                 _ => Ok(()),
             }
         } else {
-            Err(ResourceError::PoolNotFound(*item_type))
+            Err((*item_type, ResourceError::PoolNotFound))
         }
     }
 
@@ -126,20 +126,33 @@ where
 
 /// Errors possible when trying to complete a transaction.
 #[derive(Debug, PartialEq, Eq)]
-pub enum ResourceError<ID> {
-    PoolNotFound(ID),
-    TooBig(ID),
-    TooSmall(ID),
+pub enum ResourceError {
+    PoolNotFound,
+    TooBig,
+    TooSmall,
 }
 
 pub type ResourceReaction<ID, Value> = (ID, Value);
 
-#[derive(PartialEq, Debug)]
-pub enum ResourceEvent<ID> {
-    PoolUpdated(ID),
-    TransactionSuccessful(ID),
-    TransactionUnsuccessful(ResourceError<ID>),
+#[derive(PartialEq, Eq)]
+pub struct ResourceEvent<ID> {
+    pub pool: ID,
+    pub event_type: ResourceEventType,
 }
 
+#[derive(Eq, PartialEq, Debug)]
+pub enum ResourceEventType {
+    PoolUpdated,
+    TransactionSuccessful,
+    TransactionUnsuccessful(ResourceError),
+}
+
+impl EventType for ResourceEventType {}
+
 impl<ID: Ord, Value: Add + AddAssign> Reaction for ResourceReaction<ID, Value> {}
-impl<ID: Ord> Event for ResourceEvent<ID> {}
+impl<ID: Ord> Event for ResourceEvent<ID> {
+    type EventType = ResourceEventType;
+    fn get_type(&self) -> &Self::EventType {
+        &self.event_type
+    }
+}

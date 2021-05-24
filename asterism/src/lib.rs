@@ -19,6 +19,10 @@ pub trait Logic {
     type Reaction: Reaction;
 }
 
-pub trait Event {}
+pub trait Event {
+    type EventType: EventType;
+    fn get_type(&self) -> &Self::EventType;
+}
+pub trait EventType {}
 
 pub trait Reaction {}

@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 winit = "0.24.0"
 winit_input_helper = "0.9.0"
-macroquad = "0.3"
+macroquad = "0.3.4"
 glam = "0.14"
 
 # Bevy takes a long time to build and we're not actively using it currently, so making this a feature

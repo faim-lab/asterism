@@ -2,7 +2,7 @@
 //!
 //! Physics logics communicate that physical laws govern the movement of some in-game entities. They update and honor objects' physical properties like position, velocity, density, etc., according to physical laws integrated over time.
 
-use crate::{Event, Logic, Reaction};
+use crate::{Event, EventType, Logic, Reaction};
 use glam::Vec2;
 
 /// A physics logic using 2d points.
@@ -56,10 +56,20 @@ impl PointPhysics {
 pub enum PhysicsReaction {
     SetVel(usize, Vec2),
     SetAcc(usize, Vec2),
+    AddBody { pos: Vec2, vel: Vec2, acc: Vec2 },
 }
+impl Reaction for PhysicsReaction {}
+
 #[derive(PartialEq, Eq, Debug)]
 pub enum PhysicsEvent {}
 
-impl Reaction for PhysicsReaction {}
+impl Event for PhysicsEvent {
+    type EventType = PhysicsEventType;
+    fn get_type(&self) -> &Self::EventType {
+        // no idea what this should be
+        unimplemented!()
+    }
+}
 
-impl Event for PhysicsEvent {}
+pub enum PhysicsEventType {}
+impl EventType for PhysicsEventType {}

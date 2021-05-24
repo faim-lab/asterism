@@ -166,7 +166,7 @@ impl World {
 
     fn update(&mut self, logics: &mut Logics) -> bool {
         self.project_control(&mut logics.control);
-        logics.control.update_input(&());
+        logics.control.update(&());
         self.unproject_control(&logics.control);
 
         if self.keys_pressed[0][0] {

@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::{Event, Logic, Reaction};
+use crate::{Event, EventType, Logic, Reaction};
 
 /// Information for a key/button press.
 trait Input {
@@ -53,7 +53,7 @@ where
     }
 
     /// Checks and updates what inputs are being pressed every frame.
-    pub fn update_input(&mut self, events: &Wrapper::InputHelper) {
+    pub fn update(&mut self, events: &Wrapper::InputHelper) {
         self.input_wrapper.clear();
         for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
             for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
@@ -183,6 +183,10 @@ impl<ID, KeyCode> Action<ID, KeyCode> {
             input_type,
         }
     }
+
+    pub fn get_keycode(&self) -> &KeyCode {
+        &self.key_input.keycode
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -195,17 +199,28 @@ pub enum ControlReaction<ID: Copy + Eq, KeyCode: Copy + Eq> {
 
 impl<ID: Copy + Eq, KeyCode: Copy + Eq> Reaction for ControlReaction<ID, KeyCode> {}
 
-#[derive(PartialEq, Eq, Debug)]
-pub struct ControlEvent<ID: Copy + Eq + Ord>(pub ID, pub ControlEventType);
+#[derive(PartialEq, Eq, Ord, PartialOrd, Debug)]
+pub struct ControlEvent<ID> {
+    pub event_type: ControlEventType,
+    pub set: usize,
+    pub action_id: ID,
+}
 
-#[derive(PartialEq, Eq, Debug)]
+impl<ID> Event for ControlEvent<ID> {
+    type EventType = ControlEventType;
+    fn get_type(&self) -> &Self::EventType {
+        &self.event_type
+    }
+}
+
+#[derive(PartialEq, Eq, Ord, PartialOrd, Debug)]
 pub enum ControlEventType {
     KeyPressed,
     KeyReleased,
     KeyHeld,
 }
 
-impl<ID: Copy + Eq + Ord> Event for ControlEvent<ID> {}
+impl EventType for ControlEventType {}
 
 /// A wrapper to help keep track of input information that preexisting input handlers may not offer, but that we need.
 pub trait InputWrapper {
@@ -226,33 +241,21 @@ pub trait InputWrapper {
     fn is_released(&self, key: &Self::KeyCode, events: &Self::InputHelper) -> bool;
 }
 
-use macroquad::prelude::{is_key_down, is_key_pressed, KeyCode as MqKeyCode};
-/// Macroquad doesn't keep track of when keys are released, so track the keys pressed last and this frame.
-pub struct MacroquadInputWrapper {
-    this_frame_keys: Vec<MqKeyCode>,
-    last_frame_keys: Vec<MqKeyCode>,
-}
+use macroquad::prelude::{is_key_down, is_key_pressed, is_key_released, KeyCode as MqKeyCode};
+/// Macroquad's input handler already correctly handles the information we need, so this is just a wrapper for their functions
+pub struct MacroquadInputWrapper {}
 
 impl InputWrapper for MacroquadInputWrapper {
     type KeyCode = MqKeyCode;
     type InputHelper = ();
     fn new() -> Self {
-        Self {
-            this_frame_keys: Vec::new(),
-            last_frame_keys: Vec::new(),
-        }
+        Self {}
     }
 
-    fn clear(&mut self) {
-        self.last_frame_keys = std::mem::take(&mut self.this_frame_keys);
-    }
+    fn clear(&mut self) {}
 
     fn update_held(&mut self, key: &MqKeyCode, _events: &()) -> bool {
-        if is_key_down(*key) {
-            self.this_frame_keys.push(*key);
-            return true;
-        }
-        false
+        is_key_down(*key)
     }
 
     fn is_pressed(&self, key: &MqKeyCode, _events: &()) -> bool {
@@ -260,15 +263,7 @@ impl InputWrapper for MacroquadInputWrapper {
     }
 
     fn is_released(&self, key: &MqKeyCode, _events: &()) -> bool {
-        let was_pressed = self
-            .last_frame_keys
-            .iter()
-            .any(|key_pressed| key == key_pressed);
-        let is_not_pressed = !self
-            .this_frame_keys
-            .iter()
-            .any(|key_pressed| key == key_pressed);
-        was_pressed && is_not_pressed
+        is_key_released(*key)
     }
 }
 

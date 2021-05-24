@@ -6,7 +6,7 @@
 
 use std::cmp::Ordering;
 
-use crate::{Event, Logic, Reaction};
+use crate::{Event, EventType, Logic, Reaction};
 use glam::Vec2;
 
 /// Information for each contact. If the entities at the indices `i` and `j` are both unfixed or both fixed, then `i < j`. If one is unfixed and the other is fixed, `i` will be the index of the unfixed entity.
@@ -91,16 +91,41 @@ pub struct AabbCollision<ID: Copy + Eq> {
 
 impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
     type Event = CollisionEvent<ID>;
-    type Reaction = CollisionReaction;
+    type Reaction = CollisionReaction<ID>;
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum CollisionReaction {}
-pub type CollisionEvent<ID> = (ID, ID);
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum CollisionReaction<ID> {
+    SetPos(ID, Vec2),
+    SetSize(ID, Vec2),
+    SetVel(ID, Vec2),
+    SetMetadata(ID, bool, bool), // solid, fixed
+    AddBody {
+        pos: Vec2,
+        size: Vec2,
+        vel: Vec2,
+        solid: bool,
+        fixed: bool,
+    },
+}
 
-impl Reaction for CollisionReaction {}
+impl<ID> Reaction for CollisionReaction<ID> {}
 
-impl<ID: Eq> Event for CollisionEvent<ID> {}
+#[derive(PartialEq, Eq)]
+pub struct CollisionEvent<ID>(pub ID, pub ID);
+
+impl<ID> Event for CollisionEvent<ID> {
+    type EventType = CollisionEventType;
+    fn get_type(&self) -> &Self::EventType {
+        &CollisionEventType::Touching
+    }
+}
+
+pub enum CollisionEventType {
+    Touching,
+}
+
+impl EventType for CollisionEventType {}
 
 impl<ID: Copy + Eq> AabbCollision<ID> {
     pub fn new() -> Self {
@@ -391,7 +416,7 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
                 <= self.half_sizes[i].y + self.half_sizes[j].y
     }
 
-    pub fn get_ids(&self, contact: &Contact) -> CollisionEvent<ID> {
+    pub fn get_ids(&self, contact: &Contact) -> (ID, ID) {
         (self.metadata[contact.i].id, self.metadata[contact.j].id)
     }
 }
