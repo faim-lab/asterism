@@ -89,44 +89,6 @@ pub struct AabbCollision<ID: Copy + Eq> {
     pub displacements: Vec<Vec2>,
 }
 
-impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
-    type Event = CollisionEvent<ID>;
-    type Reaction = CollisionReaction<ID>;
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-pub enum CollisionReaction<ID> {
-    SetPos(ID, Vec2),
-    SetSize(ID, Vec2),
-    SetVel(ID, Vec2),
-    SetMetadata(ID, bool, bool), // solid, fixed
-    AddBody {
-        pos: Vec2,
-        size: Vec2,
-        vel: Vec2,
-        solid: bool,
-        fixed: bool,
-    },
-}
-
-impl<ID> Reaction for CollisionReaction<ID> {}
-
-#[derive(PartialEq, Eq)]
-pub struct CollisionEvent<ID>(pub ID, pub ID);
-
-impl<ID> Event for CollisionEvent<ID> {
-    type EventType = CollisionEventType;
-    fn get_type(&self) -> &Self::EventType {
-        &CollisionEventType::Touching
-    }
-}
-
-pub enum CollisionEventType {
-    Touching,
-}
-
-impl EventType for CollisionEventType {}
-
 impl<ID: Copy + Eq> AabbCollision<ID> {
     pub fn new() -> Self {
         Self {
@@ -420,3 +382,106 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
         (self.metadata[contact.i].id, self.metadata[contact.j].id)
     }
 }
+
+impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
+    type Event = CollisionEvent<ID>;
+    type Reaction = CollisionReaction<ID>;
+
+    fn check_predicate(&mut self, event: &Self::Event) -> bool {
+        self.contacts
+            .iter()
+            .position(|Contact { i, j, .. }| {
+                (self.metadata[*i].id == event.0 && self.metadata[*j].id == event.1)
+                    || (self.metadata[*i].id == event.1 && self.metadata[*j].id == event.0)
+            })
+            .is_some()
+    }
+
+    fn handle_predicate(&mut self, reaction: &Self::Reaction) {
+        match reaction {
+            CollisionReaction::SetPos(ent_id, pos) => {
+                // this sucks
+                if let Some(i) = self
+                    .metadata
+                    .iter()
+                    .position(|CollisionData { id, .. }| id == ent_id)
+                {
+                    self.centers[i] = *pos + self.half_sizes[i];
+                }
+            }
+            CollisionReaction::SetSize(ent_id, size) => {
+                if let Some(i) = self
+                    .metadata
+                    .iter()
+                    .position(|CollisionData { id, .. }| id == ent_id)
+                {
+                    self.half_sizes[i] = *size / 2.0;
+                }
+            }
+            CollisionReaction::SetVel(ent_id, vel) => {
+                if let Some(i) = self
+                    .metadata
+                    .iter()
+                    .position(|CollisionData { id, .. }| id == ent_id)
+                {
+                    self.velocities[i] = *vel;
+                }
+            }
+            CollisionReaction::SetMetadata(ent_id, solid, fixed) => {
+                if let Some(data) = self
+                    .metadata
+                    .iter_mut()
+                    .find(|CollisionData { id, .. }| id == ent_id)
+                {
+                    data.solid = *solid;
+                    data.fixed = *fixed;
+                }
+            }
+            CollisionReaction::AddBody {
+                pos,
+                size,
+                vel,
+                solid,
+                fixed,
+                id,
+            } => {
+                self.add_entity_as_xywh(*pos, *size, *vel, *solid, *fixed, *id);
+            }
+        }
+    }
+}
+
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum CollisionReaction<ID> {
+    SetPos(ID, Vec2),
+    SetSize(ID, Vec2),
+    SetVel(ID, Vec2),
+    SetMetadata(ID, bool, bool), // solid, fixed
+    AddBody {
+        pos: Vec2,
+        size: Vec2,
+        vel: Vec2,
+        solid: bool,
+        fixed: bool,
+        id: ID,
+    },
+}
+
+impl<ID> Reaction for CollisionReaction<ID> {}
+
+#[derive(PartialEq, Eq)]
+pub struct CollisionEvent<ID>(pub ID, pub ID);
+
+impl<ID> Event for CollisionEvent<ID> {
+    type EventType = CollisionEventType;
+
+    fn get_type(&self) -> &Self::EventType {
+        &CollisionEventType::Touching
+    }
+}
+
+pub enum CollisionEventType {
+    Touching,
+}
+
+impl EventType for CollisionEventType {}

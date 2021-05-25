@@ -37,6 +37,35 @@ where
 {
     type Event = ControlEvent<ID>;
     type Reaction = ControlReaction<ID, Wrapper::KeyCode>;
+
+    fn check_predicate(&mut self, event: &Self::Event) -> bool {
+        if let Some(values) = self.get_action_in_set(event.set, event.action_id) {
+            match event.event_type {
+                ControlEventType::KeyPressed => values.changed_by > 0.0,
+                ControlEventType::KeyReleased => values.changed_by < 0.0,
+                ControlEventType::KeyHeld => values.value > 0.0,
+                ControlEventType::KeyUnheld => values.value == 0.0,
+            }
+        } else {
+            false
+        }
+    }
+
+    fn handle_predicate(&mut self, reaction: &Self::Reaction) {
+        match reaction {
+            ControlReaction::AddKeyToSet(set, id, key) => self.add_key_map(*set, *key, *id),
+            ControlReaction::SetKeyValid(set, id) => {
+                if let Some(action) = self.mapping[*set].iter_mut().find(|act| act.id == *id) {
+                    action.is_valid = true;
+                }
+            }
+            ControlReaction::SetKeyInvalid(set, id) => {
+                if let Some(action) = self.mapping[*set].iter_mut().find(|act| act.id == *id) {
+                    action.is_valid = false;
+                }
+            }
+        }
+    }
 }
 
 impl<ID, Wrapper> KeyboardControl<ID, Wrapper>
@@ -191,8 +220,7 @@ impl<ID, KeyCode> Action<ID, KeyCode> {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ControlReaction<ID: Copy + Eq, KeyCode: Copy + Eq> {
-    AddKeyToSet(usize, ID, KeyCode, InputType),
-    RemoveKeyFromSet(usize, ID),
+    AddKeyToSet(usize, ID, KeyCode),
     SetKeyValid(usize, ID),
     SetKeyInvalid(usize, ID),
 }
@@ -218,6 +246,7 @@ pub enum ControlEventType {
     KeyPressed,
     KeyReleased,
     KeyHeld,
+    KeyUnheld,
 }
 
 impl EventType for ControlEventType {}

@@ -15,6 +15,27 @@ pub struct PointPhysics {
 impl Logic for PointPhysics {
     type Reaction = PhysicsReaction;
     type Event = PhysicsEvent;
+
+    fn check_predicate(&mut self, _: &Self::Event) -> bool {
+        unimplemented!()
+    }
+
+    fn handle_predicate(&mut self, reaction: &Self::Reaction) {
+        match reaction {
+            PhysicsReaction::SetPos(idx, pos) => {
+                self.positions[*idx] = *pos;
+            }
+            PhysicsReaction::SetVel(idx, vel) => {
+                self.velocities[*idx] = *vel;
+            }
+            PhysicsReaction::SetAcc(idx, acc) => {
+                self.accelerations[*idx] = *acc;
+            }
+            PhysicsReaction::AddBody { pos, vel, acc } => {
+                self.add_physics_entity(*pos, *vel, *acc);
+            }
+        }
+    }
 }
 
 impl PointPhysics {
@@ -54,6 +75,7 @@ impl PointPhysics {
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum PhysicsReaction {
+    SetPos(usize, Vec2),
     SetVel(usize, Vec2),
     SetAcc(usize, Vec2),
     AddBody { pos: Vec2, vel: Vec2, acc: Vec2 },

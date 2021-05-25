@@ -27,6 +27,27 @@ where
 {
     type Event = ResourceEvent<ID>;
     type Reaction = ResourceReaction<ID, Value>;
+
+    fn check_predicate(&mut self, event: &Self::Event) -> bool {
+        match &event.event_type {
+            ResourceEventType::PoolUpdated => {
+                self.completed.iter().any(|transaction| match transaction {
+                    Ok(id) => *id == event.pool,
+                    _ => false,
+                })
+            }
+            ResourceEventType::TransactionUnsuccessful(rsrc_err) => {
+                self.completed.iter().any(|transaction| match transaction {
+                    Err((id, err)) => *id == event.pool && err == rsrc_err,
+                    _ => false,
+                })
+            }
+        }
+    }
+
+    fn handle_predicate(&mut self, reaction: &Self::Reaction) {
+        self.transactions.push(*reaction);
+    }
 }
 
 impl<ID, Value> QueuedResources<ID, Value>
@@ -111,6 +132,7 @@ where
     Value: Add + AddAssign,
 {
     Change(Value),
+    Set(Value),
     SetMax(Value),
     SetMin(Value),
 }
@@ -123,7 +145,7 @@ pub enum ResourceError {
     TooSmall,
 }
 
-pub type ResourceReaction<ID, Value> = (ID, Value);
+pub type ResourceReaction<ID, Value> = (ID, Transaction<Value>);
 
 #[derive(PartialEq, Eq)]
 pub struct ResourceEvent<ID> {
@@ -134,13 +156,13 @@ pub struct ResourceEvent<ID> {
 #[derive(Eq, PartialEq, Debug)]
 pub enum ResourceEventType {
     PoolUpdated,
-    TransactionSuccessful,
     TransactionUnsuccessful(ResourceError),
 }
 
 impl EventType for ResourceEventType {}
 
 impl<ID: Ord, Value: Add + AddAssign> Reaction for ResourceReaction<ID, Value> {}
+
 impl<ID: Ord> Event for ResourceEvent<ID> {
     type EventType = ResourceEventType;
     fn get_type(&self) -> &Self::EventType {

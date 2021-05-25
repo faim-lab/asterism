@@ -21,12 +21,13 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    // clippy's annoyed about an iterator but i can't seem to silence the warning on that line [shrug emoji]
-    #![allow(clippy::needless_collect)]
-
     // initialize game
     let mut game = Game::new();
+    init(&mut game);
+    run(game).await;
+}
 
+fn init(game: &mut Game) {
     let mut ball = Ball::new();
     ball.set_pos(Vec2::new(
         WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
@@ -41,32 +42,27 @@ async fn main() {
             let mut wall = Wall::new();
             wall.set_pos(Vec2::new(-1.0, 0.0));
             wall.set_size(Vec2::new(1.0, HEIGHT as f32));
-            wall
+            game.add_wall(wall)
         },
         {
             let mut wall = Wall::new();
             wall.set_pos(Vec2::new(WIDTH as f32, 0.0));
             wall.set_size(Vec2::new(1.0, HEIGHT as f32));
-            wall
+            game.add_wall(wall)
         },
         {
             let mut wall = Wall::new();
             wall.set_pos(Vec2::new(0.0, -1.0));
             wall.set_size(Vec2::new(WIDTH as f32, 1.0));
-            wall
+            game.add_wall(wall)
         },
         {
             let mut wall = Wall::new();
             wall.set_pos(Vec2::new(0.0, HEIGHT as f32));
             wall.set_size(Vec2::new(WIDTH as f32, 1.0));
-            wall
+            game.add_wall(wall)
         },
     ];
-
-    let walls = walls
-        .into_iter()
-        .map(|wall| game.add_wall(wall))
-        .collect::<Vec<_>>();
 
     let mut paddle1 = Paddle::new();
     let action_o = paddle1.add_control_map(KeyCode::O);
@@ -92,13 +88,14 @@ async fn main() {
 
     let score1 = Score::new();
     let score1 = game.add_score(score1);
+    let score2 = Score::new();
+    let score2 = game.add_score(score2);
 
-    // idk
-    // game.add_collision_react(
-    //     CollisionEnt::Ball(ball),
-    //     CollisionEnt::Wall(walls[0]),
-    //     Box::new(/* ??? */),
-    // );
+    game.add_collision_predicate(
+        CollisionEnt::Ball(ball),
+        CollisionEnt::Wall(walls[0]),
+        Box::new((RsrcPool::Score(score1), Transaction::Change(1))),
+    );
 
     // i know we talked about controls "not being physical" about 70 times but i don't know how else to represent this in a logic. CollisionEvent::ChangePos and CollisionEvent::ChangeVel? but that doesn't feel intuitive.
     // i guess collision presents the idea of "objects in space"? but it doesn't provide the concept of "move an object by x amount"
@@ -112,6 +109,4 @@ async fn main() {
     //     ControlEvent::KeyHeld,
     //     Box::new(PhysicsReaction::SetVel(Vec2::new(0.0, 1.0))),
     // )
-
-    run(game).await;
 }

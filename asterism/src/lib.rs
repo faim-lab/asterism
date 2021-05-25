@@ -17,12 +17,19 @@ pub mod resources;
 pub trait Logic {
     type Event: Event;
     type Reaction: Reaction;
+
+    /// checks if a predicate (event) is occuring
+    fn check_predicate(&mut self, event: &Self::Event) -> bool;
+
+    /// processes the reaction if a predicate condition is met
+    fn handle_predicate(&mut self, reaction: &Self::Reaction);
 }
 
 pub trait Event {
     type EventType: EventType;
     fn get_type(&self) -> &Self::EventType;
 }
+
 pub trait EventType {}
 
 pub trait Reaction {}
