@@ -10,6 +10,11 @@ edition = "2018"
 pixels = "0.0.4"
 winit = "0.22.0"
 winit_input_helper = "0.7.0"
-ultraviolet = "0.4.6"
 asterism = { path = "../../asterism" }
-rand = "0.8.3"
+macroquad = { git = "https://github.com/not-fl3/macroquad", rev = "b3fc6aa8f9a66e32a401b00864af8c99fbfc26e2" }
+json = "*"
+image = "0.22"
+serde = { version = "1.0.104", features = ["derive"] }
+serde_json = "1.0.48"
+ultraviolet = "0.4.6"
+

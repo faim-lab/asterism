@@ -1,26 +1,34 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
-
 use asterism::{
-    collision::AabbCollision, control::KeyboardControl, control::WinitKeyboardControl,
-    physics::PointPhysics, resources::PoolInfo, resources::QueuedResources, resources::Transaction,
+    collision::AabbCollision,
+    control::{KeyboardControl, MacroQuadKeyboardControl},
+    entity_state::FlatEntityState,
+    physics::PointPhysics,
+    resources::{PoolInfo, QueuedResources, Transaction},
 };
-use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
-use rand::Rng;
-use ultraviolet::Vec2;
-use winit::dpi::LogicalSize;
-use winit::event::{Event, VirtualKeyCode};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::WindowBuilder;
-use winit_input_helper::WinitInputHelper;
+use json::*;
+use macroquad::prelude::*;
+use serde;
+use serde::Deserialize;
+use serde_json;
+use std::convert::TryInto;
+use std::fs::File;
 
-const WIDTH: u8 = 255;
-const HEIGHT: u8 = 255;
-const PADDLE_OFF_Y: u8 = 36;
-const PADDLE_HEIGHT: u8 = 16;
-const PADDLE_WIDTH: u8 = 24;
-const BALL_SIZE: u8 = 8;
-const BALL_NUM: u8 = 3;
+const WIDTH: u32 = 255;
+const HEIGHT: u32 = 255;
+const PADDLE_OFF_Y: u32 = 36;
+const PADDLE_HEIGHT: u32 = 36;
+const PADDLE_WIDTH: u32 = 36;
+const BALL_SIZE: u32 = 36;
+const BALL_NUM: u8 = 4;
+const WALL_DEPTH: u32 = 8;
+const GOAL_WIDTH: u32 = 72;
+//number of distinct ball sprites, number of rows in spritesheet - paddle rows
+const DIST_BALL: u32 = 4;
+
+const BASE_COLOR: Color = Color::new(0.86, 1., 0.86, 1.);
+const FENCE_COLOR: Color = Color::new(0.94, 0.9, 0.54, 1.);
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum ActionID {
@@ -28,6 +36,14 @@ enum ActionID {
     MoveLeft(Player),
     MoveUp(Player),
     MoveDown(Player),
+    Quit,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+enum StateID {
+    Running1,
+    Running2,
+    Resting,
 }
 
 impl Default for ActionID {
@@ -48,6 +64,7 @@ enum CollisionID {
 struct Ball {
     pos: Vec2,
     vel: Vec2,
+    id: usize,
 }
 
 impl Default for CollisionID {
@@ -73,8 +90,94 @@ impl PoolInfo for PoolID {
     }
 }
 
+struct SpriteSheet {
+    image: Texture2D,
+    data: Vec<Sprite>,
+    start_sprite: Vec<usize>,
+}
+
+impl SpriteSheet {
+    async fn new(image_file: &str, data_file: Vec<Sprite>) -> Self {
+        Self {
+            image: load_texture(image_file).await,
+            data: data_file,
+            start_sprite: Vec::new(),
+        }
+    }
+
+    //the base/starting sprite for the sprite
+    fn assign_sprite(&mut self, assignment: usize) -> () {
+        self.start_sprite.push(assignment);
+    }
+
+    fn create_param(&self, index: usize) -> DrawTextureParams {
+        let mut texture = DrawTextureParams::default();
+        texture.dest_size = Some(Vec2::new(
+            self.data[index].source_size.w as f32,
+            self.data[index].source_size.h as f32,
+        ));
+        texture.source = Some(Rect::new(
+            self.data[index].frame.x as f32,
+            self.data[index].frame.y as f32,
+            self.data[index].frame.w as f32,
+            self.data[index].frame.h as f32,
+        ));
+
+        return texture;
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct Rectangle {
+    x: u64,
+    y: u64,
+    w: u64,
+    h: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct Size {
+    w: u64,
+    h: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct Sprite {
+    name: String,
+    frame: Rectangle,
+    rotated: bool,
+    trimmed: bool,
+    sprite_source_size: Rectangle,
+    source_size: Size,
+}
+
+struct Animation {
+    sheet: SpriteSheet,
+    frames_drawn: u8,
+}
+
+impl Animation {
+    fn new(sprite_sheet: SpriteSheet) -> Self {
+        Self {
+            sheet: sprite_sheet,
+            frames_drawn: 0,
+        }
+    }
+}
+
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "clowder".to_owned(),
+        window_width: WIDTH as i32,
+        window_height: HEIGHT as i32,
+        fullscreen: false,
+        ..Default::default()
+    }
+}
+
 struct Logics {
-    control: WinitKeyboardControl<ActionID>,
+    control: MacroQuadKeyboardControl<ActionID>,
+    entity_state: FlatEntityState<StateID>,
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
@@ -84,11 +187,12 @@ impl Logics {
     fn new() -> Self {
         Self {
             control: {
-                let mut control = WinitKeyboardControl::new();
-                control.add_key_map(0, VirtualKeyCode::J, ActionID::MoveRight(Player::P1));
-                control.add_key_map(0, VirtualKeyCode::L, ActionID::MoveLeft(Player::P1));
-                control.add_key_map(0, VirtualKeyCode::I, ActionID::MoveUp(Player::P1));
-                control.add_key_map(0, VirtualKeyCode::K, ActionID::MoveDown(Player::P1));
+                let mut control = MacroQuadKeyboardControl::new();
+                control.add_key_map(0, KeyCode::J, ActionID::MoveRight(Player::P1));
+                control.add_key_map(0, KeyCode::L, ActionID::MoveLeft(Player::P1));
+                control.add_key_map(0, KeyCode::I, ActionID::MoveUp(Player::P1));
+                control.add_key_map(0, KeyCode::K, ActionID::MoveDown(Player::P1));
+                control.add_key_map(0, KeyCode::Escape, ActionID::Quit);
                 control
             },
             physics: PointPhysics::new(),
@@ -96,9 +200,9 @@ impl Logics {
                 let mut collision = AabbCollision::new();
                 collision.add_entity_as_xywh(
                     0.0,
-                    (HEIGHT - BALL_SIZE) as f32, //bottom wall
+                    (HEIGHT - WALL_DEPTH) as f32, //bottom wall
                     WIDTH as f32,
-                    BALL_SIZE as f32,
+                    WALL_DEPTH as f32,
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
@@ -108,7 +212,7 @@ impl Logics {
                 collision.add_entity_as_xywh(
                     0.0, //left wall
                     0.0,
-                    BALL_SIZE as f32,
+                    WALL_DEPTH as f32,
                     HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true,
@@ -118,18 +222,18 @@ impl Logics {
                 collision.add_entity_as_xywh(
                     0.0, //top 1
                     0.0,
-                    ((WIDTH / 2) - BALL_SIZE) as f32,
-                    BALL_SIZE as f32,
+                    ((WIDTH / 2) - (GOAL_WIDTH / 2)) as f32,
+                    WALL_DEPTH as f32,
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
                     CollisionID::InertWall,
                 );
                 collision.add_entity_as_xywh(
-                    ((WIDTH / 2) + (BALL_SIZE * 2)) as f32, //top 2
-                    BALL_SIZE as f32,
-                    ((WIDTH / 2) - BALL_SIZE) as f32,
+                    ((WIDTH / 2) + (GOAL_WIDTH / 2)) as f32, //top 2
                     0.0,
+                    ((WIDTH / 2) - (GOAL_WIDTH / 2)) as f32,
+                    WALL_DEPTH as f32,
                     Vec2::new(0.0, 0.0),
                     true,
                     true,
@@ -146,9 +250,9 @@ impl Logics {
                     CollisionID::Goal(Player::P1),
                 );
                 collision.add_entity_as_xywh(
-                    (WIDTH - BALL_SIZE) as f32, //right wall
+                    (WIDTH - WALL_DEPTH) as f32, //right wall
                     0.0,
-                    BALL_SIZE as f32,
+                    WALL_DEPTH as f32,
                     HEIGHT as f32,
                     Vec2::new(0.0, 0.0),
                     true,
@@ -162,6 +266,26 @@ impl Logics {
                 let mut resources = QueuedResources::new();
                 resources.items.insert(PoolID::Points(Player::P1), 0.0);
                 resources
+            },
+            entity_state: {
+                let mut entity_state = FlatEntityState::new();
+
+                for _ in 0..BALL_NUM {
+                    entity_state.add_state_map(
+                        2,
+                        vec![
+                            (StateID::Running1, vec![1, 2]),
+                            (StateID::Running2, vec![0, 2]),
+                            (StateID::Resting, vec![1]),
+                        ],
+                    );
+                }
+
+                entity_state.add_state_map(
+                    0,
+                    vec![(StateID::Running1, vec![1]), (StateID::Running2, vec![0])],
+                );
+                entity_state
             },
         }
     }
@@ -177,75 +301,51 @@ struct World {
     balls: Vec<Ball>,
     ball_err: Vec2,
     score: (u8, u8),
+    time: f64,
+    interval: f64,
 }
 
-fn main() -> Result<(), Error> {
-    let event_loop = EventLoop::new();
-    let mut input = WinitInputHelper::new();
-    let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
-        WindowBuilder::new()
-            .with_title("clowder")
-            .with_inner_size(size)
-            .with_min_inner_size(size)
-            .build(&event_loop)
-            .unwrap()
-    };
-    let mut hidpi_factor = window.scale_factor();
+#[macroquad::main(window_conf)]
+async fn main() {
+    let file = File::open("src/clowder_sprite.json").unwrap();
+    let sprite_info: Vec<Sprite> =
+        serde_json::from_reader(file).expect("error while reading or parsing");
+    let mut sprites = SpriteSheet::new("src/clowder_sprite.png", sprite_info).await;
 
-    let mut pixels = {
-        let surface = Surface::create(&window);
-        let surface_texture = SurfaceTexture::new(WIDTH as u32, HEIGHT as u32, surface);
-        Pixels::new(WIDTH as u32, HEIGHT as u32, surface_texture)?
-    };
+    let mut ball_in = 0; //assigns a starting sprite in the sprite sheet for each ball (cat)
+    for _ in 0..BALL_NUM {
+        sprites.assign_sprite(ball_in);
+        ball_in += 2;
+
+        if ball_in / 2 >= DIST_BALL.try_into().unwrap() {
+            ball_in = 0;
+        }
+    }
+    //assigns a starting/base sprite for the paddle
+    sprites.assign_sprite((DIST_BALL * 2).try_into().unwrap());
+    let mut animation = Animation::new(sprites);
     let mut world = World::new();
     let mut logics = Logics::new();
-    let mut rng = rand::thread_rng();
 
-    for _i in 0..BALL_NUM {
-        world.balls.push(Ball::new(Vec2::new(
-            rng.gen_range((BALL_SIZE as f32)..((WIDTH - BALL_SIZE) as f32)),
-            rng.gen_range(((BALL_SIZE * 2) as f32)..((HEIGHT - BALL_SIZE) as f32)),
-        )));
+    for i in 0..BALL_NUM {
+        world.balls.push(Ball::new(
+            Vec2::new(
+                rand::gen_range(BALL_SIZE as f32, (WIDTH - BALL_SIZE) as f32),
+                rand::gen_range((BALL_SIZE * 2) as f32, (HEIGHT - BALL_SIZE) as f32),
+            ),
+            i.into(),
+        ));
     }
 
-    event_loop.run(move |event, _, control_flow| {
-        // Draw the current frame
-        if let Event::RedrawRequested(_) = event {
-            world.draw(pixels.get_frame());
-            if pixels
-                .render()
-                .map_err(|e| panic!("pixels.render() failed: {}", e))
-                .is_err()
-            {
-                *control_flow = ControlFlow::Exit;
-                return;
+    loop {
+        if let Ok(cont) = world.update(&mut logics) {
+            if !cont {
+                break;
             }
         }
-
-        // Handle input events
-        if input.update(&event) {
-            // Close events
-            if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-
-            // Adjust high DPI factor
-            if let Some(factor) = input.scale_factor_changed() {
-                hidpi_factor = factor;
-            }
-
-            // Resize the window
-            if let Some(size) = input.window_resized() {
-                pixels.resize(size.width, size.height);
-            }
-
-            // Update internal state and request a redraw
-            world.update(&mut logics, &input);
-            window.request_redraw();
-        }
-    });
+        world.draw(&mut logics.entity_state, &mut animation);
+        next_frame().await;
+    }
 }
 
 impl World {
@@ -261,21 +361,31 @@ impl World {
             balls: Vec::new(),
             ball_err: Vec2::new(0.0, 0.0),
             score: (0, 0),
+            time: 0.0,
+            interval: 1.0,
         }
     }
 
-    fn update(&mut self, logics: &mut Logics, input: &WinitInputHelper) {
+    fn update(&mut self, logics: &mut Logics) -> Result<bool> {
         self.project_control(&mut logics.control);
-        logics.control.update(input);
+        logics.control.update(&());
         self.unproject_control(&logics.control);
 
         self.project_physics(&mut logics.physics);
         logics.physics.update();
         self.unproject_physics(&logics.physics);
 
-        self.project_collision(&mut logics.collision, &logics.control);
+        self.project_collision(&mut logics.collision, &mut logics.control);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
+
+        self.project_entity_state(&mut logics.entity_state, &logics.collision);
+        logics.entity_state.update();
+        self.unproject_entity_state(&logics.entity_state);
+
+        if logics.control.values[0][4].value != 0.0 {
+            return Ok(false);
+        }
 
         for contact in logics.collision.contacts.iter() {
             match (
@@ -286,6 +396,7 @@ impl World {
                 | (CollisionID::Ball(i), CollisionID::Goal(_player)) => {
                     if i <= self.balls.len() {
                         self.balls.remove(i);
+
                         logics
                             .resources
                             .transactions
@@ -323,8 +434,7 @@ impl World {
                     }
                 }
 
-                (CollisionID::Ball(i), CollisionID::Ball(j))
-                | (CollisionID::Ball(j), CollisionID::Ball(i)) => {
+                (CollisionID::Ball(i), CollisionID::Ball(j)) => {
                     let sides_touched = logics
                         .collision
                         .sides_touched(contact, &CollisionID::Ball(i));
@@ -395,16 +505,18 @@ impl World {
                 Err(_) => {}
             }
         }
+        Ok(true)
     }
 
-    fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
+    fn project_control(&self, control: &mut MacroQuadKeyboardControl<ActionID>) {
         control.mapping[0][0].is_valid = true;
         control.mapping[0][1].is_valid = true;
         control.mapping[0][2].is_valid = true;
         control.mapping[0][3].is_valid = true;
+        control.mapping[0][4].is_valid = true;
     }
 
-    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
+    fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
         self.paddles.0.x = ((self.paddles.0.x - control.values[0][0].value as f32
             + control.values[0][1].value as f32) //confusing, incorporate ActionIds
             .max(0.0) as f32)
@@ -439,7 +551,7 @@ impl World {
     fn project_collision(
         &self,
         collision: &mut AabbCollision<CollisionID, Vec2>,
-        control: &WinitKeyboardControl<ActionID>,
+        control: &mut MacroQuadKeyboardControl<ActionID>,
     ) {
         collision.centers.resize_with(6, Default::default);
         collision.half_sizes.resize_with(6, Default::default);
@@ -498,6 +610,33 @@ impl World {
         *y = angle.to_radians().cos() * magnitude * if *y < 0.0 { -1.0 } else { 1.0 };
     }
 
+    fn project_entity_state(
+        &self,
+        entity_state: &mut FlatEntityState<StateID>,
+        collision: &AabbCollision<CollisionID, Vec2>,
+    ) {
+        for ball in self.balls.iter() {
+            if entity_state.states[ball.id] == 2
+            //if resting
+            {
+                if ball.vel.x != 0.0 || ball.vel.y != 0.0
+                //has velocity
+                {
+                    entity_state.conditions[ball.id][1] = true; //move to running 1
+                    entity_state.conditions[ball.id][2] = false;
+                }
+            }
+        }
+    }
+
+    fn unproject_entity_state(&mut self, entity_state: &FlatEntityState<StateID>) {
+        for (i, state) in entity_state.states.iter().enumerate() {
+            match entity_state.maps[i].states[*state].id {
+                StateID::Running1 | StateID::Running2 | StateID::Resting => {}
+            }
+        }
+    }
+
     fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
         if !resources.items.contains_key(&PoolID::Points(Player::P1)) {
             resources.items.insert(PoolID::Points(Player::P1), 0.0);
@@ -525,96 +664,148 @@ impl World {
     /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
-    fn draw(&self, frame: &mut [u8]) {
-        for pixel in frame.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&[0, 0, 128, 255]);
+    fn draw(&self, state: &mut FlatEntityState<StateID>, animation: &mut Animation) {
+        //arbitrary value that resets frames to create cycle
+        if animation.frames_drawn >= 10 {
+            animation.frames_drawn = 0;
+        } else {
+            animation.frames_drawn = animation.frames_drawn + 1;
         }
-        //paddle
-        draw_rect(
-            self.paddles.0.x as u8,
-            self.paddles.0.y as u8,
-            PADDLE_WIDTH,
-            PADDLE_HEIGHT,
-            [255, 255, 255, 255],
-            frame,
-        );
 
-        //top 1 (left)
-        draw_rect(
-            0,
-            0,
-            (WIDTH / 2) - BALL_SIZE,
-            BALL_SIZE,
-            [255, 255, 255, 255],
-            frame,
-        );
-
-        //top 2 (right)
-        draw_rect(
-            (WIDTH / 2) + (BALL_SIZE * 2),
-            0,
-            (WIDTH / 2) - BALL_SIZE,
-            BALL_SIZE,
-            [255, 255, 255, 255],
-            frame,
-        );
-
-        //left wall
-        draw_rect(0, 0, BALL_SIZE, HEIGHT, [255, 255, 255, 255], frame);
-
-        //right wall
-        draw_rect(
-            WIDTH - BALL_SIZE,
-            0,
-            BALL_SIZE,
-            HEIGHT,
-            [255, 255, 255, 255],
-            frame,
-        );
-
-        //bottom wall
-        draw_rect(
-            0,
-            HEIGHT - BALL_SIZE,
-            WIDTH,
-            BALL_SIZE,
-            [255, 255, 255, 255],
-            frame,
-        );
+        clear_background(BASE_COLOR);
+        //dog (paddle)
+        match state.get_id_for_entity(BALL_NUM as usize) {
+            StateID::Running1 => {
+                draw_texture_ex(
+                    animation.sheet.image,
+                    self.paddles.0.x as f32,
+                    self.paddles.0.y as f32,
+                    WHITE,
+                    animation
+                        .sheet
+                        .create_param(animation.sheet.start_sprite[BALL_NUM as usize]),
+                );
+                // swaps condiction from running 1 to running 2
+                if animation.frames_drawn == 0 {
+                    state.conditions[BALL_NUM as usize][1] = true;
+                    state.conditions[BALL_NUM as usize][0] = false;
+                }
+            }
+            StateID::Running2 => {
+                draw_texture_ex(
+                    animation.sheet.image,
+                    self.paddles.0.x as f32,
+                    self.paddles.0.y as f32,
+                    WHITE,
+                    animation
+                        .sheet
+                        .create_param(animation.sheet.start_sprite[BALL_NUM as usize] + 1),
+                );
+                //swaps condition from running 2 to running 1
+                if animation.frames_drawn == 0 {
+                    state.conditions[BALL_NUM as usize][0] = true;
+                    state.conditions[BALL_NUM as usize][1] = false;
+                }
+            }
+            StateID::Resting => {}
+        }
 
         //balls
         for ball in self.balls.iter() {
-            draw_rect(
-                ball.pos.x as u8,
-                ball.pos.y as u8,
-                BALL_SIZE,
-                BALL_SIZE,
-                [255, 200, 0, 255],
-                frame,
-            );
-        }
-    }
-}
+            match state.get_id_for_entity(ball.id) {
+                StateID::Running1 => {
+                    draw_texture_ex(
+                        animation.sheet.image,
+                        ball.pos.x as f32,
+                        ball.pos.y as f32,
+                        WHITE,
+                        animation
+                            .sheet
+                            .create_param(animation.sheet.start_sprite[ball.id]),
+                    );
 
-fn draw_rect(x: u8, y: u8, w: u8, h: u8, color: [u8; 4], frame: &mut [u8]) {
-    let x = x.min(WIDTH - 1) as usize;
-    let w = (w as usize).min(WIDTH as usize - x);
-    let y = y.min(HEIGHT - 1) as usize;
-    let h = (h as usize).min(HEIGHT as usize - y);
-    for row in 0..h {
-        let row_start = (WIDTH as usize) * 4 * (y + row);
-        let slice = &mut frame[(row_start + x * 4)..(row_start + (x + w) * 4)];
-        for pixel in slice.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&color);
+                    //swaps running1 to running2
+                    if animation.frames_drawn == 0 {
+                        state.conditions[ball.id][0] = false;
+                        state.conditions[ball.id][1] = true;
+                    }
+                }
+                StateID::Running2 => {
+                    draw_texture_ex(
+                        animation.sheet.image,
+                        ball.pos.x as f32,
+                        ball.pos.y as f32,
+                        WHITE,
+                        animation
+                            .sheet
+                            .create_param(animation.sheet.start_sprite[ball.id] + 1),
+                    );
+                    //swaps from running2 to running1
+                    if animation.frames_drawn == 0 {
+                        state.conditions[ball.id][0] = true;
+                        state.conditions[ball.id][1] = false;
+                    }
+                }
+                StateID::Resting => {
+                    draw_texture_ex(
+                        animation.sheet.image,
+                        ball.pos.x as f32,
+                        ball.pos.y as f32,
+                        WHITE,
+                        animation
+                            .sheet
+                            .create_param(animation.sheet.start_sprite[ball.id]),
+                    );
+                }
+            }
         }
+        //top 1 (left)
+        draw_rectangle(
+            0.0,
+            0.0,
+            ((WIDTH / 2) - (GOAL_WIDTH / 2)) as f32,
+            WALL_DEPTH as f32,
+            FENCE_COLOR,
+        );
+
+        //top 2 (right)
+        draw_rectangle(
+            ((WIDTH / 2) + (GOAL_WIDTH / 2)) as f32,
+            0.0,
+            ((WIDTH / 2) - (GOAL_WIDTH / 2)) as f32,
+            WALL_DEPTH as f32,
+            FENCE_COLOR,
+        );
+
+        //left wall
+        draw_rectangle(0.0, 0.0, WALL_DEPTH as f32, HEIGHT as f32, FENCE_COLOR);
+
+        //right wall
+        draw_rectangle(
+            (WIDTH - WALL_DEPTH) as f32,
+            0.0,
+            WALL_DEPTH as f32,
+            HEIGHT as f32,
+            FENCE_COLOR,
+        );
+
+        //bottom wall
+        draw_rectangle(
+            0.0,
+            (HEIGHT - WALL_DEPTH) as f32,
+            WIDTH as f32,
+            WALL_DEPTH as f32,
+            FENCE_COLOR,
+        );
     }
 }
 
 impl Ball {
-    fn new(newpos: Vec2) -> Self {
+    fn new(newpos: Vec2, newid: usize) -> Self {
         Self {
             pos: newpos,
             vel: Vec2::new(0.0, 0.0),
+            id: newid,
         }
     }
 }
