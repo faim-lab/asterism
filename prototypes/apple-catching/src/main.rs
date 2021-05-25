@@ -1,4 +1,5 @@
 use asterism::{
+    animation::SimpleAnim,
     collision::AabbCollision,
     control::{KeyboardControl, MacroQuadKeyboardControl},
     entity_state::FlatEntityState,
@@ -7,9 +8,6 @@ use asterism::{
 };
 use json::*;
 use macroquad::prelude::*;
-use serde;
-use serde::Deserialize;
-use serde_json;
 use std::fs::File;
 use std::io::{self, Write};
 
@@ -67,60 +65,6 @@ impl PoolInfo for PoolID {
     }
 }
 
-struct SpriteSheet {
-    image: Texture2D,
-    data: Vec<Sprite>,
-}
-
-impl SpriteSheet {
-    async fn new(image_file: &str, data_file: Vec<Sprite>) -> Self {
-        Self {
-            image: load_texture(image_file).await,
-            data: data_file,
-        }
-    }
-
-    fn create_param(&self, index: usize) -> DrawTextureParams {
-        let mut texture = DrawTextureParams::default();
-        texture.dest_size = Some(Vec2::new(
-            self.data[index].source_size.w as f32,
-            self.data[index].source_size.h as f32,
-        ));
-        texture.source = Some(Rect::new(
-            self.data[index].frame.x as f32,
-            self.data[index].frame.y as f32,
-            self.data[index].frame.w as f32,
-            self.data[index].frame.h as f32,
-        ));
-
-        return texture;
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct Rectangle {
-    x: u64,
-    y: u64,
-    w: u64,
-    h: u64,
-}
-
-#[derive(Debug, Deserialize)]
-struct Size {
-    w: u64,
-    h: u64,
-}
-
-#[derive(Debug, Deserialize)]
-struct Sprite {
-    name: String,
-    frame: Rectangle,
-    rotated: bool,
-    trimmed: bool,
-    sprite_source_size: Rectangle,
-    source_size: Size,
-}
-
 struct Apple {
     pos: Vec2,
     vel: Vec2,
@@ -157,10 +101,10 @@ struct World {
 #[macroquad::main(window_conf)]
 async fn main() {
     let file = File::open("src/apple_tree_sprite.json").unwrap();
-
-    let sprite_info: Vec<Sprite> =
-        serde_json::from_reader(file).expect("error while reading or parsing");
-    let mut sprites = SpriteSheet::new("src/apple_tree_sprite.png", sprite_info).await;
+    let animation = SimpleAnim::new();
+    animation
+        .load_sprite_sheet("src/apple_tree_sprite.png", file)
+        .await;
     let mut world = World::new();
     let mut logics = Logics::new();
 
@@ -170,7 +114,7 @@ async fn main() {
                 break;
             }
         }
-        world.draw(&mut sprites);
+        world.draw(&mut animation);
         next_frame().await;
     }
 }
@@ -518,11 +462,17 @@ impl World {
             }
         }
     }
-    fn draw(&self, sheet: &SpriteSheet) {
+    fn draw(&self, animation: &SimpleAnim) {
         clear_background(Color::new(0., 0., 0.5, 1.));
         let mut basket = 2;
 
-        draw_texture_ex(sheet.image, 0.0, 0.0, WHITE, sheet.create_param(1));
+        draw_texture_ex(
+            animation.sheet.image,
+            0.0,
+            0.0,
+            WHITE,
+            animation.sheet.create_param(1),
+        );
 
         if self.score > 15 {
             basket = 5;
@@ -533,20 +483,20 @@ impl World {
         }
 
         draw_texture_ex(
-            sheet.image,
+            animation.sheet.image,
             self.basket.x,
             self.basket.y,
             WHITE,
-            sheet.create_param(basket),
+            animation.sheet.create_param(basket),
         );
 
         for apple in self.apples.iter() {
             draw_texture_ex(
-                sheet.image,
+                animation.sheet.image,
                 apple.pos.x,
                 apple.pos.y,
                 WHITE,
-                sheet.create_param(0),
+                animation.sheet.create_param(0),
             );
         }
     }

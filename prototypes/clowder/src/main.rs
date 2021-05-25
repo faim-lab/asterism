@@ -1,6 +1,7 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
 use asterism::{
+    animation::SimpleAnim,
     collision::AabbCollision,
     control::{KeyboardControl, MacroQuadKeyboardControl},
     entity_state::FlatEntityState,
@@ -9,10 +10,6 @@ use asterism::{
 };
 use json::*;
 use macroquad::prelude::*;
-use serde;
-use serde::Deserialize;
-use serde_json;
-use std::convert::TryInto;
 use std::fs::File;
 
 const WIDTH: u32 = 255;
@@ -86,81 +83,6 @@ impl PoolInfo for PoolID {
     fn min_value(&self) -> f64 {
         match self {
             Self::Points(_) => std::u8::MIN as f64,
-        }
-    }
-}
-
-struct SpriteSheet {
-    image: Texture2D,
-    data: Vec<Sprite>,
-    start_sprite: Vec<usize>,
-}
-
-impl SpriteSheet {
-    async fn new(image_file: &str, data_file: Vec<Sprite>) -> Self {
-        Self {
-            image: load_texture(image_file).await,
-            data: data_file,
-            start_sprite: Vec::new(),
-        }
-    }
-
-    //the base/starting sprite for the sprite
-    fn assign_sprite(&mut self, assignment: usize) -> () {
-        self.start_sprite.push(assignment);
-    }
-
-    fn create_param(&self, index: usize) -> DrawTextureParams {
-        let mut texture = DrawTextureParams::default();
-        texture.dest_size = Some(Vec2::new(
-            self.data[index].source_size.w as f32,
-            self.data[index].source_size.h as f32,
-        ));
-        texture.source = Some(Rect::new(
-            self.data[index].frame.x as f32,
-            self.data[index].frame.y as f32,
-            self.data[index].frame.w as f32,
-            self.data[index].frame.h as f32,
-        ));
-
-        return texture;
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct Rectangle {
-    x: u64,
-    y: u64,
-    w: u64,
-    h: u64,
-}
-
-#[derive(Debug, Deserialize)]
-struct Size {
-    w: u64,
-    h: u64,
-}
-
-#[derive(Debug, Deserialize)]
-struct Sprite {
-    name: String,
-    frame: Rectangle,
-    rotated: bool,
-    trimmed: bool,
-    sprite_source_size: Rectangle,
-    source_size: Size,
-}
-
-struct Animation {
-    sheet: SpriteSheet,
-    frames_drawn: u8,
-}
-
-impl Animation {
-    fn new(sprite_sheet: SpriteSheet) -> Self {
-        Self {
-            sheet: sprite_sheet,
-            frames_drawn: 0,
         }
     }
 }
@@ -308,22 +230,23 @@ struct World {
 #[macroquad::main(window_conf)]
 async fn main() {
     let file = File::open("src/clowder_sprite.json").unwrap();
-    let sprite_info: Vec<Sprite> =
-        serde_json::from_reader(file).expect("error while reading or parsing");
-    let mut sprites = SpriteSheet::new("src/clowder_sprite.png", sprite_info).await;
 
+    let mut rows = Vec::<usize>::new();
     let mut ball_in = 0; //assigns a starting sprite in the sprite sheet for each ball (cat)
     for _ in 0..BALL_NUM {
-        sprites.assign_sprite(ball_in);
+        rows.push(ball_in);
         ball_in += 2;
 
-        if ball_in / 2 >= DIST_BALL.try_into().unwrap() {
+        if ball_in / 2 >= DIST_BALL as usize {
             ball_in = 0;
         }
     }
     //assigns a starting/base sprite for the paddle
-    sprites.assign_sprite((DIST_BALL * 2).try_into().unwrap());
-    let mut animation = Animation::new(sprites);
+    rows.push((DIST_BALL * 2) as usize);
+    let mut animation = SimpleAnim::new();
+    animation.load_sprite_sheet("src/clowder_sprite.png", file);
+    animation.set_frames(10); //arbitrary value that resets frames to create cycle
+    animation.assign_rows(rows);
     let mut world = World::new();
     let mut logics = Logics::new();
 
@@ -664,15 +587,9 @@ impl World {
     /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
-    fn draw(&self, state: &mut FlatEntityState<StateID>, animation: &mut Animation) {
-        //arbitrary value that resets frames to create cycle
-        if animation.frames_drawn >= 10 {
-            animation.frames_drawn = 0;
-        } else {
-            animation.frames_drawn = animation.frames_drawn + 1;
-        }
-
+    fn draw(&self, state: &mut FlatEntityState<StateID>, animation: &mut SimpleAnim) {
         clear_background(BASE_COLOR);
+        animation.incr_frame();
         //dog (paddle)
         match state.get_id_for_entity(BALL_NUM as usize) {
             StateID::Running1 => {
@@ -686,7 +603,7 @@ impl World {
                         .create_param(animation.sheet.start_sprite[BALL_NUM as usize]),
                 );
                 // swaps condiction from running 1 to running 2
-                if animation.frames_drawn == 0 {
+                if animation.switch_frame() {
                     state.conditions[BALL_NUM as usize][1] = true;
                     state.conditions[BALL_NUM as usize][0] = false;
                 }
@@ -702,7 +619,7 @@ impl World {
                         .create_param(animation.sheet.start_sprite[BALL_NUM as usize] + 1),
                 );
                 //swaps condition from running 2 to running 1
-                if animation.frames_drawn == 0 {
+                if animation.switch_frame() {
                     state.conditions[BALL_NUM as usize][0] = true;
                     state.conditions[BALL_NUM as usize][1] = false;
                 }
@@ -725,7 +642,7 @@ impl World {
                     );
 
                     //swaps running1 to running2
-                    if animation.frames_drawn == 0 {
+                    if animation.switch_frame() {
                         state.conditions[ball.id][0] = false;
                         state.conditions[ball.id][1] = true;
                     }
@@ -741,7 +658,7 @@ impl World {
                             .create_param(animation.sheet.start_sprite[ball.id] + 1),
                     );
                     //swaps from running2 to running1
-                    if animation.frames_drawn == 0 {
+                    if animation.switch_frame() {
                         state.conditions[ball.id][0] = true;
                         state.conditions[ball.id][1] = false;
                     }
