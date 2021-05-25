@@ -15,9 +15,9 @@ where
     /// The items involved, and their values.
     pub items: BTreeMap<ID, (Value, Value, Value)>, // value, min, max
     /// Each transaction is a list of items involved in the transaction and the amount they're being changed.
-    pub transactions: Vec<Vec<(ID, Transaction<Value>)>>,
+    pub transactions: Vec<(ID, Transaction<Value>)>,
     /// A Vec of all transactions and if they were able to be completed or not. If yes, supply a Vec of the IDs of successful transactions; if no, supply the ID of the pool that caused the error and a reason (see [ResourceError]).
-    pub completed: Vec<Result<Vec<ID>, (ID, ResourceError)>>,
+    pub completed: Vec<Result<ID, (ID, ResourceError)>>,
 }
 
 impl<ID, Value> Logic for QueuedResources<ID, Value>
@@ -46,39 +46,30 @@ where
     pub fn update(&mut self) {
         self.completed.clear();
 
-        'exchange: for exchange in self.transactions.iter() {
-            let mut snapshot = BTreeMap::new();
-            for (item_type, ..) in exchange {
-                snapshot.insert(*item_type, (*self.items.get(&item_type).unwrap()).0);
+        for exchange in self.transactions.iter() {
+            let (item_type, change) = exchange;
+
+            if let Err(err) = self.is_possible(item_type, change) {
+                self.completed.push(Err(err));
+                continue;
             }
 
-            let mut item_types = Vec::new();
-            for (item_type, change) in exchange.iter() {
-                match self.is_possible(item_type, change) {
-                    Ok(_) => {}
-                    Err(err) => {
-                        self.completed.push(Err(err));
-                        for (item_type, val) in snapshot.iter() {
-                            (*self.items.get_mut(&item_type).unwrap()).0 = *val;
-                        }
-                        continue 'exchange;
-                    }
+            let (val, min, max) = self.items.get_mut(&item_type).unwrap();
+            match change {
+                Transaction::Change(amt) => {
+                    *val += *amt;
                 }
-                let (val, min, max) = self.items.get_mut(&item_type).unwrap();
-                match change {
-                    Transaction::Change(amt) => {
-                        *val += *amt;
-                        item_types.push(*item_type);
-                    }
-                    Transaction::SetMax(new_max) => {
-                        *max = *new_max;
-                    }
-                    Transaction::SetMin(new_min) => {
-                        *min = *new_min;
-                    }
+                Transaction::Set(amt) => {
+                    *val = *amt;
+                }
+                Transaction::SetMax(new_max) => {
+                    *max = *new_max;
+                }
+                Transaction::SetMin(new_min) => {
+                    *min = *new_min;
                 }
             }
-            self.completed.push(Ok(item_types));
+            self.completed.push(Ok(*item_type));
         }
         self.transactions.clear();
     }

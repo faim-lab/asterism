@@ -220,7 +220,7 @@ impl World {
                     logics
                         .resources
                         .transactions
-                        .push(vec![(PoolID(1), Transaction::Change(1))]);
+                        .push((PoolID(1), Transaction::Change(1)));
                     self.mappings[1][2] = true;
                 }
                 (4, 1) => {
@@ -232,7 +232,7 @@ impl World {
                     logics
                         .resources
                         .transactions
-                        .push(vec![(PoolID(0), Transaction::Change(1))]);
+                        .push((PoolID(0), Transaction::Change(1)));
                     self.mappings[0][2] = true;
                 }
 
@@ -274,15 +274,13 @@ impl World {
 
         for completed in logics.resources.completed.iter() {
             match completed {
-                Ok(item_types) => {
-                    for item_type in item_types {
-                        println!(
-                            "p{} scores! p1: {}, p2: {}",
-                            item_type.0 + 1,
-                            self.resources[0].0,
-                            self.resources[1].0
-                        );
-                    }
+                Ok(item_type) => {
+                    println!(
+                        "p{} scores! p1: {}, p2: {}",
+                        item_type.0 + 1,
+                        self.resources[0].0,
+                        self.resources[1].0
+                    );
                 }
                 Err(_) => {}
             }
