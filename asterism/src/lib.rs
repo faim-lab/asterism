@@ -10,6 +10,7 @@
 //!
 //! The descriptions of logics in the modules are lightly modified from Prof Osborn's dissertation.
 
+pub mod animation;
 pub mod collision;
 pub mod control;
 pub mod entity_state;

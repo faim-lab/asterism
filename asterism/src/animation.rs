@@ -14,18 +14,19 @@ use std::fs::File;
 //simple animations across a spritesheet
 //animations draw on a set frame cycle
 pub struct SimpleAnim {
-    pub sheet: Some(SpriteSheet),
+    pub sheet: Option<SpriteSheet>,
     pub frames_drawn: u8,
     frame_cycle: u8,
 }
 
 //sprite sheet
-struct SpriteSheet {
-    image: Texture2D,
+pub struct SpriteSheet {
+    pub image: Texture2D,
     data: Vec<Sprite>,
-    start_sprite: Vec<usize>,
+    pub start_sprite: Vec<usize>,
 }
 
+#[derive(Debug, Deserialize)]
 struct Rectangle {
     x: u64,
     y: u64,
@@ -63,7 +64,7 @@ impl SpriteSheet {
         self.start_sprite.push(assignment);
     }
 
-    fn create_param(&self, index: usize) -> DrawTextureParams {
+    pub fn create_param(&self, index: usize) -> DrawTextureParams {
         let mut texture = DrawTextureParams::default();
         texture.dest_size = Some(Vec2::new(
             self.data[index].source_size.w as f32,
@@ -91,25 +92,31 @@ impl SimpleAnim {
 
     //Takes an image file and json file description of image file.
     //Loads a sprite sheet
-    pub async fn load_sprite_sheet(image_file: &str, data_file: File) -> () {
+    pub async fn load_sprite_sheet(&mut self, image_file: &str, data_file: &str) -> () {
+        let file = File::open(data_file).unwrap();
         let sprite_info: Vec<Sprite> =
             serde_json::from_reader(file).expect("error while reading or parsing");
-        self.sheet = Some(SpriteSheet::new(image_file, sprite_info)).await;
+        self.sheet = Some(SpriteSheet::new(image_file, sprite_info).await);
     }
 
     //work on naming
     //assigns a base row for different sprites
-    pub fn assign_rows(assignments: Vec<usize>) -> () {
-        for i in assignments.iter() {
-            self.sheet.assign_sprite(i);
+    pub fn assign_rows(&mut self, assignments: Vec<usize>) -> () {
+        match &mut self.sheet {
+            None => {}
+            Some(s_sheet) => {
+                for i in assignments.iter() {
+                    s_sheet.assign_sprite(*i);
+                }
+            }
         }
     }
 
-    pub fn set_frames(cycle: u8) -> () {
+    pub fn set_frames(&mut self, cycle: u8) -> () {
         self.frame_cycle = cycle;
     }
 
-    pub fn incr_frames() -> () {
+    pub fn incr_frames(&mut self) -> () {
         if self.frames_drawn >= self.frame_cycle {
             self.frames_drawn = 0;
         } else {
@@ -118,7 +125,18 @@ impl SimpleAnim {
     }
 
     //determines if frames need to be switched
-    pub fn switch_frame() -> bool {
+    pub fn switch_frame(&self) -> bool {
         return self.frames_drawn == 0;
+    }
+
+    pub fn sheet_loaded(&self) -> bool {
+        match &self.sheet {
+            None => {
+                return false;
+            }
+            Some(_) => {
+                return true;
+            }
+        }
     }
 }
