@@ -1,10 +1,8 @@
-use crate::{Game, Logics};
+use crate::{Game, Logics, State};
 use asterism::control::{Action, InputType};
 use asterism::Reaction;
 
 use macroquad::{input::KeyCode, math::Vec2};
-
-pub type Reactions = Vec<Box<dyn Reaction>>;
 
 /* generates identifier structs (i got tired of typing all of them out). ex:
 
@@ -42,7 +40,7 @@ macro_rules! id_impl_new {
     };
 }
 
-id_impl_new!([] PaddleID, [] WallID, [] BallID, [derive(PartialOrd, Ord)] ScoreID, [] ActionID);
+id_impl_new!([] PaddleID, [] WallID, [] BallID, [derive(PartialOrd, Ord)] ScoreID, [derive(PartialOrd, Ord)] ActionID);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CollisionEnt {
@@ -60,7 +58,7 @@ pub enum RsrcPool {
 pub struct Paddle {
     pos: Vec2,
     size: Vec2,
-    controls: Vec<Action<usize, KeyCode>>,
+    controls: Vec<(ActionID, KeyCode)>,
 }
 
 impl Paddle {
@@ -77,10 +75,9 @@ impl Paddle {
     }
 
     pub fn add_control_map(&mut self, keycode: KeyCode) -> ActionID {
-        let num_controls = self.controls.len();
-        self.controls
-            .push(Action::new(num_controls, keycode, InputType::Digital));
-        ActionID(num_controls)
+        let act_id = ActionID(self.controls.len());
+        self.controls.push((act_id, keycode));
+        act_id
     }
 }
 
@@ -147,39 +144,63 @@ impl Score {
 }
 
 impl Logics {
-    pub fn consume_paddle(&mut self, id: PaddleID, paddle: Paddle) {
-        self.collision.add_entity_as_xywh(
-            paddle.pos,
-            paddle.size,
-            Vec2::ZERO,
-            true,
-            false,
-            CollisionEnt::Paddle(id),
+    pub fn consume_paddle(&mut self, id: PaddleID, col_idx: usize, paddle: Paddle) {
+        let hs = paddle.size / 2.0;
+        let center = paddle.pos + hs;
+        self.collision.centers.insert(col_idx, center);
+        self.collision.half_sizes.insert(col_idx, hs);
+        self.collision.velocities.insert(col_idx, Vec2::ZERO);
+
+        use asterism::collision::CollisionData;
+        self.collision.metadata.insert(
+            col_idx,
+            CollisionData {
+                solid: true,
+                fixed: true,
+                id: CollisionEnt::Paddle(id),
+            },
         );
-        self.control.mapping.push(paddle.controls);
+
+        for (act_id, keycode) in paddle.controls {
+            self.control.add_key_map(id.0, keycode, act_id);
+        }
     }
 
-    pub fn consume_wall(&mut self, id: WallID, wall: Wall) {
-        self.collision.add_entity_as_xywh(
-            wall.pos,
-            wall.size,
-            Vec2::ZERO,
-            true,
-            false,
-            CollisionEnt::Wall(id),
+    pub fn consume_wall(&mut self, id: WallID, col_idx: usize, wall: Wall) {
+        let hs = wall.size / 2.0;
+        let center = wall.pos + hs;
+        self.collision.centers.insert(col_idx, center);
+        self.collision.half_sizes.insert(col_idx, hs);
+        self.collision.velocities.insert(col_idx, Vec2::ZERO);
+
+        use asterism::collision::CollisionData;
+        self.collision.metadata.insert(
+            col_idx,
+            CollisionData {
+                solid: true,
+                fixed: true,
+                id: CollisionEnt::Wall(id),
+            },
         );
     }
 
-    pub fn consume_ball(&mut self, id: BallID, ball: Ball) {
+    pub fn consume_ball(&mut self, id: BallID, col_idx: usize, ball: Ball) {
         self.physics
             .add_physics_entity(ball.pos, ball.vel, Vec2::ZERO);
-        self.collision.add_entity_as_xywh(
-            ball.pos,
-            ball.size,
-            Vec2::ZERO,
-            true,
-            false,
-            CollisionEnt::Ball(id),
+        let hs = ball.size / 2.0;
+        let center = ball.pos + hs;
+        self.collision.centers.insert(col_idx, center);
+        self.collision.half_sizes.insert(col_idx, hs);
+        self.collision.velocities.insert(col_idx, Vec2::ZERO);
+
+        use asterism::collision::CollisionData;
+        self.collision.metadata.insert(
+            col_idx,
+            CollisionData {
+                solid: true,
+                fixed: false,
+                id: CollisionEnt::Ball(id),
+            },
         );
     }
 
