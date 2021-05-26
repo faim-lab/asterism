@@ -591,18 +591,15 @@ impl World {
         clear_background(BASE_COLOR);
         animation.incr_frames();
 
-        if (animation.sheet_loaded()) {
+        if animation.sheet_loaded() {
             //dog (paddle)
             match state.get_id_for_entity(BALL_NUM as usize) {
                 StateID::Running1 => {
-                    draw_texture_ex(
-                        animation.sheet.as_ref().unwrap().image,
+                    animation.draw_sprite(
                         self.paddles.0.x as f32,
                         self.paddles.0.y as f32,
-                        WHITE,
-                        animation.sheet.as_ref().unwrap().create_param(
-                            animation.sheet.as_ref().unwrap().start_sprite[BALL_NUM as usize],
-                        ),
+                        BALL_NUM as usize,
+                        0,
                     );
                     // swaps condiction from running 1 to running 2
                     if animation.switch_frame() {
@@ -611,15 +608,13 @@ impl World {
                     }
                 }
                 StateID::Running2 => {
-                    draw_texture_ex(
-                        animation.sheet.as_ref().unwrap().image,
+                    animation.draw_sprite(
                         self.paddles.0.x as f32,
                         self.paddles.0.y as f32,
-                        WHITE,
-                        animation.sheet.as_ref().unwrap().create_param(
-                            animation.sheet.as_ref().unwrap().start_sprite[BALL_NUM as usize] + 1,
-                        ),
+                        BALL_NUM as usize,
+                        1,
                     );
+
                     //swaps condition from running 2 to running 1
                     if animation.switch_frame() {
                         state.conditions[BALL_NUM as usize][0] = true;
@@ -632,15 +627,7 @@ impl World {
             for ball in self.balls.iter() {
                 match state.get_id_for_entity(ball.id) {
                     StateID::Running1 => {
-                        draw_texture_ex(
-                            animation.sheet.as_ref().unwrap().image,
-                            ball.pos.x as f32,
-                            ball.pos.y as f32,
-                            WHITE,
-                            animation.sheet.as_ref().unwrap().create_param(
-                                animation.sheet.as_ref().unwrap().start_sprite[ball.id],
-                            ),
-                        );
+                        animation.draw_sprite(ball.pos.x as f32, ball.pos.y as f32, ball.id, 0);
                         //swaps running1 to running2
                         if animation.switch_frame() {
                             state.conditions[ball.id][0] = false;
@@ -648,15 +635,8 @@ impl World {
                         }
                     }
                     StateID::Running2 => {
-                        draw_texture_ex(
-                            animation.sheet.as_ref().unwrap().image,
-                            ball.pos.x as f32,
-                            ball.pos.y as f32,
-                            WHITE,
-                            animation.sheet.as_ref().unwrap().create_param(
-                                animation.sheet.as_ref().unwrap().start_sprite[ball.id] + 1,
-                            ),
-                        );
+                        animation.draw_sprite(ball.pos.x as f32, ball.pos.y as f32, ball.id, 1);
+
                         //swaps from running2 to running1
                         if animation.switch_frame() {
                             state.conditions[ball.id][0] = true;
@@ -664,15 +644,7 @@ impl World {
                         }
                     }
                     StateID::Resting => {
-                        draw_texture_ex(
-                            animation.sheet.as_ref().unwrap().image,
-                            ball.pos.x as f32,
-                            ball.pos.y as f32,
-                            WHITE,
-                            animation.sheet.as_ref().unwrap().create_param(
-                                animation.sheet.as_ref().unwrap().start_sprite[ball.id],
-                            ),
-                        );
+                        animation.draw_sprite(ball.pos.x as f32, ball.pos.y as f32, ball.id, 0);
                     }
                 }
             }

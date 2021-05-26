@@ -21,9 +21,9 @@ pub struct SimpleAnim {
 
 //sprite sheet
 pub struct SpriteSheet {
-    pub image: Texture2D,
+    image: Texture2D,
     data: Vec<Sprite>,
-    pub start_sprite: Vec<usize>,
+    start_sprite: Vec<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,7 +64,7 @@ impl SpriteSheet {
         self.start_sprite.push(assignment);
     }
 
-    pub fn create_param(&self, index: usize) -> DrawTextureParams {
+    fn create_param(&self, index: usize) -> DrawTextureParams {
         let mut texture = DrawTextureParams::default();
         texture.dest_size = Some(Vec2::new(
             self.data[index].source_size.w as f32,
@@ -138,5 +138,19 @@ impl SimpleAnim {
                 return true;
             }
         }
+    }
+
+    //dist, of actual sprite to be drawn from start index on sprite sheet
+    pub fn draw_sprite(&self, x_pos: f32, y_pos: f32, start_index: usize, dist: usize) -> () {
+        draw_texture_ex(
+            self.sheet.as_ref().unwrap().image,
+            x_pos,
+            y_pos,
+            WHITE,
+            self.sheet
+                .as_ref()
+                .unwrap()
+                .create_param(self.sheet.as_ref().unwrap().start_sprite[start_index] + dist),
+        );
     }
 }

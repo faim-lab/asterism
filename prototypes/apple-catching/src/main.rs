@@ -43,6 +43,10 @@ enum StateID {
     AppleFalling,
     AppleBouncing,
     AppleResting,
+    EmptyBasket,
+    PartialBasket,
+    MidBasket,
+    FullBasket,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
@@ -99,10 +103,15 @@ struct World {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    let mut rows = Vec::<usize>::new();
+    rows.push(0);
+    rows.push(1);
+    rows.push(2);
     let mut animation = SimpleAnim::new();
     animation
         .load_sprite_sheet("src/apple_tree_sprite.png", "src/apple_tree_sprite.json")
         .await;
+    animation.assign_rows(rows);
     let mut world = World::new();
     let mut logics = Logics::new();
 
@@ -112,7 +121,7 @@ async fn main() {
                 break;
             }
         }
-        world.draw(&mut animation);
+        world.draw(&mut animation, &logics.entity_state);
         next_frame().await;
     }
 }
@@ -181,7 +190,19 @@ impl Logics {
                 resources.items.insert(PoolID::Points, 0.0);
                 resources
             },
-            entity_state: FlatEntityState::new(),
+            entity_state: {
+                let mut entity_state = FlatEntityState::new();
+                entity_state.add_state_map(
+                    0,
+                    vec![
+                        (StateID::EmptyBasket, vec![1]),
+                        (StateID::PartialBasket, vec![2]),
+                        (StateID::MidBasket, vec![3]),
+                        (StateID::FullBasket, vec![0]),
+                    ],
+                );
+                entity_state
+            },
         }
     }
 }
@@ -371,6 +392,48 @@ impl World {
         entity_state.maps.clear();
         entity_state.conditions.clear();
         entity_state.states.clear();
+
+        if self.score > 15 {
+            entity_state.add_state_map(
+                3,
+                vec![
+                    (StateID::EmptyBasket, vec![1]),
+                    (StateID::PartialBasket, vec![2]),
+                    (StateID::MidBasket, vec![3]),
+                    (StateID::FullBasket, vec![0]),
+                ],
+            );
+        } else if self.score > 10 {
+            entity_state.add_state_map(
+                2,
+                vec![
+                    (StateID::EmptyBasket, vec![1]),
+                    (StateID::PartialBasket, vec![2]),
+                    (StateID::MidBasket, vec![3]),
+                    (StateID::FullBasket, vec![0]),
+                ],
+            );
+        } else if self.score > 5 {
+            entity_state.add_state_map(
+                1,
+                vec![
+                    (StateID::EmptyBasket, vec![1]),
+                    (StateID::PartialBasket, vec![2]),
+                    (StateID::MidBasket, vec![3]),
+                    (StateID::FullBasket, vec![0]),
+                ],
+            );
+        } else {
+            entity_state.add_state_map(
+                0,
+                vec![
+                    (StateID::EmptyBasket, vec![0]),
+                    (StateID::PartialBasket, vec![2]),
+                    (StateID::MidBasket, vec![3]),
+                    (StateID::FullBasket, vec![0]),
+                ],
+            );
+        }
         for _ in self.apples.iter() {
             entity_state.add_state_map(
                 0,
@@ -435,6 +498,10 @@ impl World {
                 StateID::AppleResting => {
                     self.apples[i].vel.y = 0.0;
                 }
+                StateID::EmptyBasket => {}
+                StateID::PartialBasket => {}
+                StateID::MidBasket => {}
+                StateID::FullBasket => {}
             }
         }
     }
@@ -460,43 +527,32 @@ impl World {
             }
         }
     }
-    fn draw(&self, animation: &SimpleAnim) {
+    fn draw(&self, animation: &SimpleAnim, entity_state: &FlatEntityState<StateID>) {
         clear_background(Color::new(0., 0., 0.5, 1.));
-        let mut basket = 2;
 
         if animation.sheet_loaded() {
-            draw_texture_ex(
-                animation.sheet.as_ref().unwrap().image,
-                0.0,
-                0.0,
-                WHITE,
-                animation.sheet.as_ref().unwrap().create_param(1),
-            );
+            animation.draw_sprite(0.0, 0.0, 1, 0);
 
-            if self.score > 15 {
-                basket = 5;
-            } else if self.score > 10 {
-                basket = 4;
-            } else if self.score > 5 {
-                basket = 3;
+            match entity_state.get_id_for_entity(0) {
+                StateID::AppleFalling => {}
+                StateID::AppleBouncing => {}
+                StateID::AppleResting => {}
+                StateID::EmptyBasket => {
+                    animation.draw_sprite(self.basket.x, self.basket.y, 2, 0);
+                }
+                StateID::PartialBasket => {
+                    animation.draw_sprite(self.basket.x, self.basket.y, 2, 1);
+                }
+                StateID::MidBasket => {
+                    animation.draw_sprite(self.basket.x, self.basket.y, 2, 2);
+                }
+                StateID::FullBasket => {
+                    animation.draw_sprite(self.basket.x, self.basket.y, 2, 3);
+                }
             }
 
-            draw_texture_ex(
-                animation.sheet.as_ref().unwrap().image,
-                self.basket.x,
-                self.basket.y,
-                WHITE,
-                animation.sheet.as_ref().unwrap().create_param(basket),
-            );
-
             for apple in self.apples.iter() {
-                draw_texture_ex(
-                    animation.sheet.as_ref().unwrap().image,
-                    apple.pos.x,
-                    apple.pos.y,
-                    WHITE,
-                    animation.sheet.as_ref().unwrap().create_param(0),
-                );
+                animation.draw_sprite(apple.pos.x, apple.pos.y, 0, 0);
             }
         }
     }
