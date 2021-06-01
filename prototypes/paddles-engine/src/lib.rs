@@ -13,6 +13,8 @@ use macroquad::prelude::*;
 
 mod types;
 use types::*;
+mod syntheses;
+use syntheses::*;
 
 // reexports
 pub use asterism::collision::{CollisionEvent, CollisionReaction};
@@ -31,27 +33,6 @@ pub struct Logics {
     pub control: KeyboardControl<ActionID, MacroquadInputWrapper>,
 }
 
-#[derive(Default)]
-#[allow(clippy::type_complexity)]
-struct Events {
-    control: Vec<(
-        ControlEvent<ActionID>,
-        Box<dyn Fn(&mut State, &mut Logics, &ControlEvent<ActionID>)>,
-    )>,
-    collision: Vec<(
-        CollisionEvent<CollisionEnt>,
-        Box<dyn Fn(&mut State, &mut Logics, &CollisionEvent<CollisionEnt>)>,
-    )>,
-    resources: Vec<(
-        ResourceEvent<RsrcPool>,
-        Box<dyn Fn(&mut State, &mut Logics, &ResourceEvent<RsrcPool>)>,
-    )>,
-    physics: Vec<(
-        PhysicsEvent,
-        Box<dyn Fn(&mut State, &mut Logics, &PhysicsEvent)>,
-    )>,
-}
-
 impl Logics {
     fn new() -> Self {
         Self {
@@ -60,15 +41,6 @@ impl Logics {
             resources: QueuedResources::new(),
             control: KeyboardControl::new(),
         }
-    }
-
-    fn handle_reaction(&mut self, reaction: &dyn Reaction) {
-        unimplemented!();
-        // if let Some(reaction) =
-        //     (&reaction as &dyn std::any::Any).downcast_ref::<ResourceReaction<RsrcPool, u16>>()
-        // {
-        //     self.resources.handle_predicate(reaction);
-        // }
     }
 }
 
@@ -93,7 +65,7 @@ impl State {
 pub struct Game {
     pub state: State,
     pub logics: Logics,
-    events: Events,
+    pub(crate) events: Events,
 }
 
 impl Game {
@@ -103,44 +75,6 @@ impl Game {
             logics: Logics::new(),
             events: Events::default(),
         }
-    }
-
-    pub fn add_ctrl_predicate(
-        &mut self,
-        paddle: PaddleID,
-        action: ActionID,
-        key_event: ControlEventType,
-        on_key_event: Box<dyn Fn(&mut State, &mut Logics, &ControlEvent<ActionID>)>,
-    ) {
-        let key_event = ControlEvent {
-            event_type: key_event,
-            action_id: action,
-            set: paddle.idx(),
-        };
-        self.events.control.push((key_event, on_key_event));
-    }
-
-    pub fn add_collision_predicate(
-        &mut self,
-        col1: CollisionEnt,
-        col2: CollisionEnt,
-        on_collide: Box<dyn Fn(&mut State, &mut Logics, &CollisionEvent<CollisionEnt>)>,
-    ) {
-        let col_event = CollisionEvent(col1, col2);
-        self.events.collision.push((col_event, on_collide));
-    }
-
-    pub fn add_rsrc_predicate(
-        &mut self,
-        pool: RsrcPool,
-        rsrc_event: ResourceEventType,
-        on_rsrc_event: Box<dyn Fn(&mut State, &mut Logics, &ResourceEvent<RsrcPool>)>,
-    ) {
-        let rsrc_event = ResourceEvent {
-            pool,
-            event_type: rsrc_event,
-        };
-        self.events.resources.push((rsrc_event, on_rsrc_event));
     }
 
     pub fn add_paddle(&mut self, paddle: Paddle) {
@@ -199,22 +133,28 @@ fn control(game: &mut Game) {
 fn physics(game: &mut Game) {
     game.logics.physics.update();
 
-    // update collision positions
-    for (i, ball) in game.state.balls.iter().enumerate() {
-        let col_idx = game.state.get_col_idx(CollisionEnt::Ball(*ball));
-        game.logics.collision.centers[col_idx] =
-            game.logics.physics.positions[i] + game.logics.collision.half_sizes[col_idx];
-    }
-
     for (predicate, reaction) in game.events.physics.iter() {
         if game.logics.physics.check_predicate(predicate) {
             reaction(&mut game.state, &mut game.logics, predicate);
         }
     }
+
+    // update collision positions, hard-coded structural synthesis
+    for (i, ball) in game.state.balls.iter().enumerate() {
+        let col_idx = game.state.get_col_idx(CollisionEnt::Ball(*ball));
+        game.logics.collision.centers[col_idx] =
+            game.logics.physics.positions[i] + game.logics.collision.half_sizes[col_idx];
+    }
 }
 
 fn collision(game: &mut Game) {
     game.logics.collision.update();
+
+    for (predicate, reaction) in game.events.collision.iter() {
+        if game.logics.collision.check_predicate(predicate) {
+            reaction(&mut game.state, &mut game.logics, predicate);
+        }
+    }
 
     // update physics positions
     // honestly this updating/passing on makes me think of the functional programming style of continuously modifying one state
@@ -223,12 +163,6 @@ fn collision(game: &mut Game) {
         let col_idx = game.state.get_col_idx(CollisionEnt::Ball(*ball));
         game.logics.physics.positions[i] =
             game.logics.collision.centers[col_idx] - game.logics.collision.half_sizes[col_idx];
-    }
-
-    for (predicate, reaction) in game.events.collision.iter() {
-        if game.logics.collision.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, predicate);
-        }
     }
 }
 

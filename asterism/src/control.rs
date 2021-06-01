@@ -38,7 +38,12 @@ where
     type Event = ControlEvent<ID>;
     type Reaction = ControlReaction<ID, Wrapper::KeyCode>;
 
-    fn check_predicate(&mut self, event: &Self::Event) -> bool {
+    /// for each control locus
+    type Ident = usize;
+    /// values are only included for reference; modifying values will not change the data in the logic
+    type IdentData = (Vec<Action<ID, Wrapper::KeyCode>>, Vec<Values>);
+
+    fn check_predicate(&self, event: &Self::Event) -> bool {
         if let Some(values) = self.get_action_in_set(event.set, event.action_id) {
             match event.event_type {
                 ControlEventType::KeyPressed => values.changed_by > 0.0,
@@ -65,6 +70,14 @@ where
                 }
             }
         }
+    }
+
+    fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
+        (self.mapping[ident].clone(), self.values[ident].clone())
+    }
+
+    fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
+        self.mapping[ident] = data.0;
     }
 }
 
@@ -161,12 +174,13 @@ where
 }
 
 /// A keyboard input.
-pub struct KeyInput<KeyCode> {
+#[derive(Clone, Copy)]
+pub struct KeyInput<KeyCode: Copy> {
     /// The keycode that the input is tracking.
     keycode: KeyCode,
 }
 
-impl<KeyCode> Input for KeyInput<KeyCode> {
+impl<KeyCode: Copy> Input for KeyInput<KeyCode> {
     /// Minimum value for a keypress is 0.0.
     fn min(&self) -> f32 {
         0.0
@@ -193,7 +207,8 @@ pub struct Values {
 }
 
 /// Information for an action and the input it's attached to.
-pub struct Action<ID, KeyCode> {
+#[derive(Clone, Copy)]
+pub struct Action<ID, KeyCode: Copy> {
     pub id: ID,
     /// The input's keycode and min/max.
     pub key_input: KeyInput<KeyCode>,
@@ -203,7 +218,7 @@ pub struct Action<ID, KeyCode> {
     pub input_type: InputType,
 }
 
-impl<ID, KeyCode> Action<ID, KeyCode> {
+impl<ID, KeyCode: Copy> Action<ID, KeyCode> {
     pub fn new(id: ID, keycode: KeyCode, input_type: InputType) -> Self {
         Self {
             id,

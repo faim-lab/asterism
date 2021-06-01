@@ -18,11 +18,20 @@ pub trait Logic {
     type Event: Event;
     type Reaction: Reaction;
 
+    type Ident: Clone + Copy;
+    type IdentData;
+
     /// checks if a predicate (event) is occuring
-    fn check_predicate(&mut self, event: &Self::Event) -> bool;
+    fn check_predicate(&self, event: &Self::Event) -> bool;
 
     /// processes the reaction if a predicate condition is met
     fn handle_predicate(&mut self, reaction: &Self::Reaction);
+
+    /// exposes the data associated with a particular ""entity"" of the logic. NOTE that modifying the data returned here does NOT change the logic's data!!!
+    fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData;
+
+    /// updates the data of an ""entity"" of the logic
+    fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData);
 }
 
 pub trait Event {

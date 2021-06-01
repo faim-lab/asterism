@@ -383,18 +383,24 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
     }
 }
 
+pub struct AabbColData {
+    pub center: Vec2,
+    pub half_size: Vec2,
+    pub vel: Vec2,
+}
+
 impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
     type Event = CollisionEvent<ID>;
     type Reaction = CollisionReaction<ID>;
 
-    fn check_predicate(&mut self, event: &Self::Event) -> bool {
-        self.contacts
-            .iter()
-            .position(|Contact { i, j, .. }| {
-                (self.metadata[*i].id == event.0 && self.metadata[*j].id == event.1)
-                    || (self.metadata[*i].id == event.1 && self.metadata[*j].id == event.0)
-            })
-            .is_some()
+    type Ident = usize;
+    type IdentData = AabbColData;
+
+    fn check_predicate(&self, event: &Self::Event) -> bool {
+        self.contacts.iter().any(|Contact { i, j, .. }| {
+            (self.metadata[*i].id == event.0 && self.metadata[*j].id == event.1)
+                || (self.metadata[*i].id == event.1 && self.metadata[*j].id == event.0)
+        })
     }
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
@@ -448,6 +454,20 @@ impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
                 self.add_entity_as_xywh(*pos, *size, *vel, *solid, *fixed, *id);
             }
         }
+    }
+
+    fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
+        AabbColData {
+            center: self.centers[ident],
+            half_size: self.half_sizes[ident],
+            vel: self.velocities[ident],
+        }
+    }
+
+    fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
+        self.centers[ident] = data.center;
+        self.half_sizes[ident] = data.half_size;
+        self.velocities[ident] = data.vel;
     }
 }
 

@@ -135,22 +135,26 @@ fn init(game: &mut Game) {
     let bounce_ball_y =
         |_: &mut State, logics: &mut Logics, event: &CollisionEvent<CollisionEnt>| {
             if let CollisionEnt::Ball(ball_id) = event.0 {
-                let vel = logics.physics.velocities[ball_id.idx()];
-                logics.physics.handle_predicate(&PhysicsReaction::SetVel(
-                    ball_id.idx(),
-                    Vec2::new(vel.x, vel.y * -1.0),
-                ));
+                // could also be this:
+                //
+                // let vel = logics.physics.velocities[ball_id.idx()];
+                // logics.physics.handle_predicate(&PhysicsReaction::SetVel(
+                //     ball_id.idx(),
+                //     Vec2::new(vel.x * -1.0, vel.y),
+                // ));
+
+                let mut vals = logics.physics.get_synthesis(ball_id.idx());
+                vals.vel.y *= -1.0;
+                logics.physics.update_synthesis(ball_id.idx(), vals);
             }
         };
 
     let bounce_ball_x =
         |_: &mut State, logics: &mut Logics, event: &CollisionEvent<CollisionEnt>| {
             if let CollisionEnt::Ball(ball_id) = event.0 {
-                let vel = logics.physics.velocities[ball_id.idx()];
-                logics.physics.handle_predicate(&PhysicsReaction::SetVel(
-                    ball_id.idx(),
-                    Vec2::new(vel.x * -1.0, vel.y),
-                ));
+                let mut vals = logics.physics.get_synthesis(ball_id.idx());
+                vals.vel.x *= -1.0;
+                logics.physics.update_synthesis(ball_id.idx(), vals);
             }
         };
 
@@ -185,8 +189,10 @@ fn init(game: &mut Game) {
         ControlEventType::KeyHeld,
         Box::new(|state, logics, event| {
             let col_idx = state.get_col_idx(CollisionEnt::Paddle(state.paddles[event.set]));
-            logics.collision.centers[col_idx].y -= 1.0;
-            logics.collision.velocities[col_idx].y = -1.0;
+            let mut vals = logics.collision.get_synthesis(col_idx);
+            vals.center.y -= 1.0;
+            vals.vel.y = -1.0;
+            logics.collision.update_synthesis(col_idx, vals);
         }),
     );
 
@@ -196,8 +202,10 @@ fn init(game: &mut Game) {
         ControlEventType::KeyHeld,
         Box::new(|state, logics, event| {
             let col_idx = state.get_col_idx(CollisionEnt::Paddle(state.paddles[event.set]));
-            logics.collision.centers[col_idx].y += 1.0;
-            logics.collision.velocities[col_idx].y = 1.0;
+            let mut vals = logics.collision.get_synthesis(col_idx);
+            vals.center.y += 1.0;
+            vals.vel.y = 1.0;
+            logics.collision.update_synthesis(col_idx, vals);
         }),
     );
 
@@ -207,8 +215,10 @@ fn init(game: &mut Game) {
         ControlEventType::KeyHeld,
         Box::new(|state, logics, event| {
             let col_idx = state.get_col_idx(CollisionEnt::Paddle(state.paddles[event.set]));
-            logics.collision.centers[col_idx].y -= 1.0;
-            logics.collision.velocities[col_idx].y = -1.0;
+            let mut vals = logics.collision.get_synthesis(col_idx);
+            vals.center.y -= 1.0;
+            vals.vel.y = -1.0;
+            logics.collision.update_synthesis(col_idx, vals);
         }),
     );
 
@@ -218,8 +228,10 @@ fn init(game: &mut Game) {
         ControlEventType::KeyHeld,
         Box::new(|state, logics, event| {
             let col_idx = state.get_col_idx(CollisionEnt::Paddle(state.paddles[event.set]));
-            logics.collision.centers[col_idx].y += 1.0;
-            logics.collision.velocities[col_idx].y = 1.0;
+            let mut vals = logics.collision.get_synthesis(col_idx);
+            vals.center.y += 1.0;
+            vals.vel.y = 1.0;
+            logics.collision.update_synthesis(col_idx, vals);
         }),
     );
 

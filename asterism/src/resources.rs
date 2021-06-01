@@ -28,7 +28,10 @@ where
     type Event = ResourceEvent<ID>;
     type Reaction = ResourceReaction<ID, Value>;
 
-    fn check_predicate(&mut self, event: &Self::Event) -> bool {
+    type Ident = ID;
+    type IdentData = (Value, Value, Value);
+
+    fn check_predicate(&self, event: &Self::Event) -> bool {
         match &event.event_type {
             ResourceEventType::PoolUpdated => {
                 self.completed.iter().any(|transaction| match transaction {
@@ -47,6 +50,17 @@ where
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         self.transactions.push(*reaction);
+    }
+
+    fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
+        *self
+            .items
+            .get(&ident)
+            .expect("requested pool doesn't exist in resource logic")
+    }
+
+    fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
+        self.items.entry(ident).and_modify(|vals| *vals = data);
     }
 }
 

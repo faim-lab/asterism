@@ -12,12 +12,21 @@ pub struct PointPhysics {
     pub accelerations: Vec<Vec2>,
 }
 
+pub struct PointPhysData {
+    pub pos: Vec2,
+    pub vel: Vec2,
+    pub acc: Vec2,
+}
+
 impl Logic for PointPhysics {
     type Reaction = PhysicsReaction;
     type Event = PhysicsEvent;
 
-    fn check_predicate(&mut self, _: &Self::Event) -> bool {
-        unimplemented!()
+    type Ident = usize;
+    type IdentData = PointPhysData;
+
+    fn check_predicate(&self, _: &Self::Event) -> bool {
+        false
     }
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
@@ -35,6 +44,20 @@ impl Logic for PointPhysics {
                 self.add_physics_entity(*pos, *vel, *acc);
             }
         }
+    }
+
+    fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
+        PointPhysData {
+            pos: self.positions[ident],
+            vel: self.velocities[ident],
+            acc: self.accelerations[ident],
+        }
+    }
+
+    fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
+        self.positions[ident] = data.pos;
+        self.velocities[ident] = data.vel;
+        self.accelerations[ident] = data.acc;
     }
 }
 
