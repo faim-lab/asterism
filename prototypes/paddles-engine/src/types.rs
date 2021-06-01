@@ -1,25 +1,24 @@
 use crate::{Game, Logics, State};
-use asterism::control::{Action, InputType};
+use asterism::control::{Action, InputType, Values};
 use asterism::Reaction;
 
 use macroquad::{input::KeyCode, math::Vec2};
 
-/* generates identifier structs (i got tired of typing all of them out). ex:
-
-id_impl_new!([derive(PartialOrd, Ord)] ScoreID) expands out to
-
-#[derive(PartialOrd, Ord)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct ScoreID(usize);
-impl ScoreID {
-    pub fn new(idx: usize) -> Self {
-        Self(idx)
-    }
-    pub fn idx(&self) -> usize {
-        self.0
-    }
-} */
-
+/// generates identifier structs (i got tired of typing all of them out). ex: `id_impl_new!([derive(PartialOrd, Ord)] ScoreID)` expands out to
+///
+/// ```
+/// #[derive(PartialOrd, Ord)]
+/// #[derive(Clone, Copy, PartialEq, Eq)]
+/// pub struct ScoreID(usize);
+/// impl ScoreID {
+///     pub fn new(idx: usize) -> Self {
+///         Self(idx)
+///     }
+///     pub fn idx(&self) -> usize {
+///         self.0
+///     }
+/// }
+/// ```
 macro_rules! id_impl_new {
     ($([$($derive:meta)*] $id_type:ident),*) => {
         $(
@@ -56,9 +55,9 @@ pub enum RsrcPool {
 
 #[derive(Default)]
 pub struct Paddle {
-    pos: Vec2,
-    size: Vec2,
-    controls: Vec<(ActionID, KeyCode)>,
+    pub pos: Vec2,
+    pub size: Vec2,
+    pub controls: Vec<(ActionID, KeyCode, bool, Values)>,
 }
 
 impl Paddle {
@@ -74,18 +73,18 @@ impl Paddle {
         self.size = size;
     }
 
-    pub fn add_control_map(&mut self, keycode: KeyCode) -> ActionID {
+    pub fn add_control_map(&mut self, keycode: KeyCode, valid: bool) -> ActionID {
         let act_id = ActionID(self.controls.len());
-        self.controls.push((act_id, keycode));
+        self.controls.push((act_id, keycode, valid, Values::new()));
         act_id
     }
 }
 
 #[derive(Default)]
 pub struct Ball {
-    pos: Vec2,
-    size: Vec2,
-    vel: Vec2,
+    pub pos: Vec2,
+    pub size: Vec2,
+    pub vel: Vec2,
 }
 
 impl Ball {
@@ -108,8 +107,8 @@ impl Ball {
 
 #[derive(Default)]
 pub struct Wall {
-    pos: Vec2,
-    size: Vec2,
+    pub pos: Vec2,
+    pub size: Vec2,
 }
 
 impl Wall {
@@ -128,7 +127,7 @@ impl Wall {
 
 #[derive(Default)]
 pub struct Score {
-    value: u16,
+    pub value: u16,
 }
 
 impl Score {
@@ -161,8 +160,8 @@ impl Logics {
             },
         );
 
-        for (act_id, keycode) in paddle.controls {
-            self.control.add_key_map(id.0, keycode, act_id);
+        for (act_id, keycode, valid, _) in paddle.controls {
+            self.control.add_key_map(id.0, keycode, act_id, valid);
         }
     }
 

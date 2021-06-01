@@ -45,13 +45,13 @@ impl Logics {
         Self {
             control: {
                 let mut control = KeyboardControl::new();
-                control.add_key_map(0, KeyCode::Q, ActionID::MoveUp);
-                control.add_key_map(0, KeyCode::A, ActionID::MoveDown);
-                control.add_key_map(0, KeyCode::W, ActionID::Serve);
-                control.add_key_map(1, KeyCode::O, ActionID::MoveUp);
-                control.add_key_map(1, KeyCode::L, ActionID::MoveDown);
-                control.add_key_map(1, KeyCode::I, ActionID::Serve);
-                control.add_key_map(2, KeyCode::Escape, ActionID::Quit);
+                control.add_key_map(0, KeyCode::Q, ActionID::MoveUp, true);
+                control.add_key_map(0, KeyCode::A, ActionID::MoveDown, true);
+                control.add_key_map(0, KeyCode::W, ActionID::Serve, true);
+                control.add_key_map(1, KeyCode::O, ActionID::MoveUp, true);
+                control.add_key_map(1, KeyCode::L, ActionID::MoveDown, true);
+                control.add_key_map(1, KeyCode::I, ActionID::Serve, false);
+                control.add_key_map(2, KeyCode::Escape, ActionID::Quit, true);
                 control
             },
             physics: PointPhysics::new(),

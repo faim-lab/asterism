@@ -27,15 +27,16 @@ async fn main() {
 }
 
 fn init(game: &mut Game) {
+    // ball
     let mut ball = Ball::new();
     ball.set_pos(Vec2::new(
         WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
         HEIGHT as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
     ));
     ball.set_size(Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32));
-
     game.add_ball(ball);
 
+    // walls
     // left
     let mut wall = Wall::new();
     wall.set_pos(Vec2::new(-1.0, 0.0));
@@ -57,22 +58,27 @@ fn init(game: &mut Game) {
     wall.set_size(Vec2::new(WIDTH as f32, 1.0));
     game.add_wall(wall);
 
+    // paddle 1
     let mut paddle1 = Paddle::new();
-    let action_q = paddle1.add_control_map(KeyCode::Q);
-    let action_a = paddle1.add_control_map(KeyCode::A);
-    let action_w = paddle1.add_control_map(KeyCode::W);
+    #[allow(unused)]
+    let action_q = paddle1.add_control_map(KeyCode::Q, true);
+    #[allow(unused)]
+    let action_a = paddle1.add_control_map(KeyCode::A, true);
+    let action_w = paddle1.add_control_map(KeyCode::W, true);
     paddle1.set_pos(Vec2::new(
         PADDLE_OFF_X as f32,
         HEIGHT as f32 / 2.0 - PADDLE_HEIGHT as f32 / 2.0,
     ));
     paddle1.set_size(Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32));
-
     game.add_paddle(paddle1);
 
+    // paddle 2
     let mut paddle2 = Paddle::new();
-    let action_o = paddle2.add_control_map(KeyCode::O);
-    let action_l = paddle2.add_control_map(KeyCode::L);
-    let action_i = paddle2.add_control_map(KeyCode::I);
+    #[allow(unused)]
+    let action_o = paddle2.add_control_map(KeyCode::O, true);
+    #[allow(unused)]
+    let action_l = paddle2.add_control_map(KeyCode::L, true);
+    let action_i = paddle2.add_control_map(KeyCode::I, false);
     paddle2.set_pos(Vec2::new(
         WIDTH as f32 - PADDLE_OFF_X as f32 - PADDLE_WIDTH as f32,
         HEIGHT as f32 / 2.0 - PADDLE_HEIGHT as f32 / 2.0,
@@ -85,6 +91,17 @@ fn init(game: &mut Game) {
     game.add_score(score1);
     let score2 = Score::new();
     game.add_score(score2);
+
+    game.set_paddle_synthesis(Box::new(|paddle: &mut Paddle| {
+        if paddle.controls[0].3.value > 0.0 {
+            paddle.pos.y -= 1.0;
+            // paddle.vel.y -= 1.0;
+        }
+        if paddle.controls[1].3.value > 0.0 {
+            paddle.pos.y += 1.0;
+            // paddle.vel.y = (-1.0).min(paddle.vel.y);
+        }
+    }));
 
     let inc_score =
         |state: &mut State, logics: &mut Logics, event: &CollisionEvent<CollisionEnt>| {
@@ -182,60 +199,6 @@ fn init(game: &mut Game) {
         Box::new(bounce_ball_x),
     );
 
-    // these controls should be a mapping?
-    game.add_ctrl_predicate(
-        game.state.paddles[0],
-        action_q,
-        ControlEventType::KeyHeld,
-        Box::new(|state, logics, event| {
-            let col_idx = state.get_col_idx(CollisionEnt::Paddle(state.paddles[event.set]));
-            let mut vals = logics.collision.get_synthesis(col_idx);
-            vals.center.y -= 1.0;
-            vals.vel.y = -1.0;
-            logics.collision.update_synthesis(col_idx, vals);
-        }),
-    );
-
-    game.add_ctrl_predicate(
-        game.state.paddles[0],
-        action_a,
-        ControlEventType::KeyHeld,
-        Box::new(|state, logics, event| {
-            let col_idx = state.get_col_idx(CollisionEnt::Paddle(state.paddles[event.set]));
-            let mut vals = logics.collision.get_synthesis(col_idx);
-            vals.center.y += 1.0;
-            vals.vel.y = 1.0;
-            logics.collision.update_synthesis(col_idx, vals);
-        }),
-    );
-
-    game.add_ctrl_predicate(
-        game.state.paddles[1],
-        action_o,
-        ControlEventType::KeyHeld,
-        Box::new(|state, logics, event| {
-            let col_idx = state.get_col_idx(CollisionEnt::Paddle(state.paddles[event.set]));
-            let mut vals = logics.collision.get_synthesis(col_idx);
-            vals.center.y -= 1.0;
-            vals.vel.y = -1.0;
-            logics.collision.update_synthesis(col_idx, vals);
-        }),
-    );
-
-    game.add_ctrl_predicate(
-        game.state.paddles[1],
-        action_l,
-        ControlEventType::KeyHeld,
-        Box::new(|state, logics, event| {
-            let col_idx = state.get_col_idx(CollisionEnt::Paddle(state.paddles[event.set]));
-            let mut vals = logics.collision.get_synthesis(col_idx);
-            vals.center.y += 1.0;
-            vals.vel.y = 1.0;
-            logics.collision.update_synthesis(col_idx, vals);
-        }),
-    );
-
-    // but these shouldn't
     let move_ball = |state: &mut State, logics: &mut Logics, event: &ControlEvent<ActionID>| {
         let vel = match event.set {
             0 => Vec2::new(1.0, 1.0),

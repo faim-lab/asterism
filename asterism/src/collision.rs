@@ -387,6 +387,8 @@ pub struct AabbColData {
     pub center: Vec2,
     pub half_size: Vec2,
     pub vel: Vec2,
+    pub fixed: bool,
+    pub solid: bool,
 }
 
 impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
@@ -461,6 +463,8 @@ impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
             center: self.centers[ident],
             half_size: self.half_sizes[ident],
             vel: self.velocities[ident],
+            fixed: self.metadata[ident].fixed,
+            solid: self.metadata[ident].solid,
         }
     }
 
@@ -468,6 +472,8 @@ impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
         self.centers[ident] = data.center;
         self.half_sizes[ident] = data.half_size;
         self.velocities[ident] = data.vel;
+        self.metadata[ident].fixed = data.fixed;
+        self.metadata[ident].solid = data.solid;
     }
 }
 

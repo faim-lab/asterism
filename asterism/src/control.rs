@@ -58,7 +58,9 @@ where
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         match reaction {
-            ControlReaction::AddKeyToSet(set, id, key) => self.add_key_map(*set, *key, *id),
+            ControlReaction::AddKeyToSet(set, id, key, valid) => {
+                self.add_key_map(*set, *key, *id, *valid)
+            }
             ControlReaction::SetKeyValid(set, id) => {
                 if let Some(action) = self.mapping[*set].iter_mut().find(|act| act.id == *id) {
                     action.is_valid = true;
@@ -160,12 +162,18 @@ where
     }
 
     /// Adds a single keymap to the logic.
-    pub fn add_key_map(&mut self, locus_idx: usize, keycode: Wrapper::KeyCode, id: ID) {
+    pub fn add_key_map(
+        &mut self,
+        locus_idx: usize,
+        keycode: Wrapper::KeyCode,
+        id: ID,
+        valid: bool,
+    ) {
         if locus_idx >= self.mapping.len() {
             self.mapping.resize_with(locus_idx + 1, Default::default);
             self.values.resize_with(locus_idx + 1, Default::default);
         }
-        self.mapping[locus_idx].push(Action::new(id, keycode, InputType::Digital));
+        self.mapping[locus_idx].push(Action::new(id, keycode, InputType::Digital, valid));
         self.values[locus_idx].push(Values {
             value: 0.0,
             changed_by: 0.0,
@@ -206,6 +214,15 @@ pub struct Values {
     pub value: f32,
 }
 
+impl Values {
+    pub fn new() -> Self {
+        Self {
+            changed_by: 0.0,
+            value: 0.0,
+        }
+    }
+}
+
 /// Information for an action and the input it's attached to.
 #[derive(Clone, Copy)]
 pub struct Action<ID, KeyCode: Copy> {
@@ -219,11 +236,11 @@ pub struct Action<ID, KeyCode: Copy> {
 }
 
 impl<ID, KeyCode: Copy> Action<ID, KeyCode> {
-    pub fn new(id: ID, keycode: KeyCode, input_type: InputType) -> Self {
+    pub fn new(id: ID, keycode: KeyCode, input_type: InputType, valid: bool) -> Self {
         Self {
             id,
             key_input: KeyInput { keycode },
-            is_valid: true,
+            is_valid: valid,
             input_type,
         }
     }
@@ -235,7 +252,7 @@ impl<ID, KeyCode: Copy> Action<ID, KeyCode> {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ControlReaction<ID: Copy + Eq, KeyCode: Copy + Eq> {
-    AddKeyToSet(usize, ID, KeyCode),
+    AddKeyToSet(usize, ID, KeyCode, bool),
     SetKeyValid(usize, ID),
     SetKeyInvalid(usize, ID),
 }
