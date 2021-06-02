@@ -15,6 +15,8 @@ mod types;
 use types::*;
 mod syntheses;
 use syntheses::*;
+mod tables;
+use tables::*;
 
 // reexports
 pub use asterism::collision::{CollisionEvent, CollisionReaction};
