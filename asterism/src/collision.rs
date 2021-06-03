@@ -407,43 +407,22 @@ impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         match reaction {
-            CollisionReaction::SetPos(ent_id, pos) => {
-                // this sucks
-                if let Some(i) = self
-                    .metadata
-                    .iter()
-                    .position(|CollisionData { id, .. }| id == ent_id)
-                {
-                    self.centers[i] = *pos + self.half_sizes[i];
-                }
+            CollisionReaction::SetPos(idx, pos) => {
+                let idx = *idx;
+                self.centers[idx] = *pos + self.half_sizes[idx];
             }
-            CollisionReaction::SetSize(ent_id, size) => {
-                if let Some(i) = self
-                    .metadata
-                    .iter()
-                    .position(|CollisionData { id, .. }| id == ent_id)
-                {
-                    self.half_sizes[i] = *size / 2.0;
-                }
+            CollisionReaction::SetSize(idx, size) => {
+                let idx = *idx;
+                self.half_sizes[idx] = *size / 2.0;
             }
-            CollisionReaction::SetVel(ent_id, vel) => {
-                if let Some(i) = self
-                    .metadata
-                    .iter()
-                    .position(|CollisionData { id, .. }| id == ent_id)
-                {
-                    self.velocities[i] = *vel;
-                }
+            CollisionReaction::SetVel(idx, vel) => {
+                let idx = *idx;
+                self.velocities[idx] = *vel;
             }
-            CollisionReaction::SetMetadata(ent_id, solid, fixed) => {
-                if let Some(data) = self
-                    .metadata
-                    .iter_mut()
-                    .find(|CollisionData { id, .. }| id == ent_id)
-                {
-                    data.solid = *solid;
-                    data.fixed = *fixed;
-                }
+            CollisionReaction::SetMetadata(idx, solid, fixed) => {
+                let idx = *idx;
+                self.metadata[idx].solid = *solid;
+                self.metadata[idx].fixed = *fixed;
             }
             CollisionReaction::AddBody {
                 pos,
@@ -479,10 +458,10 @@ impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum CollisionReaction<ID> {
-    SetPos(ID, Vec2),
-    SetSize(ID, Vec2),
-    SetVel(ID, Vec2),
-    SetMetadata(ID, bool, bool), // solid, fixed
+    SetPos(usize, Vec2),
+    SetSize(usize, Vec2),
+    SetVel(usize, Vec2),
+    SetMetadata(usize, bool, bool), // solid, fixed
     AddBody {
         pos: Vec2,
         size: Vec2,

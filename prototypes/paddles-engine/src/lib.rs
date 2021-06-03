@@ -3,8 +3,7 @@
 #![allow(clippy::upper_case_acronyms)]
 
 use asterism::{
-    collision::AabbCollision,
-    control::{Action, InputType, KeyboardControl, MacroquadInputWrapper},
+    control::{InputType, KeyboardControl, MacroquadInputWrapper},
     physics::PointPhysics,
     resources::QueuedResources,
     Event, Reaction,
@@ -15,13 +14,11 @@ mod types;
 use types::*;
 mod syntheses;
 use syntheses::*;
-mod tables;
-use tables::*;
 
 // reexports
-pub use asterism::collision::{CollisionEvent, CollisionReaction};
-pub use asterism::control::{ControlEvent, ControlEventType, ControlReaction};
-pub use asterism::physics::{PhysicsEvent, PhysicsReaction};
+pub use asterism::collision::{AabbColData, AabbCollision, CollisionEvent, CollisionReaction};
+pub use asterism::control::{Action, ControlEvent, ControlEventType, ControlReaction, Values};
+pub use asterism::physics::{PhysicsEvent, PhysicsReaction, PointPhysData};
 pub use asterism::resources::{ResourceEvent, ResourceEventType, ResourceReaction, Transaction};
 pub use asterism::Logic;
 pub use types::{
@@ -72,10 +69,28 @@ pub struct Events {
     pub resources: PredicateFn<ResourceEvent<RsrcPool>>,
     pub physics: PredicateFn<PhysicsEvent>,
 
-    pub paddle_synth: Synthesis<Paddle>,
-    pub ball_synth: Synthesis<Ball>,
-    pub wall_synth: Synthesis<Wall>,
-    pub score_synth: Synthesis<Score>,
+    paddle_synth: PaddleSynth,
+    ball_synth: BallSynth,
+    wall_synth: WallSynth,
+    score_synth: ScoreSynth,
+}
+
+struct PaddleSynth {
+    ctrl: Option<Synthesis<Paddle>>,
+    col: Option<Synthesis<Paddle>>,
+}
+
+struct BallSynth {
+    col: Option<Synthesis<Ball>>,
+    phys: Option<Synthesis<Ball>>,
+}
+
+struct WallSynth {
+    col: Option<Synthesis<Wall>>,
+}
+
+struct ScoreSynth {
+    rsrc: Option<Synthesis<Score>>,
 }
 
 impl Events {
@@ -86,10 +101,16 @@ impl Events {
             resources: Vec::new(),
             physics: Vec::new(),
 
-            paddle_synth: Box::new(|paddle| {}),
-            ball_synth: Box::new(|ball| {}),
-            wall_synth: Box::new(|wall| {}),
-            score_synth: Box::new(|score| {}),
+            paddle_synth: PaddleSynth {
+                col: None,
+                ctrl: None,
+            },
+            ball_synth: BallSynth {
+                col: Some(Box::new(|ball: Ball| ball)),
+                phys: Some(Box::new(|ball: Ball| ball)),
+            },
+            wall_synth: WallSynth { col: None },
+            score_synth: ScoreSynth { rsrc: None },
         }
     }
 }
@@ -176,26 +197,35 @@ impl Game {
 }
 
 pub async fn run(mut game: Game) {
+    use std::time::*;
+    let mut available_time = 0.0;
+    let mut since = Instant::now();
+    const DT: f32 = 1.0 / 60.0;
+
     loop {
         if is_key_down(KeyCode::Escape) {
             break;
         }
-        // order is probably weird??
-        control(&mut game);
-        physics(&mut game);
-        collision(&mut game);
-        resources(&mut game);
-        game.paddle_synthesis();
-        game.wall_synthesis();
-        game.ball_synthesis();
-        game.score_synthesis();
-
         draw(&game);
+        available_time += since.elapsed().as_secs_f32();
+        since = Instant::now();
+
+        // framerate
+        while available_time >= DT {
+            available_time -= DT;
+            control(&mut game);
+            physics(&mut game);
+            collision(&mut game);
+            resources(&mut game);
+        }
+
         next_frame().await;
     }
 }
 
 fn control(game: &mut Game) {
+    game.paddle_ctrl_synthesis();
+
     game.logics.control.update(&());
 
     for (predicate, reaction) in game.events.control.iter() {
@@ -206,6 +236,8 @@ fn control(game: &mut Game) {
 }
 
 fn physics(game: &mut Game) {
+    game.ball_phys_synthesis();
+
     game.logics.physics.update();
 
     for (predicate, reaction) in game.events.physics.iter() {
@@ -213,16 +245,13 @@ fn physics(game: &mut Game) {
             reaction(&mut game.state, &mut game.logics, predicate);
         }
     }
-
-    // update collision positions, hard-coded structural synthesis
-    for (i, ball) in game.state.balls.iter().enumerate() {
-        let col_idx = game.state.get_col_idx(CollisionEnt::Ball(*ball));
-        game.logics.collision.centers[col_idx] =
-            game.logics.physics.positions[i] + game.logics.collision.half_sizes[col_idx];
-    }
 }
 
 fn collision(game: &mut Game) {
+    game.paddle_col_synthesis();
+    game.ball_col_synthesis();
+    game.wall_synthesis();
+
     game.logics.collision.update();
 
     for (predicate, reaction) in game.events.collision.iter() {
@@ -230,19 +259,13 @@ fn collision(game: &mut Game) {
             reaction(&mut game.state, &mut game.logics, predicate);
         }
     }
-
-    // update physics positions
-    // honestly this updating/passing on makes me think of the functional programming style of continuously modifying one state
-    // kind of like projection/unprojection but instead you modify other logics' information directly...
-    for (i, ball) in game.state.balls.iter().enumerate() {
-        let col_idx = game.state.get_col_idx(CollisionEnt::Ball(*ball));
-        game.logics.physics.positions[i] =
-            game.logics.collision.centers[col_idx] - game.logics.collision.half_sizes[col_idx];
-    }
 }
 
 fn resources(game: &mut Game) {
+    game.score_synthesis();
+
     game.logics.resources.update();
+
     for (predicate, reaction) in game.events.resources.iter() {
         if game.logics.resources.check_predicate(predicate) {
             reaction(&mut game.state, &mut game.logics, predicate);

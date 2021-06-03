@@ -1,3 +1,5 @@
+// abandoned, doesn't compile
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -9,7 +11,7 @@ use asterism::Logic;
 use crate::types::*;
 
 pub struct ConditionTable {
-    rows: Vec<Row>,
+    row: Vec<bool>,
     query_arrays: Vec<Rc<RefCell<dyn QueryArray>>>,
 }
 
@@ -19,10 +21,6 @@ impl ConditionTable {
             let query_array = query_array.borrow_mut().unwrap();
         }
     }
-}
-
-struct Row {
-    query_arrays: Rc<RefCell<dyn QueryArray>>,
 }
 
 // query arrays, composed to build condition tables
