@@ -40,6 +40,11 @@ impl Logic for PointPhysics {
             PhysicsReaction::SetAcc(idx, acc) => {
                 self.accelerations[*idx] = *acc;
             }
+            PhysicsReaction::RemoveBody(idx) => {
+                self.positions.remove(*idx);
+                self.velocities.remove(*idx);
+                self.accelerations.remove(*idx);
+            }
             PhysicsReaction::AddBody { pos, vel, acc } => {
                 self.add_physics_entity(*pos, *vel, *acc);
             }
@@ -101,6 +106,7 @@ pub enum PhysicsReaction {
     SetPos(usize, Vec2),
     SetVel(usize, Vec2),
     SetAcc(usize, Vec2),
+    RemoveBody(usize),
     AddBody { pos: Vec2, vel: Vec2, acc: Vec2 },
 }
 impl Reaction for PhysicsReaction {}

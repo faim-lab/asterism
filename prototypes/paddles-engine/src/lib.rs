@@ -45,18 +45,18 @@ impl Logics {
 
 #[derive(Default)]
 pub struct State {
-    pub paddles: Vec<PaddleID>,
-    pub balls: Vec<BallID>,
-    pub walls: Vec<WallID>,
-    pub scores: Vec<ScoreID>,
+    num_paddles: usize,
+    num_balls: usize,
+    num_walls: usize,
+    num_scores: usize,
 }
 
 impl State {
     pub fn get_col_idx(&self, col: CollisionEnt) -> usize {
         match col {
             CollisionEnt::Paddle(paddle) => paddle.idx(),
-            CollisionEnt::Wall(wall) => wall.idx() + self.paddles.len(),
-            CollisionEnt::Ball(ball) => ball.idx() + self.paddles.len() + self.walls.len(),
+            CollisionEnt::Wall(wall) => wall.idx() + self.num_paddles,
+            CollisionEnt::Ball(ball) => ball.idx() + self.num_paddles + self.num_walls,
         }
     }
 }
@@ -168,31 +168,72 @@ impl Game {
         self.events.resources.push((rsrc_event, on_rsrc_event));
     }
 
-    pub fn add_paddle(&mut self, paddle: Paddle) {
-        let id = PaddleID::new(self.state.paddles.len());
+    pub fn add_paddle(&mut self, paddle: Paddle) -> PaddleID {
+        let id = PaddleID::new(self.state.num_paddles);
         self.logics
             .consume_paddle(id, self.state.get_col_idx(CollisionEnt::Paddle(id)), paddle);
-        self.state.paddles.push(id);
+        self.state.num_paddles += 1;
+        id
     }
 
-    pub fn add_ball(&mut self, ball: Ball) {
-        let id = BallID::new(self.state.balls.len());
+    pub fn add_ball(&mut self, ball: Ball) -> BallID {
+        let id = BallID::new(self.state.num_balls);
         self.logics
             .consume_ball(id, self.state.get_col_idx(CollisionEnt::Ball(id)), ball);
-        self.state.balls.push(id);
+        self.state.num_balls += 1;
+        id
     }
 
-    pub fn add_wall(&mut self, wall: Wall) {
-        let id = WallID::new(self.state.walls.len());
+    pub fn add_wall(&mut self, wall: Wall) -> WallID {
+        let id = WallID::new(self.state.num_walls);
         self.logics
             .consume_wall(id, self.state.get_col_idx(CollisionEnt::Wall(id)), wall);
-        self.state.walls.push(id);
+        self.state.num_walls += 1;
+        id
     }
 
-    pub fn add_score(&mut self, score: Score) {
-        let id = ScoreID::new(self.state.scores.len());
+    pub fn add_score(&mut self, score: Score) -> ScoreID {
+        let id = ScoreID::new(self.state.num_scores);
         self.logics.consume_score(id, score);
-        self.state.scores.push(id);
+        self.state.num_scores += 1;
+        id
+    }
+
+    pub fn remove_paddle(&mut self, paddle: PaddleID) {
+        self.state.num_paddles -= 1;
+        self.logics.control.mapping.remove(paddle.idx());
+        self.logics
+            .collision
+            .handle_predicate(&CollisionReaction::RemoveBody(
+                self.state.get_col_idx(CollisionEnt::Paddle(paddle)),
+            ));
+    }
+
+    pub fn remove_wall(&mut self, wall: WallID) {
+        self.state.num_walls -= 1;
+        self.logics
+            .collision
+            .handle_predicate(&CollisionReaction::RemoveBody(
+                self.state.get_col_idx(CollisionEnt::Wall(wall)),
+            ));
+    }
+
+    pub fn remove_ball(&mut self, ball: BallID) {
+        self.state.num_balls -= 1;
+        self.logics
+            .physics
+            .handle_predicate(&PhysicsReaction::RemoveBody(ball.idx()));
+        self.logics
+            .collision
+            .handle_predicate(&CollisionReaction::RemoveBody(
+                self.state.get_col_idx(CollisionEnt::Ball(ball)),
+            ));
+    }
+
+    pub fn remove_score(&mut self, score: ScoreID) {
+        self.state.num_scores -= 1;
+        let rsrc = RsrcPool::Score(score);
+        self.logics.resources.items.remove(&rsrc);
     }
 }
 

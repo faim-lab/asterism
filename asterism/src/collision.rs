@@ -424,6 +424,15 @@ impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
                 self.metadata[idx].solid = *solid;
                 self.metadata[idx].fixed = *fixed;
             }
+            CollisionReaction::RemoveBody(idx) => {
+                // this will likely mess up any contacts processing....
+                let idx = *idx;
+                self.centers.remove(idx);
+                self.half_sizes.remove(idx);
+                self.metadata.remove(idx);
+                self.velocities.remove(idx);
+                self.displacements.remove(idx);
+            }
             CollisionReaction::AddBody {
                 pos,
                 size,
@@ -462,6 +471,8 @@ pub enum CollisionReaction<ID> {
     SetSize(usize, Vec2),
     SetVel(usize, Vec2),
     SetMetadata(usize, bool, bool), // solid, fixed
+    /// NOTE that using this predicate will likely break anything involving contacts until this logic is updated
+    RemoveBody(usize),
     AddBody {
         pos: Vec2,
         size: Vec2,

@@ -34,29 +34,29 @@ fn init(game: &mut Game) {
         HEIGHT as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
     ));
     ball.set_size(Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32));
-    game.add_ball(ball);
+    let ball = game.add_ball(ball);
 
     // walls
     // left
     let mut wall = Wall::new();
     wall.set_pos(Vec2::new(-1.0, 0.0));
     wall.set_size(Vec2::new(1.0, HEIGHT as f32));
-    game.add_wall(wall);
+    let left_wall = game.add_wall(wall);
     // right
     let mut wall = Wall::new();
     wall.set_pos(Vec2::new(WIDTH as f32, 0.0));
     wall.set_size(Vec2::new(1.0, HEIGHT as f32));
-    game.add_wall(wall);
+    let right_wall = game.add_wall(wall);
     // top
     let mut wall = Wall::new();
     wall.set_pos(Vec2::new(0.0, -1.0));
     wall.set_size(Vec2::new(WIDTH as f32, 1.0));
-    game.add_wall(wall);
+    let top_wall = game.add_wall(wall);
     // bottom
     let mut wall = Wall::new();
     wall.set_pos(Vec2::new(0.0, HEIGHT as f32));
     wall.set_size(Vec2::new(WIDTH as f32, 1.0));
-    game.add_wall(wall);
+    let bottom_wall = game.add_wall(wall);
 
     // paddle 1
     let mut paddle1 = Paddle::new();
@@ -68,7 +68,7 @@ fn init(game: &mut Game) {
         HEIGHT as f32 / 2.0 - PADDLE_HEIGHT as f32 / 2.0,
     ));
     paddle1.set_size(Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32));
-    game.add_paddle(paddle1);
+    let paddle1 = game.add_paddle(paddle1);
 
     // paddle 2
     let mut paddle2 = Paddle::new();
@@ -81,12 +81,10 @@ fn init(game: &mut Game) {
     ));
     paddle2.set_size(Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32));
 
-    game.add_paddle(paddle2);
+    let paddle2 = game.add_paddle(paddle2);
 
-    let score1 = Score::new();
-    game.add_score(score1);
-    let score2 = Score::new();
-    game.add_score(score2);
+    let score1 = game.add_score(Score::new());
+    let score2 = game.add_score(Score::new());
 
     game.set_paddle_col_synthesis(Box::new(|mut paddle: Paddle| {
         if paddle.controls[0].3.value > 0.0 {
@@ -100,26 +98,25 @@ fn init(game: &mut Game) {
         paddle
     }));
 
-    let inc_score =
-        |state: &mut State, logics: &mut Logics, event: &CollisionEvent<CollisionEnt>| {
-            println!("collided");
-            if let CollisionEnt::Wall(wall_id) = event.1 {
-                logics.resources.handle_predicate(&(
-                    RsrcPool::Score(state.scores[wall_id.idx()]),
-                    Transaction::Change(1),
-                ));
-            }
-        };
+    let inc_score = |_: &mut State, logics: &mut Logics, event: &CollisionEvent<CollisionEnt>| {
+        println!("collided");
+        if let CollisionEnt::Wall(wall_id) = event.1 {
+            logics.resources.handle_predicate(&(
+                RsrcPool::Score(ScoreID::new(wall_id.idx())),
+                Transaction::Change(1),
+            ));
+        }
+    };
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(game.state.balls[0]),
-        CollisionEnt::Wall(game.state.walls[0]),
+        CollisionEnt::Ball(ball),
+        CollisionEnt::Wall(left_wall),
         Box::new(inc_score),
     );
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(game.state.balls[0]),
-        CollisionEnt::Wall(game.state.walls[1]),
+        CollisionEnt::Ball(ball),
+        CollisionEnt::Wall(right_wall),
         Box::new(inc_score),
     );
 
@@ -127,11 +124,11 @@ fn init(game: &mut Game) {
         let RsrcPool::Score(score_id) = event.pool;
         logics
             .physics
-            .handle_predicate(&PhysicsReaction::SetVel(state.balls[0].idx(), Vec2::ZERO));
+            .handle_predicate(&PhysicsReaction::SetVel(0, Vec2::ZERO));
         logics
             .collision
             .handle_predicate(&CollisionReaction::SetPos(
-                state.get_col_idx(CollisionEnt::Ball(state.balls[0])),
+                state.get_col_idx(CollisionEnt::Ball(BallID::new(0))),
                 Vec2::new(
                     WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
                     WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
@@ -146,12 +143,12 @@ fn init(game: &mut Game) {
     };
 
     game.add_rsrc_predicate(
-        RsrcPool::Score(game.state.scores[0]),
+        RsrcPool::Score(score1),
         ResourceEventType::PoolUpdated,
         Box::new(reset_ball),
     );
     game.add_rsrc_predicate(
-        RsrcPool::Score(game.state.scores[1]),
+        RsrcPool::Score(score2),
         ResourceEventType::PoolUpdated,
         Box::new(reset_ball),
     );
@@ -175,30 +172,30 @@ fn init(game: &mut Game) {
         };
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(game.state.balls[0]),
-        CollisionEnt::Wall(game.state.walls[2]),
+        CollisionEnt::Ball(ball),
+        CollisionEnt::Wall(top_wall),
         Box::new(bounce_ball_y),
     );
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(game.state.balls[0]),
-        CollisionEnt::Wall(game.state.walls[3]),
+        CollisionEnt::Ball(ball),
+        CollisionEnt::Wall(bottom_wall),
         Box::new(bounce_ball_y),
     );
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(game.state.balls[0]),
-        CollisionEnt::Paddle(game.state.paddles[0]),
+        CollisionEnt::Ball(ball),
+        CollisionEnt::Paddle(paddle1),
         Box::new(bounce_ball_x),
     );
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(game.state.balls[0]),
-        CollisionEnt::Paddle(game.state.paddles[1]),
+        CollisionEnt::Ball(ball),
+        CollisionEnt::Paddle(paddle2),
         Box::new(bounce_ball_x),
     );
 
-    let move_ball = |state: &mut State, logics: &mut Logics, event: &ControlEvent<ActionID>| {
+    let move_ball = |_: &mut State, logics: &mut Logics, event: &ControlEvent<ActionID>| {
         let vel = match event.set {
             0 => Vec2::new(1.0, 1.0),
             1 => Vec2::new(-1.0, -1.0),
@@ -206,21 +203,21 @@ fn init(game: &mut Game) {
         };
         logics
             .physics
-            .handle_predicate(&PhysicsReaction::SetVel(state.balls[0].idx(), vel));
+            .handle_predicate(&PhysicsReaction::SetVel(0, vel));
         logics
             .control
             .handle_predicate(&ControlReaction::SetKeyInvalid(event.set, event.action_id));
     };
 
     game.add_ctrl_predicate(
-        game.state.paddles[0],
+        paddle1,
         action_w,
         ControlEventType::KeyPressed,
         Box::new(move_ball),
     );
 
     game.add_ctrl_predicate(
-        game.state.paddles[1],
+        paddle2,
         action_i,
         ControlEventType::KeyPressed,
         Box::new(move_ball),

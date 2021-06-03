@@ -36,8 +36,8 @@ impl Game {
 
     pub(crate) fn paddle_col_synthesis(&mut self) {
         if let Some(synthesis) = self.events.paddle_synth.col.as_ref() {
-            for paddle_id in self.state.paddles.iter() {
-                let col_idx = self.state.get_col_idx(CollisionEnt::Paddle(*paddle_id));
+            for paddle_id in (0..self.state.num_paddles).map(PaddleID::new) {
+                let col_idx = self.state.get_col_idx(CollisionEnt::Paddle(paddle_id));
                 let mut col = self.logics.collision.get_synthesis(col_idx);
                 let ctrl = self.logics.control.get_synthesis(paddle_id.idx());
 
@@ -64,8 +64,8 @@ impl Game {
 
     pub(crate) fn paddle_ctrl_synthesis(&mut self) {
         if let Some(synthesis) = self.events.paddle_synth.ctrl.as_ref() {
-            for paddle_id in self.state.paddles.iter() {
-                let col_idx = self.state.get_col_idx(CollisionEnt::Paddle(*paddle_id));
+            for paddle_id in (0..self.state.num_paddles).map(PaddleID::new) {
+                let col_idx = self.state.get_col_idx(CollisionEnt::Paddle(paddle_id));
                 let col = self.logics.collision.get_synthesis(col_idx);
                 let mut ctrl = self.logics.control.get_synthesis(paddle_id.idx());
 
@@ -99,8 +99,8 @@ impl Game {
 
     pub(crate) fn wall_synthesis(&mut self) {
         if let Some(synthesis) = self.events.wall_synth.col.as_ref() {
-            for wall_id in self.state.walls.iter() {
-                let col_idx = self.state.get_col_idx(CollisionEnt::Wall(*wall_id));
+            for wall_id in (0..self.state.num_walls).map(WallID::new) {
+                let col_idx = self.state.get_col_idx(CollisionEnt::Wall(wall_id));
                 let mut col = self.logics.collision.get_synthesis(col_idx);
 
                 let mut wall = Wall::new();
@@ -117,8 +117,8 @@ impl Game {
 
     pub(crate) fn ball_col_synthesis(&mut self) {
         if let Some(synthesis) = self.events.ball_synth.col.as_ref() {
-            for ball_id in self.state.balls.iter() {
-                let col_idx = self.state.get_col_idx(CollisionEnt::Ball(*ball_id));
+            for ball_id in (0..self.state.num_balls).map(BallID::new) {
+                let col_idx = self.state.get_col_idx(CollisionEnt::Ball(ball_id));
                 let mut col = self.logics.collision.get_synthesis(col_idx);
                 let phys = self.logics.physics.get_synthesis(ball_id.idx());
 
@@ -140,8 +140,8 @@ impl Game {
 
     pub(crate) fn ball_phys_synthesis(&mut self) {
         if let Some(synthesis) = self.events.ball_synth.phys.as_ref() {
-            for ball_id in self.state.balls.iter() {
-                let col_idx = self.state.get_col_idx(CollisionEnt::Ball(*ball_id));
+            for ball_id in (0..self.state.num_balls).map(BallID::new) {
+                let col_idx = self.state.get_col_idx(CollisionEnt::Ball(ball_id));
                 let col = self.logics.collision.get_synthesis(col_idx);
                 let mut phys = self.logics.physics.get_synthesis(ball_id.idx());
 
@@ -160,8 +160,8 @@ impl Game {
 
     pub fn score_synthesis(&mut self) {
         if let Some(synthesis) = self.events.score_synth.rsrc.as_ref() {
-            for score_id in self.state.scores.iter() {
-                let rsrc_id = RsrcPool::Score(*score_id);
+            for score_id in (0..self.state.num_scores).map(ScoreID::new) {
+                let rsrc_id = RsrcPool::Score(score_id);
                 let rsrc = self.logics.resources.get_synthesis(rsrc_id);
 
                 let mut score = Score::new();
