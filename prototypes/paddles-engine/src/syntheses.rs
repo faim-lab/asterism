@@ -1,6 +1,6 @@
 // very shaky on the difference between predicate and structural synthesis but honestly the theoretical difference is also kind of vague so it's fine
 
-use asterism::collision::{AabbColData, AabbCollision, CollisionEvent, CollisionReaction};
+use asterism::collision::{AabbColData, AabbCollision, CollisionReaction, Contact};
 use asterism::control::{Action, ControlEvent, ControlEventType, ControlReaction, Values};
 use asterism::physics::{PhysicsEvent, PhysicsReaction, PointPhysData};
 use asterism::resources::{ResourceEvent, ResourceEventType, ResourceReaction, Transaction};

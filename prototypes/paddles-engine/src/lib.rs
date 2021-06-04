@@ -16,7 +16,7 @@ mod syntheses;
 use syntheses::*;
 
 // reexports
-pub use asterism::collision::{AabbColData, AabbCollision, CollisionEvent, CollisionReaction};
+pub use asterism::collision::{AabbColData, AabbCollision, CollisionReaction, Contact};
 pub use asterism::control::{Action, ControlEvent, ControlEventType, ControlReaction, Values};
 pub use asterism::physics::{PhysicsEvent, PhysicsReaction, PointPhysData};
 pub use asterism::resources::{ResourceEvent, ResourceEventType, ResourceReaction, Transaction};
@@ -43,8 +43,25 @@ impl Logics {
     }
 }
 
+pub enum EntID {
+    Wall(WallID),
+    Ball(BallID),
+    Paddle(PaddleID),
+    Score(ScoreID),
+}
+
+pub enum Ent {
+    Wall(Wall),
+    Ball(Ball),
+    Paddle(Paddle),
+    Score(Score),
+}
+
 #[derive(Default)]
 pub struct State {
+    remove_queue: Vec<EntID>,
+    add_queue: Vec<Ent>,
+    // bring back vecs of ids, things should have persistent identity
     num_paddles: usize,
     num_balls: usize,
     num_walls: usize,
@@ -59,13 +76,21 @@ impl State {
             CollisionEnt::Ball(ball) => ball.idx() + self.num_paddles + self.num_walls,
         }
     }
+
+    // WARNING: the logic for adding and removing things is EXTREMELY WRONG, i will eventually figure it out but not today
+    pub fn queue_remove(&mut self, ent: EntID) {
+        self.remove_queue.push(ent);
+    }
+    pub fn queue_add(&mut self, ent: Ent) {
+        self.add_queue.push(ent);
+    }
 }
 
 type PredicateFn<Event> = Vec<(Event, Box<dyn Fn(&mut State, &mut Logics, &Event)>)>;
 
 pub struct Events {
     pub control: PredicateFn<ControlEvent<ActionID>>,
-    pub collision: PredicateFn<CollisionEvent<CollisionEnt>>,
+    pub collision: PredicateFn<Contact>,
     pub resources: PredicateFn<ResourceEvent<RsrcPool>>,
     pub physics: PredicateFn<PhysicsEvent>,
 
@@ -149,9 +174,13 @@ impl Game {
         &mut self,
         col1: CollisionEnt,
         col2: CollisionEnt,
-        on_collide: Box<dyn Fn(&mut State, &mut Logics, &CollisionEvent<CollisionEnt>)>,
+        on_collide: Box<dyn Fn(&mut State, &mut Logics, &Contact)>,
     ) {
-        let col_event = CollisionEvent(col1, col2);
+        let col_event = Contact {
+            i: self.state.get_col_idx(col1),
+            j: self.state.get_col_idx(col2),
+            displacement: Vec2::ZERO,
+        };
         self.events.collision.push((col_event, on_collide));
     }
 
@@ -199,7 +228,7 @@ impl Game {
         id
     }
 
-    pub fn remove_paddle(&mut self, paddle: PaddleID) {
+    fn remove_paddle(&mut self, paddle: PaddleID) {
         self.state.num_paddles -= 1;
         self.logics.control.mapping.remove(paddle.idx());
         self.logics
@@ -209,7 +238,7 @@ impl Game {
             ));
     }
 
-    pub fn remove_wall(&mut self, wall: WallID) {
+    fn remove_wall(&mut self, wall: WallID) {
         self.state.num_walls -= 1;
         self.logics
             .collision
@@ -218,7 +247,7 @@ impl Game {
             ));
     }
 
-    pub fn remove_ball(&mut self, ball: BallID) {
+    fn remove_ball(&mut self, ball: BallID) {
         self.state.num_balls -= 1;
         self.logics
             .physics
@@ -230,7 +259,7 @@ impl Game {
             ));
     }
 
-    pub fn remove_score(&mut self, score: ScoreID) {
+    fn remove_score(&mut self, score: ScoreID) {
         self.state.num_scores -= 1;
         let rsrc = RsrcPool::Score(score);
         self.logics.resources.items.remove(&rsrc);
@@ -254,10 +283,47 @@ pub async fn run(mut game: Game) {
         // framerate
         while available_time >= DT {
             available_time -= DT;
+
+            let add_queue = std::mem::take(&mut game.state.add_queue);
+            for ent in add_queue {
+                match ent {
+                    Ent::Wall(wall) => {
+                        game.add_wall(wall);
+                    }
+                    Ent::Ball(ball) => {
+                        game.add_ball(ball);
+                    }
+                    Ent::Paddle(paddle) => {
+                        game.add_paddle(paddle);
+                    }
+                    Ent::Score(score) => {
+                        game.add_score(score);
+                    }
+                };
+            }
+
             control(&mut game);
             physics(&mut game);
             collision(&mut game);
             resources(&mut game);
+
+            let remove_queue = std::mem::take(&mut game.state.remove_queue);
+            for ent in remove_queue {
+                match ent {
+                    EntID::Wall(wall) => {
+                        game.remove_wall(wall);
+                    }
+                    EntID::Ball(ball) => {
+                        game.remove_ball(ball);
+                    }
+                    EntID::Paddle(paddle) => {
+                        game.remove_paddle(paddle);
+                    }
+                    EntID::Score(score) => {
+                        game.remove_score(score);
+                    }
+                };
+            }
         }
 
         next_frame().await;

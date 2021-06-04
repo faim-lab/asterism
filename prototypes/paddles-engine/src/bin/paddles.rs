@@ -98,9 +98,8 @@ fn init(game: &mut Game) {
         paddle
     }));
 
-    let inc_score = |_: &mut State, logics: &mut Logics, event: &CollisionEvent<CollisionEnt>| {
-        println!("collided");
-        if let CollisionEnt::Wall(wall_id) = event.1 {
+    let inc_score = |_: &mut State, logics: &mut Logics, event: &Contact| {
+        if let CollisionEnt::Wall(wall_id) = logics.collision.metadata[event.j].id {
             logics.resources.handle_predicate(&(
                 RsrcPool::Score(ScoreID::new(wall_id.idx())),
                 Transaction::Change(1),
@@ -153,23 +152,21 @@ fn init(game: &mut Game) {
         Box::new(reset_ball),
     );
 
-    let bounce_ball_y =
-        |_: &mut State, logics: &mut Logics, event: &CollisionEvent<CollisionEnt>| {
-            if let CollisionEnt::Ball(ball_id) = event.0 {
-                let mut vals = logics.physics.get_synthesis(ball_id.idx());
-                vals.vel.y *= -1.0;
-                logics.physics.update_synthesis(ball_id.idx(), vals);
-            }
-        };
+    let bounce_ball_y = |_: &mut State, logics: &mut Logics, event: &Contact| {
+        if let CollisionEnt::Ball(ball_id) = logics.collision.metadata[event.i].id {
+            let mut vals = logics.physics.get_synthesis(ball_id.idx());
+            vals.vel.y *= -1.0;
+            logics.physics.update_synthesis(ball_id.idx(), vals);
+        }
+    };
 
-    let bounce_ball_x =
-        |_: &mut State, logics: &mut Logics, event: &CollisionEvent<CollisionEnt>| {
-            if let CollisionEnt::Ball(ball_id) = event.0 {
-                let mut vals = logics.physics.get_synthesis(ball_id.idx());
-                vals.vel.x *= -1.0;
-                logics.physics.update_synthesis(ball_id.idx(), vals);
-            }
-        };
+    let bounce_ball_x = |_: &mut State, logics: &mut Logics, event: &Contact| {
+        if let CollisionEnt::Ball(ball_id) = logics.collision.metadata[event.i].id {
+            let mut vals = logics.physics.get_synthesis(ball_id.idx());
+            vals.vel.x *= -1.0;
+            logics.physics.update_synthesis(ball_id.idx(), vals);
+        }
+    };
 
     game.add_collision_predicate(
         CollisionEnt::Ball(ball),

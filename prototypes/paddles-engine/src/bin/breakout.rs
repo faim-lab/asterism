@@ -1,0 +1,205 @@
+use macroquad::prelude::*;
+use paddles_engine::*;
+
+const WIDTH: u8 = 255;
+const HEIGHT: u8 = 255;
+const BALL_SIZE: u8 = 10;
+const PADDLE_OFF_X: u8 = 16;
+const PADDLE_WIDTH: u8 = 48;
+const PADDLE_HEIGHT: u8 = 8;
+
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "breakout".to_owned(),
+        window_width: WIDTH as i32,
+        window_height: HEIGHT as i32,
+        fullscreen: false,
+        ..Default::default()
+    }
+}
+
+#[macroquad::main(window_conf)]
+async fn main() {
+    // initialize game
+    let mut game = Game::new();
+    init(&mut game);
+    run(game).await;
+}
+
+fn init(game: &mut Game) {
+    // ball
+    let mut ball = Ball::new();
+    ball.set_pos(Vec2::new(
+        WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
+        HEIGHT as f32 - PADDLE_OFF_X as f32 * 2.0,
+    ));
+    ball.set_size(Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32));
+    let ball = game.add_ball(ball);
+
+    // walls
+    let walls = [
+        {
+            // left
+            let mut wall = Wall::new();
+            wall.set_pos(Vec2::new(-1.0, 0.0));
+            wall.set_size(Vec2::new(1.0, HEIGHT as f32));
+            game.add_wall(wall)
+        },
+        {
+            // right
+            let mut wall = Wall::new();
+            wall.set_pos(Vec2::new(WIDTH as f32, 0.0));
+            wall.set_size(Vec2::new(1.0, HEIGHT as f32));
+            game.add_wall(wall)
+        },
+        {
+            // top
+            let mut wall = Wall::new();
+            wall.set_pos(Vec2::new(0.0, -1.0));
+            wall.set_size(Vec2::new(WIDTH as f32, 1.0));
+            game.add_wall(wall)
+        },
+    ];
+    // bottom
+    let mut wall = Wall::new();
+    wall.set_pos(Vec2::new(0.0, HEIGHT as f32));
+    wall.set_size(Vec2::new(WIDTH as f32, 1.0));
+    let bottom_wall = game.add_wall(wall);
+
+    // blocks
+    let block_size = Vec2::new(32.0, 16.0);
+    let blocks = (0..5)
+        .map(|y| {
+            (0..8)
+                .map(|x| {
+                    let mut wall = Wall::new();
+                    wall.set_pos(Vec2::new(x as f32 * 32.0, y as f32 * 16.0));
+                    wall.set_size(block_size);
+                    game.add_wall(wall)
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    // paddle 1
+    let mut paddle = Paddle::new();
+    paddle.add_control_map(KeyCode::Left, true);
+    paddle.add_control_map(KeyCode::Right, true);
+    let action_serve = paddle.add_control_map(KeyCode::Space, true);
+    paddle.set_pos(Vec2::new(
+        WIDTH as f32 / 2.0 - PADDLE_WIDTH as f32 / 2.0,
+        HEIGHT as f32 - PADDLE_OFF_X as f32,
+    ));
+    paddle.set_size(Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32));
+    let paddle = game.add_paddle(paddle);
+
+    game.set_paddle_col_synthesis(Box::new(|mut paddle: Paddle| {
+        if paddle.controls[0].3.value > 0.0 {
+            paddle.pos.x -= 1.0;
+            // paddle.vel.y -= 1.0;
+        }
+        if paddle.controls[1].3.value > 0.0 {
+            paddle.pos.x += 1.0;
+            // paddle.vel.y = (-1.0).min(paddle.vel.y);
+        }
+        paddle
+    }));
+
+    let reset_ball = |state: &mut State, logics: &mut Logics, _: &Contact| {
+        logics
+            .physics
+            .handle_predicate(&PhysicsReaction::SetVel(0, Vec2::ZERO));
+        logics
+            .collision
+            .handle_predicate(&CollisionReaction::SetPos(
+                state.get_col_idx(CollisionEnt::Ball(BallID::new(0))),
+                Vec2::new(
+                    WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
+                    HEIGHT as f32 - PADDLE_OFF_X as f32 * 2.0,
+                ),
+            ));
+        logics
+            .control
+            .handle_predicate(&ControlReaction::SetKeyValid(
+                0,
+                ActionID::new(2), // eh....
+            ));
+    };
+
+    game.add_collision_predicate(
+        CollisionEnt::Ball(ball),
+        CollisionEnt::Wall(bottom_wall),
+        Box::new(reset_ball),
+    );
+
+    let bounce = |_: &mut State, logics: &mut Logics, event: &Contact| {
+        let col_id = logics.collision.metadata[event.i].id;
+        if let CollisionEnt::Ball(ball_id) = col_id {
+            let sides_touched = logics.collision.sides_touched(event, &col_id);
+            let mut vals = logics.physics.get_synthesis(ball_id.idx());
+            if sides_touched.y != 0.0 {
+                vals.vel.x *= -1.0;
+            }
+            if sides_touched.x != 0.0 {
+                vals.vel.y *= -1.0;
+            }
+            logics.physics.update_synthesis(ball_id.idx(), vals);
+        }
+    };
+
+    let bounce_inc_remove = |state: &mut State, logics: &mut Logics, event: &Contact| {
+        let ball_id = BallID::new(0);
+        let col_id = CollisionEnt::Ball(ball_id);
+        let wall_id = WallID::new(0);
+        let sides_touched = logics.collision.sides_touched(event, &col_id);
+        let mut vals = logics.physics.get_synthesis(ball_id.idx());
+        if sides_touched.y > 1.0 {
+            vals.vel.y *= -1.0;
+        } else {
+            vals.vel.x *= -1.0;
+        }
+        logics.physics.update_synthesis(ball_id.idx(), vals);
+        state.queue_remove(EntID::Wall(wall_id));
+        logics
+            .resources
+            .handle_predicate(&(RsrcPool::Score(ScoreID::new(0)), Transaction::Change(1)));
+    };
+
+    for wall in walls.iter() {
+        game.add_collision_predicate(
+            CollisionEnt::Ball(ball),
+            CollisionEnt::Wall(*wall),
+            Box::new(bounce),
+        );
+    }
+
+    for block in blocks.iter().flatten() {
+        game.add_collision_predicate(
+            CollisionEnt::Ball(ball),
+            CollisionEnt::Wall(*block),
+            Box::new(bounce_inc_remove),
+        );
+    }
+
+    game.add_collision_predicate(
+        CollisionEnt::Ball(ball),
+        CollisionEnt::Paddle(paddle),
+        Box::new(bounce),
+    );
+
+    let move_ball = |_: &mut State, logics: &mut Logics, event: &ControlEvent<ActionID>| {
+        logics
+            .physics
+            .handle_predicate(&PhysicsReaction::SetVel(0, Vec2::new(1.0, 1.0)));
+        logics
+            .control
+            .handle_predicate(&ControlReaction::SetKeyInvalid(event.set, event.action_id));
+    };
+
+    game.add_ctrl_predicate(
+        paddle,
+        action_serve,
+        ControlEventType::KeyPressed,
+        Box::new(move_ball),
+    );
+}
