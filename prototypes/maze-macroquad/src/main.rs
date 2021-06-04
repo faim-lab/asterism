@@ -1,9 +1,9 @@
+#![allow(clippy::upper_case_acronyms)]
 use asterism::{
     collision::AabbCollision,
-    control::{KeyboardControl, MacroQuadKeyboardControl},
+    control::{KeyboardControl, MacroquadInputWrapper},
     linking::GraphedLinking,
-    resources::{PoolInfo, QueuedResources, Transaction},
-    Logic,
+    resources::{QueuedResources, Transaction},
 };
 use macroquad::prelude::*;
 
@@ -24,26 +24,6 @@ enum CollisionID {
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum PoolID {
     Points,
-}
-
-impl PoolInfo for PoolID {
-    fn max_value(&self) -> f64 {
-        match self {
-            Self::Points => std::u8::MAX as f64,
-        }
-    }
-
-    fn min_value(&self) -> f64 {
-        match self {
-            Self::Points => std::u8::MIN as f64,
-        }
-    }
-}
-
-impl Default for CollisionID {
-    fn default() -> Self {
-        Self::Player
-    }
 }
 
 struct World {
@@ -108,22 +88,22 @@ enum Direction {
 }
 
 struct Logics {
-    control: MacroQuadKeyboardControl<ActionID>,
-    collision: AabbCollision<CollisionID, Vec2>,
+    control: KeyboardControl<ActionID, MacroquadInputWrapper>,
+    collision: AabbCollision<CollisionID>,
     linking: GraphedLinking,
-    resources: QueuedResources<PoolID>,
+    resources: QueuedResources<PoolID, u8>,
 }
 
 impl Logics {
     fn new(walls: &Vec<Wall>, portals: &Vec<Portal>) -> Self {
         Self {
             control: {
-                let mut control = MacroQuadKeyboardControl::new();
-                control.add_key_map(0, KeyCode::Up, ActionID::Move(Direction::Up));
-                control.add_key_map(0, KeyCode::Down, ActionID::Move(Direction::Down));
-                control.add_key_map(0, KeyCode::Right, ActionID::Move(Direction::Right));
-                control.add_key_map(0, KeyCode::Left, ActionID::Move(Direction::Left));
-                control.add_key_map(0, KeyCode::Escape, ActionID::Quit);
+                let mut control = KeyboardControl::new();
+                control.add_key_map(0, KeyCode::Up, ActionID::Move(Direction::Up), true);
+                control.add_key_map(0, KeyCode::Down, ActionID::Move(Direction::Down), true);
+                control.add_key_map(0, KeyCode::Right, ActionID::Move(Direction::Right), true);
+                control.add_key_map(0, KeyCode::Left, ActionID::Move(Direction::Left), true);
+                control.add_key_map(0, KeyCode::Escape, ActionID::Quit, true);
                 control
             },
             collision: {
@@ -132,7 +112,7 @@ impl Logics {
                     collision.add_entity_as_xywh(
                         Vec2::new(wall.x as f32, wall.y as f32),
                         Vec2::new(wall.w as f32, wall.h as f32),
-                        Vec2::zero(),
+                        Vec2::ZERO,
                         true,
                         true,
                         CollisionID::Wall,
@@ -143,7 +123,7 @@ impl Logics {
                     collision.add_entity_as_xywh(
                         Vec2::new(portal.x as f32, portal.y as f32),
                         portal_size,
-                        Vec2::zero(),
+                        Vec2::ZERO,
                         false,
                         true,
                         CollisionID::Portal(portal.to, i),
@@ -154,7 +134,9 @@ impl Logics {
             linking: GraphedLinking::new(),
             resources: {
                 let mut resources = QueuedResources::new();
-                resources.items.insert(PoolID::Points, 0.0);
+                resources
+                    .items
+                    .insert(PoolID::Points, (0, u8::MIN, u8::MAX));
                 resources
             },
         }
@@ -177,13 +159,8 @@ async fn main() {
     let mut logics = Logics::new(&world.walls, &world.portals);
 
     loop {
-        match world.update(&mut logics) {
-            Ok(cont) => {
-                if !cont {
-                    break;
-                }
-            }
-            Err(message) => panic!("{}", message),
+        if !world.update(&mut logics) {
+            break;
         }
         world.draw();
         next_frame().await;
@@ -245,12 +222,12 @@ impl World {
         }
     }
 
-    fn update(&mut self, logics: &mut Logics) -> Result<bool, &'static str> {
+    fn update(&mut self, logics: &mut Logics) -> bool {
         self.project_control(&mut logics.control);
         logics.control.update(&());
         match self.unproject_control(&logics.control) {
             Ok(_) => {}
-            Err(_) => return Ok(false),
+            Err(_) => return false,
         }
 
         self.project_collision(&mut logics.collision, &logics.control);
@@ -272,9 +249,10 @@ impl World {
                     logics
                         .resources
                         .transactions
-                        .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
+                        .push((PoolID::Points, Transaction::Change(1)));
                     self.items
                         .remove(contact.i - self.walls.len() - self.portals.len() - 1);
+                    dbg!(contact.j);
                 }
                 _ => {}
             }
@@ -294,22 +272,18 @@ impl World {
 
         for completed in logics.resources.completed.iter() {
             match completed {
-                Ok(item_types) => {
-                    for item_type in item_types {
-                        match item_type {
-                            PoolID::Points => {
-                                println!("You scored! Current points: {}", self.score);
-                            }
-                        }
+                Ok(item_type) => match item_type {
+                    PoolID::Points => {
+                        println!("You scored! Current points: {}", self.score);
                     }
-                }
+                },
                 Err(_) => {}
             }
         }
-        Ok(true)
+        true
     }
 
-    fn project_control(&self, control: &mut MacroQuadKeyboardControl<ActionID>) {
+    fn project_control(&self, control: &mut KeyboardControl<ActionID, MacroquadInputWrapper>) {
         for map in control.mapping[0].iter_mut() {
             map.is_valid = true;
         }
@@ -317,7 +291,7 @@ impl World {
 
     fn unproject_control(
         &mut self,
-        control: &MacroQuadKeyboardControl<ActionID>,
+        control: &KeyboardControl<ActionID, MacroquadInputWrapper>,
     ) -> Result<(), ()> {
         self.x += control
             .get_action(ActionID::Move(Direction::Right))
@@ -345,21 +319,27 @@ impl World {
 
     fn project_collision(
         &self,
-        collision: &mut AabbCollision<CollisionID, Vec2>,
-        control: &MacroQuadKeyboardControl<ActionID>,
+        collision: &mut AabbCollision<CollisionID>,
+        control: &KeyboardControl<ActionID, MacroquadInputWrapper>,
     ) {
         collision
             .centers
-            .resize_with(self.walls.len() + self.portals.len(), Vec2::default);
+            .resize_with(self.walls.len() + self.portals.len(), || Vec2::ZERO);
         collision
             .half_sizes
-            .resize_with(self.walls.len() + self.portals.len(), Vec2::default);
+            .resize_with(self.walls.len() + self.portals.len(), || Vec2::ZERO);
         collision
             .velocities
-            .resize_with(self.walls.len() + self.portals.len(), Default::default);
+            .resize_with(self.walls.len() + self.portals.len(), || Vec2::ZERO);
         collision
             .metadata
-            .resize_with(self.walls.len() + self.portals.len(), Default::default);
+            .resize_with(self.walls.len() + self.portals.len(), || {
+                asterism::collision::CollisionData {
+                    solid: false,
+                    fixed: false,
+                    id: CollisionID::Player,
+                }
+            });
 
         // create collider for items
 
@@ -368,7 +348,7 @@ impl World {
             collision.add_entity_as_xywh(
                 Vec2::new(item.x as f32, item.y as f32),
                 item_size,
-                Vec2::zero(),
+                Vec2::ZERO,
                 false,
                 true,
                 CollisionID::Item,
@@ -403,10 +383,9 @@ impl World {
         );
     }
 
-    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
-        let pos = collision
-            .get_xy_pos_for_entity(CollisionID::Player)
-            .unwrap();
+    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
+        let player_idx = self.items.len() + self.portals.len() + self.walls.len();
+        let pos = collision.centers[player_idx] - collision.half_sizes[player_idx];
         self.x = pos.x;
         self.y = pos.y;
     }
@@ -415,7 +394,7 @@ impl World {
     fn project_linking(
         &self,
         linking: &mut GraphedLinking,
-        collision: &AabbCollision<CollisionID, Vec2>,
+        collision: &AabbCollision<CollisionID>,
     ) {
         let mut touched_portal = false;
         for contact in collision.contacts.iter() {
@@ -466,21 +445,21 @@ impl World {
         }
     }
 
-    fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
+    fn project_resources(&self, resources: &mut QueuedResources<PoolID, u8>) {
         if !resources.items.contains_key(&PoolID::Points) {
-            resources.items.insert(PoolID::Points, 0.0);
+            resources
+                .items
+                .insert(PoolID::Points, (0, u8::MIN, u8::MAX));
         }
     }
 
-    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
+    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID, u8>) {
         for completed in resources.completed.iter() {
             match completed {
-                Ok(item_types) => {
-                    for item_type in item_types {
-                        let value = resources.get_value_by_itemtype(item_type).unwrap() as u8;
-                        match item_type {
-                            PoolID::Points => self.score = value,
-                        }
+                Ok(item_type) => {
+                    let value = resources.get_value_by_itemtype(item_type).unwrap();
+                    match item_type {
+                        PoolID::Points => self.score = value,
                     }
                 }
                 Err(_) => {}

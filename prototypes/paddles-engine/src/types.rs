@@ -209,3 +209,11 @@ impl Logics {
             .insert(RsrcPool::Score(id), (score.value, Score::MIN, Score::MAX));
     }
 }
+
+use asterism::collision::CollisionEvent;
+use asterism::control::ControlEvent;
+use asterism::resources::ResourceEvent;
+
+pub type CtrlEvent = ControlEvent<ActionID>;
+pub type ColEvent = CollisionEvent<CollisionEnt>;
+pub type RsrcEvent = ResourceEvent<RsrcPool>;

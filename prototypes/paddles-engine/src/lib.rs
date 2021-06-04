@@ -16,14 +16,15 @@ mod syntheses;
 use syntheses::*;
 
 // reexports
-pub use asterism::collision::{AabbColData, AabbCollision, CollisionReaction, Contact};
-pub use asterism::control::{Action, ControlEvent, ControlEventType, ControlReaction, Values};
+pub use asterism::collision::{AabbColData, AabbCollision, CollisionReaction};
+pub use asterism::control::{Action, ControlEventType, ControlReaction, Values};
 pub use asterism::physics::{PhysicsEvent, PhysicsReaction, PointPhysData};
-pub use asterism::resources::{ResourceEvent, ResourceEventType, ResourceReaction, Transaction};
+pub use asterism::resources::{ResourceEventType, ResourceReaction, Transaction};
 pub use asterism::Logic;
 pub use types::{
     ActionID, Ball, BallID, CollisionEnt, Paddle, PaddleID, RsrcPool, Score, ScoreID, Wall, WallID,
 };
+pub use types::{ColEvent, CtrlEvent, RsrcEvent};
 
 pub struct Logics {
     pub collision: AabbCollision<CollisionEnt>,
@@ -89,9 +90,9 @@ impl State {
 type PredicateFn<Event> = Vec<(Event, Box<dyn Fn(&mut State, &mut Logics, &Event)>)>;
 
 pub struct Events {
-    pub control: PredicateFn<ControlEvent<ActionID>>,
-    pub collision: PredicateFn<Contact>,
-    pub resources: PredicateFn<ResourceEvent<RsrcPool>>,
+    pub control: PredicateFn<CtrlEvent>,
+    pub collision: PredicateFn<ColEvent>,
+    pub resources: PredicateFn<RsrcEvent>,
     pub physics: PredicateFn<PhysicsEvent>,
 
     paddle_synth: PaddleSynth,
@@ -160,9 +161,9 @@ impl Game {
         paddle: PaddleID,
         action: ActionID,
         key_event: ControlEventType,
-        on_key_event: Box<dyn Fn(&mut State, &mut Logics, &ControlEvent<ActionID>)>,
+        on_key_event: Box<dyn Fn(&mut State, &mut Logics, &CtrlEvent)>,
     ) {
-        let key_event = ControlEvent {
+        let key_event = CtrlEvent {
             event_type: key_event,
             action_id: action,
             set: paddle.idx(),
@@ -174,13 +175,10 @@ impl Game {
         &mut self,
         col1: CollisionEnt,
         col2: CollisionEnt,
-        on_collide: Box<dyn Fn(&mut State, &mut Logics, &Contact)>,
+        on_collide: Box<dyn Fn(&mut State, &mut Logics, &ColEvent)>,
     ) {
-        let col_event = Contact {
-            i: self.state.get_col_idx(col1),
-            j: self.state.get_col_idx(col2),
-            displacement: Vec2::ZERO,
-        };
+        let col_event =
+            ColEvent::ByIndex(self.state.get_col_idx(col1), self.state.get_col_idx(col2));
         self.events.collision.push((col_event, on_collide));
     }
 
@@ -188,9 +186,9 @@ impl Game {
         &mut self,
         pool: RsrcPool,
         rsrc_event: ResourceEventType,
-        on_rsrc_event: Box<dyn Fn(&mut State, &mut Logics, &ResourceEvent<RsrcPool>)>,
+        on_rsrc_event: Box<dyn Fn(&mut State, &mut Logics, &RsrcEvent)>,
     ) {
-        let rsrc_event = ResourceEvent {
+        let rsrc_event = RsrcEvent {
             pool,
             event_type: rsrc_event,
         };

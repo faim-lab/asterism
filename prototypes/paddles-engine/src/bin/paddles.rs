@@ -98,12 +98,14 @@ fn init(game: &mut Game) {
         paddle
     }));
 
-    let inc_score = |_: &mut State, logics: &mut Logics, event: &Contact| {
-        if let CollisionEnt::Wall(wall_id) = logics.collision.metadata[event.j].id {
-            logics.resources.handle_predicate(&(
-                RsrcPool::Score(ScoreID::new(wall_id.idx())),
-                Transaction::Change(1),
-            ));
+    let inc_score = |_: &mut State, logics: &mut Logics, event: &ColEvent| {
+        if let ColEvent::ByIndex(_, j) = event {
+            if let CollisionEnt::Wall(wall_id) = logics.collision.metadata[*j].id {
+                logics.resources.handle_predicate(&(
+                    RsrcPool::Score(ScoreID::new(wall_id.idx())),
+                    Transaction::Change(1),
+                ));
+            }
         }
     };
 
@@ -119,7 +121,7 @@ fn init(game: &mut Game) {
         Box::new(inc_score),
     );
 
-    let reset_ball = |state: &mut State, logics: &mut Logics, event: &ResourceEvent<RsrcPool>| {
+    let reset_ball = |state: &mut State, logics: &mut Logics, event: &RsrcEvent| {
         let RsrcPool::Score(score_id) = event.pool;
         logics
             .physics
@@ -136,7 +138,11 @@ fn init(game: &mut Game) {
         logics
             .control
             .handle_predicate(&ControlReaction::SetKeyValid(
-                score_id.idx(),
+                match score_id.idx() {
+                    0 => 1,
+                    1 => 0,
+                    _ => unreachable!(),
+                },
                 ActionID::new(2), // eh....
             ));
     };
@@ -152,19 +158,23 @@ fn init(game: &mut Game) {
         Box::new(reset_ball),
     );
 
-    let bounce_ball_y = |_: &mut State, logics: &mut Logics, event: &Contact| {
-        if let CollisionEnt::Ball(ball_id) = logics.collision.metadata[event.i].id {
-            let mut vals = logics.physics.get_synthesis(ball_id.idx());
-            vals.vel.y *= -1.0;
-            logics.physics.update_synthesis(ball_id.idx(), vals);
+    let bounce_ball_y = |_: &mut State, logics: &mut Logics, event: &ColEvent| {
+        if let ColEvent::ByIndex(i, _) = event {
+            if let CollisionEnt::Ball(ball_id) = logics.collision.metadata[*i].id {
+                let mut vals = logics.physics.get_synthesis(ball_id.idx());
+                vals.vel.y *= -1.0;
+                logics.physics.update_synthesis(ball_id.idx(), vals);
+            }
         }
     };
 
-    let bounce_ball_x = |_: &mut State, logics: &mut Logics, event: &Contact| {
-        if let CollisionEnt::Ball(ball_id) = logics.collision.metadata[event.i].id {
-            let mut vals = logics.physics.get_synthesis(ball_id.idx());
-            vals.vel.x *= -1.0;
-            logics.physics.update_synthesis(ball_id.idx(), vals);
+    let bounce_ball_x = |_: &mut State, logics: &mut Logics, event: &ColEvent| {
+        if let ColEvent::ByIndex(i, _) = event {
+            if let CollisionEnt::Ball(ball_id) = logics.collision.metadata[*i].id {
+                let mut vals = logics.physics.get_synthesis(ball_id.idx());
+                vals.vel.x *= -1.0;
+                logics.physics.update_synthesis(ball_id.idx(), vals);
+            }
         }
     };
 
@@ -192,7 +202,7 @@ fn init(game: &mut Game) {
         Box::new(bounce_ball_x),
     );
 
-    let move_ball = |_: &mut State, logics: &mut Logics, event: &ControlEvent<ActionID>| {
+    let move_ball = |_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
         let vel = match event.set {
             0 => Vec2::new(1.0, 1.0),
             1 => Vec2::new(-1.0, -1.0),

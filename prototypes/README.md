@@ -38,7 +38,7 @@ These engines attempt to compose logics to form an engine rather than an individ
 
 - `archer_game`: A game made with the WGPU. Doesn't use Asterism. I recommend not running this because compiling it will take seven minutes (ergo it is not included in the workspace).
 
-Winit is no longer supported by `asterism`, so these no longer run:
+The ultraviolet crate is no longer supported by `asterism`, so these no longer run:
 
 - `paddles`: remake of Atari Pong. Outputs to a framebuffer using the Pixels crate, as well as the terminal. Logics used: control, physics, collision, resource.
 - `jumper`: simple 2d platformer. Outputs to a framebuffer using the Pixels crate. Logics used: control, physics, collision, entity-state.
