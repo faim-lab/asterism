@@ -105,14 +105,14 @@ fn init(game: &mut Game) {
         paddle
     }));
 
-    let reset_ball = |state: &mut State, logics: &mut Logics, _: &Contact| {
+    let reset_ball = |state: &mut State, logics: &mut Logics, _: &ColEvent| {
         logics
             .physics
             .handle_predicate(&PhysicsReaction::SetVel(0, Vec2::ZERO));
         logics
             .collision
             .handle_predicate(&CollisionReaction::SetPos(
-                state.get_col_idx(CollisionEnt::Ball(BallID::new(0))),
+                state.get_col_idx(0, CollisionEnt::Ball),
                 Vec2::new(
                     WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
                     HEIGHT as f32 - PADDLE_OFF_X as f32 * 2.0,
@@ -127,67 +127,76 @@ fn init(game: &mut Game) {
     };
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(ball),
-        CollisionEnt::Wall(bottom_wall),
+        (ball.idx(), CollisionEnt::Ball),
+        (bottom_wall.idx(), CollisionEnt::Wall),
         Box::new(reset_ball),
     );
 
-    let bounce = |_: &mut State, logics: &mut Logics, event: &Contact| {
-        let col_id = logics.collision.metadata[event.i].id;
-        if let CollisionEnt::Ball(ball_id) = col_id {
-            let sides_touched = logics.collision.sides_touched(event, &col_id);
-            let mut vals = logics.physics.get_synthesis(ball_id.idx());
-            if sides_touched.y != 0.0 {
-                vals.vel.x *= -1.0;
+    let bounce = |state: &mut State, logics: &mut Logics, event: &ColEvent| {
+        if let ColEvent::ByIndex(i, j) = event {
+            let id = state.get_id(*i);
+            if let EntID::Ball(ball_id) = id {
+                let sides_touched = logics.collision.sides_touched(*i, *j);
+                let mut vals = logics.physics.get_synthesis(ball_id.idx());
+                if sides_touched.y != 0.0 {
+                    vals.vel.y *= -1.0;
+                }
+                if sides_touched.x != 0.0 {
+                    vals.vel.x *= -1.0;
+                }
+                logics.physics.update_synthesis(ball_id.idx(), vals);
             }
-            if sides_touched.x != 0.0 {
-                vals.vel.y *= -1.0;
-            }
-            logics.physics.update_synthesis(ball_id.idx(), vals);
         }
     };
 
-    let bounce_inc_remove = |state: &mut State, logics: &mut Logics, event: &Contact| {
-        let ball_id = BallID::new(0);
-        let col_id = CollisionEnt::Ball(ball_id);
-        let wall_id = WallID::new(0);
-        let sides_touched = logics.collision.sides_touched(event, &col_id);
-        let mut vals = logics.physics.get_synthesis(ball_id.idx());
-        if sides_touched.y > 1.0 {
-            vals.vel.y *= -1.0;
-        } else {
-            vals.vel.x *= -1.0;
+    let bounce_inc_remove = |state: &mut State, logics: &mut Logics, event: &ColEvent| {
+        if let ColEvent::ByIndex(i, j) = event {
+            let id = state.get_id(*j);
+            if let EntID::Wall(wall_id) = id {
+                let id = state.get_id(*i);
+                if let EntID::Ball(ball_id) = id {
+                    let sides_touched = logics.collision.sides_touched(*i, *j);
+                    let mut vals = logics.physics.get_synthesis(ball_id.idx());
+                    if sides_touched.y != 0.0 {
+                        vals.vel.y *= -1.0;
+                    }
+                    if sides_touched.x != 0.0 {
+                        vals.vel.x *= -1.0;
+                    }
+                    logics.physics.update_synthesis(ball_id.idx(), vals);
+                    state.queue_remove(EntID::Wall(wall_id));
+                    logics.resources.handle_predicate(&(
+                        RsrcPool::Score(ScoreID::new(0)),
+                        Transaction::Change(1),
+                    ));
+                }
+            }
         }
-        logics.physics.update_synthesis(ball_id.idx(), vals);
-        state.queue_remove(EntID::Wall(wall_id));
-        logics
-            .resources
-            .handle_predicate(&(RsrcPool::Score(ScoreID::new(0)), Transaction::Change(1)));
     };
 
     for wall in walls.iter() {
         game.add_collision_predicate(
-            CollisionEnt::Ball(ball),
-            CollisionEnt::Wall(*wall),
+            (ball.idx(), CollisionEnt::Ball),
+            (wall.idx(), CollisionEnt::Wall),
             Box::new(bounce),
         );
     }
 
     for block in blocks.iter().flatten() {
         game.add_collision_predicate(
-            CollisionEnt::Ball(ball),
-            CollisionEnt::Wall(*block),
+            (ball.idx(), CollisionEnt::Ball),
+            (block.idx(), CollisionEnt::Wall),
             Box::new(bounce_inc_remove),
         );
     }
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(ball),
-        CollisionEnt::Paddle(paddle),
+        (ball.idx(), CollisionEnt::Ball),
+        (paddle.idx(), CollisionEnt::Paddle),
         Box::new(bounce),
     );
 
-    let move_ball = |_: &mut State, logics: &mut Logics, event: &ControlEvent<ActionID>| {
+    let move_ball = |_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
         logics
             .physics
             .handle_predicate(&PhysicsReaction::SetVel(0, Vec2::new(1.0, 1.0)));

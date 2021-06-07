@@ -100,24 +100,29 @@ fn init(game: &mut Game) {
 
     let inc_score = |_: &mut State, logics: &mut Logics, event: &ColEvent| {
         if let ColEvent::ByIndex(_, j) = event {
-            if let CollisionEnt::Wall(wall_id) = logics.collision.metadata[*j].id {
-                logics.resources.handle_predicate(&(
-                    RsrcPool::Score(ScoreID::new(wall_id.idx())),
-                    Transaction::Change(1),
-                ));
-            }
+            let change_score = match j {
+                0 => 1,
+                1 => 0,
+                _ => {
+                    unreachable!()
+                }
+            };
+            logics.resources.handle_predicate(&(
+                RsrcPool::Score(ScoreID::new(change_score)),
+                Transaction::Change(1),
+            ));
         }
     };
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(ball),
-        CollisionEnt::Wall(left_wall),
+        (ball.idx(), CollisionEnt::Ball),
+        (left_wall.idx(), CollisionEnt::Wall),
         Box::new(inc_score),
     );
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(ball),
-        CollisionEnt::Wall(right_wall),
+        (ball.idx(), CollisionEnt::Ball),
+        (right_wall.idx(), CollisionEnt::Wall),
         Box::new(inc_score),
     );
 
@@ -129,7 +134,7 @@ fn init(game: &mut Game) {
         logics
             .collision
             .handle_predicate(&CollisionReaction::SetPos(
-                state.get_col_idx(CollisionEnt::Ball(BallID::new(0))),
+                state.get_col_idx(0, CollisionEnt::Ball),
                 Vec2::new(
                     WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
                     WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
@@ -158,9 +163,10 @@ fn init(game: &mut Game) {
         Box::new(reset_ball),
     );
 
-    let bounce_ball_y = |_: &mut State, logics: &mut Logics, event: &ColEvent| {
+    let bounce_ball_y = |state: &mut State, logics: &mut Logics, event: &ColEvent| {
         if let ColEvent::ByIndex(i, _) = event {
-            if let CollisionEnt::Ball(ball_id) = logics.collision.metadata[*i].id {
+            let id = state.get_id(*i);
+            if let EntID::Ball(ball_id) = id {
                 let mut vals = logics.physics.get_synthesis(ball_id.idx());
                 vals.vel.y *= -1.0;
                 logics.physics.update_synthesis(ball_id.idx(), vals);
@@ -168,9 +174,10 @@ fn init(game: &mut Game) {
         }
     };
 
-    let bounce_ball_x = |_: &mut State, logics: &mut Logics, event: &ColEvent| {
+    let bounce_ball_x = |state: &mut State, logics: &mut Logics, event: &ColEvent| {
         if let ColEvent::ByIndex(i, _) = event {
-            if let CollisionEnt::Ball(ball_id) = logics.collision.metadata[*i].id {
+            let id = state.get_id(*i);
+            if let EntID::Ball(ball_id) = id {
                 let mut vals = logics.physics.get_synthesis(ball_id.idx());
                 vals.vel.x *= -1.0;
                 logics.physics.update_synthesis(ball_id.idx(), vals);
@@ -179,26 +186,26 @@ fn init(game: &mut Game) {
     };
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(ball),
-        CollisionEnt::Wall(top_wall),
+        (ball.idx(), CollisionEnt::Ball),
+        (top_wall.idx(), CollisionEnt::Wall),
         Box::new(bounce_ball_y),
     );
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(ball),
-        CollisionEnt::Wall(bottom_wall),
+        (ball.idx(), CollisionEnt::Ball),
+        (bottom_wall.idx(), CollisionEnt::Wall),
         Box::new(bounce_ball_y),
     );
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(ball),
-        CollisionEnt::Paddle(paddle1),
+        (ball.idx(), CollisionEnt::Ball),
+        (paddle1.idx(), CollisionEnt::Paddle),
         Box::new(bounce_ball_x),
     );
 
     game.add_collision_predicate(
-        CollisionEnt::Ball(ball),
-        CollisionEnt::Paddle(paddle2),
+        (ball.idx(), CollisionEnt::Ball),
+        (paddle2.idx(), CollisionEnt::Paddle),
         Box::new(bounce_ball_x),
     );
 

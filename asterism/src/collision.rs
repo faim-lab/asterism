@@ -123,8 +123,8 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
 
         self.contacts.sort_unstable_by(|a, b| {
             b.displacement
-                .length()
-                .partial_cmp(&a.displacement.length())
+                .length_squared()
+                .partial_cmp(&a.displacement.length_squared())
                 .unwrap()
         });
 
@@ -190,23 +190,25 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
     }
 
     /// Returns unit vector of normal of displacement for the entity of the given ID in the given contact. I.e., if a contact is moved in a positive x direction after restitution _because of_ the other entity involved in collision, `sides_touched` will return `Vec2::new(1.0, 0.0)`. Panics if the given EntityID isn't that of either entity in the contact.
-    pub fn sides_touched(&self, contact: &Contact, id: &ID) -> Vec2 {
-        let mut i = contact.i;
-        let mut j = contact.j;
+    pub fn sides_touched(&self, i: usize, j: usize) -> Vec2 {
         let should_swap = self.metadata[i].fixed && !self.metadata[j].fixed;
         let temp_i = i;
+        let mut i = i;
+        let mut j = j;
         if should_swap {
             i = j;
             j = temp_i;
         }
-        assert!(self.metadata[i].id == *id);
-        let mut distance = self.centers[i] - self.centers[j];
-        if distance.x.abs() < distance.y.abs() {
-            distance.x = 0.0;
-            distance.normalize_or_zero()
-        } else if distance.x.abs() > distance.y.abs() {
-            distance.y = 0.0;
-            distance.normalize_or_zero()
+        let displacement = find_displacement(
+            self.centers[i],
+            self.half_sizes[i],
+            self.centers[j],
+            self.half_sizes[j],
+        );
+        if displacement.x.abs() < displacement.y.abs() {
+            Vec2::new(1.0, 0.0)
+        } else if displacement.x.abs() > displacement.y.abs() {
+            Vec2::new(0.0, 1.0)
         } else {
             Vec2::ZERO
         }

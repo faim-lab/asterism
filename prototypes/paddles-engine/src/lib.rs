@@ -44,6 +44,7 @@ impl Logics {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub enum EntID {
     Wall(WallID),
     Ball(BallID),
@@ -62,23 +63,42 @@ pub enum Ent {
 pub struct State {
     remove_queue: Vec<EntID>,
     add_queue: Vec<Ent>,
-    // bring back vecs of ids, things should have persistent identity
-    num_paddles: usize,
-    num_balls: usize,
-    num_walls: usize,
-    num_scores: usize,
+    paddles: Vec<PaddleID>,
+    walls: Vec<WallID>,
+    balls: Vec<BallID>,
+    scores: Vec<ScoreID>,
+    paddle_id_max: usize,
+    ball_id_max: usize,
+    wall_id_max: usize,
+    score_id_max: usize,
 }
 
 impl State {
-    pub fn get_col_idx(&self, col: CollisionEnt) -> usize {
+    pub fn get_col_idx(&self, i: usize, col: CollisionEnt) -> usize {
         match col {
-            CollisionEnt::Paddle(paddle) => paddle.idx(),
-            CollisionEnt::Wall(wall) => wall.idx() + self.num_paddles,
-            CollisionEnt::Ball(ball) => ball.idx() + self.num_paddles + self.num_walls,
+            CollisionEnt::Paddle => i,
+            CollisionEnt::Wall => i + self.paddles.len(),
+            CollisionEnt::Ball => i + self.paddles.len() + self.walls.len(),
         }
     }
 
-    // WARNING: the logic for adding and removing things is EXTREMELY WRONG, i will eventually figure it out but not today
+    // i hope this logic is correct...
+    pub fn get_id(&self, idx: usize) -> EntID {
+        let mut idx = idx as isize;
+        if idx - (self.paddles.len() as isize) < 0 {
+            let paddle = self.paddles[idx as usize];
+            return EntID::Paddle(paddle);
+        }
+        idx -= self.paddles.len() as isize;
+        if idx - (self.walls.len() as isize) < 0 {
+            let wall = self.walls[idx as usize];
+            return EntID::Wall(wall);
+        }
+        idx -= self.walls.len() as isize;
+        let ball = self.balls[idx as usize];
+        EntID::Ball(ball)
+    }
+
     pub fn queue_remove(&mut self, ent: EntID) {
         self.remove_queue.push(ent);
     }
@@ -173,12 +193,14 @@ impl Game {
 
     pub fn add_collision_predicate(
         &mut self,
-        col1: CollisionEnt,
-        col2: CollisionEnt,
+        col1: (usize, CollisionEnt),
+        col2: (usize, CollisionEnt),
         on_collide: Box<dyn Fn(&mut State, &mut Logics, &ColEvent)>,
     ) {
-        let col_event =
-            ColEvent::ByIndex(self.state.get_col_idx(col1), self.state.get_col_idx(col2));
+        let col_event = ColEvent::ByIndex(
+            self.state.get_col_idx(col1.0, col1.1),
+            self.state.get_col_idx(col2.0, col2.1),
+        );
         self.events.collision.push((col_event, on_collide));
     }
 
@@ -196,71 +218,204 @@ impl Game {
     }
 
     pub fn add_paddle(&mut self, paddle: Paddle) -> PaddleID {
-        let id = PaddleID::new(self.state.num_paddles);
-        self.logics
-            .consume_paddle(id, self.state.get_col_idx(CollisionEnt::Paddle(id)), paddle);
-        self.state.num_paddles += 1;
+        let id = PaddleID::new(self.state.paddle_id_max);
+        self.logics.consume_paddle(
+            id,
+            self.state
+                .get_col_idx(self.state.paddles.len(), CollisionEnt::Paddle),
+            paddle,
+        );
+        self.state.paddle_id_max += 1;
+        self.state.paddles.push(id);
         id
     }
 
     pub fn add_ball(&mut self, ball: Ball) -> BallID {
-        let id = BallID::new(self.state.num_balls);
-        self.logics
-            .consume_ball(id, self.state.get_col_idx(CollisionEnt::Ball(id)), ball);
-        self.state.num_balls += 1;
+        let id = BallID::new(self.state.ball_id_max);
+        self.logics.consume_ball(
+            id,
+            self.state
+                .get_col_idx(self.state.balls.len(), CollisionEnt::Ball),
+            ball,
+        );
+        self.state.ball_id_max += 1;
+        self.state.balls.push(id);
         id
     }
 
     pub fn add_wall(&mut self, wall: Wall) -> WallID {
-        let id = WallID::new(self.state.num_walls);
-        self.logics
-            .consume_wall(id, self.state.get_col_idx(CollisionEnt::Wall(id)), wall);
-        self.state.num_walls += 1;
+        let id = WallID::new(self.state.wall_id_max);
+        self.logics.consume_wall(
+            id,
+            self.state
+                .get_col_idx(self.state.walls.len(), CollisionEnt::Wall),
+            wall,
+        );
+        self.state.wall_id_max += 1;
+        self.state.walls.push(id);
         id
     }
 
     pub fn add_score(&mut self, score: Score) -> ScoreID {
-        let id = ScoreID::new(self.state.num_scores);
+        let id = ScoreID::new(self.state.score_id_max);
         self.logics.consume_score(id, score);
-        self.state.num_scores += 1;
+        self.state.score_id_max += 1;
+        self.state.scores.push(id);
         id
     }
 
     fn remove_paddle(&mut self, paddle: PaddleID) {
-        self.state.num_paddles -= 1;
-        self.logics.control.mapping.remove(paddle.idx());
+        let ent_i = self
+            .state
+            .paddles
+            .iter()
+            .position(|pid| *pid == paddle)
+            .unwrap();
+        self.logics.control.mapping.remove(ent_i);
         self.logics
             .collision
             .handle_predicate(&CollisionReaction::RemoveBody(
-                self.state.get_col_idx(CollisionEnt::Paddle(paddle)),
+                self.state.get_col_idx(ent_i, CollisionEnt::Paddle),
             ));
+
+        let mut remove = Vec::new();
+        // collision events
+        for (idx, (col_event, _)) in self.events.collision.iter_mut().enumerate() {
+            if let ColEvent::ByIndex(i, j) = col_event {
+                if EntID::Paddle(paddle) == self.state.get_id(*i) {
+                    remove.push(idx);
+                }
+                if EntID::Paddle(paddle) == self.state.get_id(*j) {
+                    remove.push(idx);
+                }
+                if *i > ent_i {
+                    *i -= 1;
+                }
+                if *j > ent_i {
+                    *j -= 1;
+                }
+            }
+        }
+        for i in remove.iter().rev() {
+            self.events.collision.remove(*i);
+        }
+
+        // control events
+        remove.clear();
+        for (idx, (ctrl_event, _)) in self.events.control.iter_mut().enumerate() {
+            if ctrl_event.set == ent_i {
+                remove.push(idx);
+            }
+            if ctrl_event.set > ent_i {
+                ctrl_event.set -= 1;
+            }
+        }
+        for i in remove.into_iter().rev() {
+            self.events.control.remove(i);
+        }
+
+        self.state.paddles.remove(ent_i);
     }
 
     fn remove_wall(&mut self, wall: WallID) {
-        self.state.num_walls -= 1;
+        let ent_i = self
+            .state
+            .walls
+            .iter()
+            .position(|wid| *wid == wall)
+            .unwrap();
         self.logics
             .collision
             .handle_predicate(&CollisionReaction::RemoveBody(
-                self.state.get_col_idx(CollisionEnt::Wall(wall)),
+                self.state.get_col_idx(ent_i, CollisionEnt::Wall),
             ));
+
+        let mut remove = Vec::new();
+        for (idx, (col_event, _)) in self.events.collision.iter_mut().enumerate() {
+            if let ColEvent::ByIndex(i, j) = col_event {
+                let mut removed = false;
+                if EntID::Wall(wall) == self.state.get_id(*i) {
+                    remove.push(idx);
+                    removed = true;
+                }
+                if EntID::Wall(wall) == self.state.get_id(*j) {
+                    remove.push(idx);
+                    removed = true;
+                }
+                if *i > ent_i {
+                    *i -= 1;
+                }
+                if *j > ent_i {
+                    *j -= 1;
+                }
+            }
+        }
+        for i in remove.into_iter().rev() {
+            self.events.collision.remove(i);
+        }
+        self.state.walls.remove(ent_i);
     }
 
     fn remove_ball(&mut self, ball: BallID) {
-        self.state.num_balls -= 1;
+        let ent_i = self
+            .state
+            .balls
+            .iter()
+            .position(|bid| *bid == ball)
+            .unwrap();
         self.logics
             .physics
-            .handle_predicate(&PhysicsReaction::RemoveBody(ball.idx()));
+            .handle_predicate(&PhysicsReaction::RemoveBody(ent_i));
         self.logics
             .collision
             .handle_predicate(&CollisionReaction::RemoveBody(
-                self.state.get_col_idx(CollisionEnt::Ball(ball)),
+                self.state.get_col_idx(ent_i, CollisionEnt::Ball),
             ));
+
+        let mut remove = Vec::new();
+        // idk what a physics event is, no-op
+        for (idx, (col_event, _)) in self.events.collision.iter_mut().enumerate() {
+            if let ColEvent::ByIndex(i, j) = col_event {
+                if EntID::Ball(ball) == self.state.get_id(*i) {
+                    remove.push(idx);
+                }
+                if EntID::Ball(ball) == self.state.get_id(*j) {
+                    remove.push(idx);
+                }
+                if *i > ent_i {
+                    *i -= 1;
+                }
+                if *j > ent_i {
+                    *j -= 1;
+                }
+            }
+        }
+        for i in remove.into_iter() {
+            self.events.collision.remove(i);
+        }
+        self.state.balls.remove(ent_i);
     }
 
     fn remove_score(&mut self, score: ScoreID) {
-        self.state.num_scores -= 1;
+        let ent_i = self
+            .state
+            .scores
+            .iter()
+            .position(|sid| *sid == score)
+            .unwrap();
         let rsrc = RsrcPool::Score(score);
         self.logics.resources.items.remove(&rsrc);
+
+        let mut remove = Vec::new();
+        for (idx, (rsrc_event, _)) in self.events.resources.iter().enumerate() {
+            if RsrcPool::Score(score) == rsrc_event.pool {
+                remove.push(idx);
+            }
+        }
+        for i in remove.into_iter() {
+            self.events.resources.remove(i);
+        }
+        self.state.scores.remove(ent_i);
     }
 }
 

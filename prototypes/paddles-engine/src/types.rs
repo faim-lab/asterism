@@ -43,9 +43,9 @@ id_impl_new!([] PaddleID, [] WallID, [] BallID, [derive(PartialOrd, Ord)] ScoreI
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CollisionEnt {
-    Paddle(PaddleID),
-    Wall(WallID),
-    Ball(BallID),
+    Paddle,
+    Wall,
+    Ball,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
@@ -156,7 +156,7 @@ impl Logics {
             CollisionData {
                 solid: true,
                 fixed: true,
-                id: CollisionEnt::Paddle(id),
+                id: CollisionEnt::Paddle,
             },
         );
 
@@ -178,7 +178,7 @@ impl Logics {
             CollisionData {
                 solid: true,
                 fixed: true,
-                id: CollisionEnt::Wall(id),
+                id: CollisionEnt::Wall,
             },
         );
     }
@@ -198,7 +198,7 @@ impl Logics {
             CollisionData {
                 solid: true,
                 fixed: false,
-                id: CollisionEnt::Ball(id),
+                id: CollisionEnt::Ball,
             },
         );
     }
