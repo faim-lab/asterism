@@ -29,6 +29,7 @@ These games use a json file to define sprite animations, which play based on inf
 These engines attempt to compose logics to form an engine rather than an individual game. Engines provide types that represent mappings across logics. We aim to simplify the process of building usable engines through `asterism` (eventually through proc macros?).
 
 - `paddles-engine`: offers the types Paddle (control, collision), Wall (collision), Ball (collision, physics), Score (resource). Attempts to make the logics own all game state data. Examples: paddles, breakout (run with ex. `cargo run --bin paddles`)
+- `bitsy` (Adam Le Doux please don't sue us): fake Bitsy.
 
 # Early Prototypes
 

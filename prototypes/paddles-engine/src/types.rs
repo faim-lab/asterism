@@ -1,6 +1,5 @@
-use crate::{Game, Logics, State};
-use asterism::control::{Action, InputType, Values};
-use asterism::Reaction;
+use crate::Logics;
+use asterism::control::Values;
 
 use macroquad::{input::KeyCode, math::Vec2};
 
@@ -165,7 +164,7 @@ impl Logics {
         }
     }
 
-    pub fn consume_wall(&mut self, id: WallID, col_idx: usize, wall: Wall) {
+    pub fn consume_wall(&mut self, col_idx: usize, wall: Wall) {
         let hs = wall.size / 2.0;
         let center = wall.pos + hs;
         self.collision.centers.insert(col_idx, center);
@@ -183,7 +182,7 @@ impl Logics {
         );
     }
 
-    pub fn consume_ball(&mut self, id: BallID, col_idx: usize, ball: Ball) {
+    pub fn consume_ball(&mut self, col_idx: usize, ball: Ball) {
         self.physics
             .add_physics_entity(ball.pos, ball.vel, Vec2::ZERO);
         let hs = ball.size / 2.0;

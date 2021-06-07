@@ -1,18 +1,15 @@
-#![allow(unused)]
 #![allow(clippy::new_without_default)]
 #![allow(clippy::upper_case_acronyms)]
 
 use asterism::{
-    control::{InputType, KeyboardControl, MacroquadInputWrapper},
+    control::{KeyboardControl, MacroquadInputWrapper},
     physics::PointPhysics,
     resources::QueuedResources,
-    Event, Reaction,
 };
 use macroquad::prelude::*;
 
-mod types;
-use types::*;
 mod syntheses;
+mod types;
 use syntheses::*;
 
 // reexports
@@ -233,7 +230,6 @@ impl Game {
     pub fn add_ball(&mut self, ball: Ball) -> BallID {
         let id = BallID::new(self.state.ball_id_max);
         self.logics.consume_ball(
-            id,
             self.state
                 .get_col_idx(self.state.balls.len(), CollisionEnt::Ball),
             ball,
@@ -246,7 +242,6 @@ impl Game {
     pub fn add_wall(&mut self, wall: Wall) -> WallID {
         let id = WallID::new(self.state.wall_id_max);
         self.logics.consume_wall(
-            id,
             self.state
                 .get_col_idx(self.state.walls.len(), CollisionEnt::Wall),
             wall,
@@ -297,7 +292,7 @@ impl Game {
             }
         }
         for i in remove.iter().rev() {
-            self.events.collision.remove(*i);
+            let _ = self.events.collision.remove(*i);
         }
 
         // control events
@@ -311,7 +306,7 @@ impl Game {
             }
         }
         for i in remove.into_iter().rev() {
-            self.events.control.remove(i);
+            let _ = self.events.control.remove(i);
         }
 
         self.state.paddles.remove(ent_i);
@@ -333,14 +328,11 @@ impl Game {
         let mut remove = Vec::new();
         for (idx, (col_event, _)) in self.events.collision.iter_mut().enumerate() {
             if let ColEvent::ByIndex(i, j) = col_event {
-                let mut removed = false;
                 if EntID::Wall(wall) == self.state.get_id(*i) {
                     remove.push(idx);
-                    removed = true;
                 }
                 if EntID::Wall(wall) == self.state.get_id(*j) {
                     remove.push(idx);
-                    removed = true;
                 }
                 if *i > ent_i {
                     *i -= 1;
@@ -351,7 +343,7 @@ impl Game {
             }
         }
         for i in remove.into_iter().rev() {
-            self.events.collision.remove(i);
+            let _ = self.events.collision.remove(i);
         }
         self.state.walls.remove(ent_i);
     }
@@ -391,7 +383,7 @@ impl Game {
             }
         }
         for i in remove.into_iter() {
-            self.events.collision.remove(i);
+            let _ = self.events.collision.remove(i);
         }
         self.state.balls.remove(ent_i);
     }
@@ -413,7 +405,7 @@ impl Game {
             }
         }
         for i in remove.into_iter() {
-            self.events.resources.remove(i);
+            let _ = self.events.resources.remove(i);
         }
         self.state.scores.remove(ent_i);
     }

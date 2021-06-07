@@ -1,13 +1,9 @@
 // very shaky on the difference between predicate and structural synthesis but honestly the theoretical difference is also kind of vague so it's fine
 
-use asterism::collision::{AabbColData, AabbCollision, CollisionReaction, Contact};
-use asterism::control::{Action, ControlEvent, ControlEventType, ControlReaction, Values};
-use asterism::physics::{PhysicsEvent, PhysicsReaction, PointPhysData};
-use asterism::resources::{ResourceEvent, ResourceEventType, ResourceReaction, Transaction};
 use asterism::Logic;
 
 use crate::types::*;
-use crate::{Game, Logics, State};
+use crate::Game;
 
 pub type Synthesis<Ident> = Box<dyn Fn(Ident) -> Ident>;
 
@@ -99,7 +95,7 @@ impl Game {
 
     pub(crate) fn wall_synthesis(&mut self) {
         if let Some(synthesis) = self.events.wall_synth.col.as_ref() {
-            for (i, wall_id) in self.state.walls.iter().enumerate() {
+            for (i, _) in self.state.walls.iter().enumerate() {
                 let col_idx = self.state.get_col_idx(i, CollisionEnt::Wall);
                 let mut col = self.logics.collision.get_synthesis(col_idx);
 
@@ -160,7 +156,7 @@ impl Game {
 
     pub fn score_synthesis(&mut self) {
         if let Some(synthesis) = self.events.score_synth.rsrc.as_ref() {
-            for (i, score_id) in self.state.scores.iter().enumerate() {
+            for score_id in self.state.scores.iter() {
                 let rsrc_id = RsrcPool::Score(*score_id);
                 let rsrc = self.logics.resources.get_synthesis(rsrc_id);
 
