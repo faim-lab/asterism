@@ -1,48 +1,51 @@
 use std::collections::BTreeMap;
 
-use asterism::{Event, EventType, Logic, Reaction};
+use asterism::{Event, Logic, Reaction};
 use macroquad::math::IVec2;
 
-struct CollisionData<ID> {
-    fixed: bool,
+pub struct CollisionData<ID> {
     solid: bool,
+    fixed: bool,
     id: ID,
 }
 
-pub struct TileMapCollision<TileID, EntID> {
-    map: Vec<Vec<Option<TileID>>>,
-    tile_solid: BTreeMap<TileID, bool>,
-    positions: Vec<IVec2>,
-    metadata: Vec<CollisionData<EntID>>,
-    amt_moved: Vec<IVec2>,
+impl<ID> CollisionData<ID> {
+    pub fn new(solid: bool, fixed: bool, id: ID) -> Self {
+        Self { solid, fixed, id }
+    }
 }
 
-pub enum CollisionEvent<TileID, EntID> {
-    EntCollision {
-        i: (usize, EntID),
-        j: (usize, EntID),
-    },
-    TileCollision {
-        ent: (usize, EntID),
-        tile: (IVec2, TileID),
-    },
+pub struct TileMapCollision<TileID, EntID> {
+    pub map: Vec<Vec<Option<TileID>>>,
+    pub tile_solid: BTreeMap<TileID, bool>,
+    pub positions: Vec<IVec2>,
+    pub metadata: Vec<CollisionData<EntID>>,
+    pub amt_moved: Vec<IVec2>,
+    pub contacts: Vec<Contact>,
+}
+
+#[derive(PartialEq, Eq)]
+pub enum Contact {
+    Ent(usize, usize),
+    Tile(usize, IVec2),
 }
 
 use asterism::collision::CollisionEventType;
-impl<TileID, EntID> Event for CollisionEvent<TileID, EntID> {
+impl Event for Contact {
     type EventType = CollisionEventType;
 
     fn get_type(&self) -> &Self::EventType {
-        CollisionEventType::Touching
+        &CollisionEventType::Touching
     }
 }
 
 pub enum CollisionReaction<TileID, EntID> {
     SetTileAtPos(IVec2, TileID),
-    RemoveTileAtPos(IVec2, TileID),
-    SetEntPos(usize),
+    RemoveTileAtPos(IVec2),
+    SetEntPos(usize, IVec2),
+    SetEntVel(usize, IVec2),
+    SetEntData(usize, bool, bool, EntID), // idx, solid, fixed, id
     RemoveEnt(usize),
-    SetEntData(usize, bool, EntID),
 }
 
 #[derive(Clone, Copy)]
@@ -59,38 +62,109 @@ pub enum TileMapColData<TileID, EntID> {
     },
     Ent {
         pos: IVec2,
-        fixed: bool,
         solid: bool,
+        fixed: bool,
         id: EntID,
     },
 }
 
 impl<TileID, EntID> Reaction for CollisionReaction<TileID, EntID> {}
 
-impl<TileID, EntID> Logic for TileMapCollision<TileID, EntID> {
-    type Event = CollisionEvent<TileID, EntID>;
+impl<TileID: Copy + Eq + Ord, EntID: Copy> Logic for TileMapCollision<TileID, EntID> {
+    type Event = Contact;
     type Reaction = CollisionReaction<TileID, EntID>;
     type Ident = ColIdent;
     type IdentData = TileMapColData<TileID, EntID>;
 
     fn check_predicate(&self, event: &Self::Event) -> bool {
-        todo!()
+        self.contacts.iter().any(|contact| event == contact)
     }
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
-        todo!()
+        match reaction {
+            CollisionReaction::SetTileAtPos(pos, id) => {
+                self.map[pos.y as usize][pos.x as usize] = Some(*id);
+            }
+            CollisionReaction::RemoveTileAtPos(pos) => {
+                self.map[pos.y as usize][pos.x as usize] = None;
+            }
+            CollisionReaction::SetEntPos(idx, pos) => {
+                self.positions[*idx] = *pos;
+            }
+            CollisionReaction::SetEntVel(idx, vel) => {
+                self.amt_moved[*idx] = *vel;
+            }
+            CollisionReaction::SetEntData(idx, solid, fixed, id) => {
+                self.metadata[*idx].solid = *solid;
+                self.metadata[*idx].fixed = *fixed;
+                self.metadata[*idx].id = *id;
+            }
+            CollisionReaction::RemoveEnt(idx) => {
+                self.positions.remove(*idx);
+                self.amt_moved.remove(*idx);
+                self.metadata.remove(*idx);
+            }
+        };
     }
 
     fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
-        todo!()
+        match ident {
+            ColIdent::Position(pos) => {
+                let id = self.map[pos.y as usize][pos.x as usize]
+                    .expect("no tile at requested position");
+                TileMapColData::Position {
+                    pos,
+                    solid: self.tile_solid(&id),
+                    id,
+                }
+            }
+            ColIdent::EntIdx(idx) => {
+                let meta = &self.metadata[idx];
+                TileMapColData::Ent {
+                    pos: self.positions[idx],
+                    solid: meta.solid,
+                    fixed: meta.fixed,
+                    id: meta.id,
+                }
+            }
+        }
     }
 
     fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
-        todo!()
+        match (ident, data) {
+            (ColIdent::Position(pos_ident), TileMapColData::Position { pos, solid, id }) => {
+                if pos_ident != pos {
+                    *self.tile_at_pos_mut(&pos_ident) = None;
+                }
+                *self.tile_at_pos_mut(&pos) = Some(id);
+                self.tile_solid.insert(id, solid);
+            }
+            (
+                ColIdent::EntIdx(idx),
+                TileMapColData::Ent {
+                    pos,
+                    solid,
+                    fixed,
+                    id,
+                },
+            ) => {
+                self.positions[idx] = pos;
+                let meta = &mut self.metadata[idx];
+                meta.solid = solid;
+                meta.fixed = fixed;
+                meta.id = id;
+            }
+            (ColIdent::Position(_), _) => {
+                unreachable!("cannot update tile information for an entity")
+            }
+            (ColIdent::EntIdx(_), _) => {
+                unreachable!("cannot update entity information for a tile")
+            }
+        }
     }
 }
 
-impl<TileID, EntID> TileMapCollision<TileID, EntID> {
+impl<TileID: Eq + Ord + Copy, EntID> TileMapCollision<TileID, EntID> {
     pub fn new() -> Self {
         Self {
             map: Vec::new(),
@@ -98,6 +172,7 @@ impl<TileID, EntID> TileMapCollision<TileID, EntID> {
             positions: Vec::new(),
             metadata: Vec::new(),
             amt_moved: Vec::new(),
+            contacts: Vec::new(),
         }
     }
 
@@ -114,12 +189,139 @@ impl<TileID, EntID> TileMapCollision<TileID, EntID> {
         self.tile_solid.clear();
     }
 
-    pub fn update(&mut self) {}
+    pub fn update(&mut self) {
+        self.contacts.clear();
+
+        // check for contacts
+        // ent vs tile
+        for (i, pos_i) in self.positions.iter().enumerate() {
+            if self.tile_at_pos(pos_i).is_some() {
+                self.contacts.push(Contact::Tile(i, *pos_i));
+            }
+        }
+
+        // ent vs ent
+        for (i, (pos_i, meta_i)) in self.positions.iter().zip(self.metadata.iter()).enumerate() {
+            for (j, (pos_j, meta_j)) in self
+                .positions
+                .iter()
+                .zip(self.metadata.iter())
+                .enumerate()
+                .skip(i)
+            {
+                if pos_i == pos_j {
+                    let mut i = i;
+                    let mut j = j;
+
+                    if meta_i.fixed && !meta_j.fixed {
+                        std::mem::swap(&mut i, &mut j);
+                    }
+
+                    self.contacts.push(Contact::Ent(i, j));
+                }
+            }
+        }
+
+        // restitute
+        for contact in self.contacts.iter() {
+            match contact {
+                Contact::Tile(i, pos) => {
+                    if self.positions[*i] != *pos {
+                        continue;
+                    }
+                    if !self.metadata[*i].solid || self.metadata[*i].fixed {
+                        continue;
+                    }
+                    if let Some(tile_id) = self.tile_at_pos(pos) {
+                        if self.tile_solid(&tile_id) {
+                            let moved = normalize(self.amt_moved[*i]);
+                            let mut pos = self.positions[*i];
+                            pos -= moved;
+                            self.restitute_ent(&mut pos, moved);
+                            self.positions[*i] = pos;
+                        }
+                    }
+                }
+
+                Contact::Ent(i, j) => {
+                    if self.positions[*i] != self.positions[*j] {
+                        continue;
+                    }
+                    if !self.metadata[*i].solid
+                        || self.metadata[*i].fixed
+                        || !self.metadata[*j].solid
+                    {
+                        continue;
+                    }
+                    let moved = normalize(self.amt_moved[*i]);
+                    let mut pos = self.positions[*i];
+                    pos -= moved;
+                    self.restitute_ent(&mut pos, moved);
+                    self.positions[*i] = pos;
+
+                    if !self.metadata[*j].fixed {
+                        let moved = normalize(self.amt_moved[*j]);
+                        let mut pos = self.positions[*j];
+                        self.restitute_ent(&mut pos, moved);
+                        self.positions[*j] = pos;
+                    }
+                }
+            }
+        }
+    }
+
+    fn restitute_ent(&self, pos: &mut IVec2, moved: IVec2) {
+        let mut new_pos = *pos;
+        // check collision against map
+        while let Some(tile_id) = self.map[pos.y as usize][pos.x as usize] {
+            if self.tile_solid(&tile_id) {
+                if self.in_bounds(new_pos, moved) {
+                    new_pos -= moved;
+                }
+            } else {
+                *pos = new_pos;
+                break;
+            }
+        }
+    }
+
+    fn tile_at_pos(&self, pos: &IVec2) -> &Option<TileID> {
+        &self.map[pos.y as usize][pos.x as usize]
+    }
+
+    fn tile_at_pos_mut(&mut self, pos: &IVec2) -> &mut Option<TileID> {
+        &mut self.map[pos.y as usize][pos.x as usize]
+    }
+
+    fn tile_solid(&self, tile_id: &TileID) -> bool {
+        *self
+            .tile_solid
+            .get(tile_id)
+            .expect("not specified if the tile is solid or not")
+    }
+
+    fn in_bounds(&self, pos: IVec2, moved: IVec2) -> bool {
+        let pos = pos + moved;
+        pos.x < self.map[0].len() as i32
+            && pos.y < self.map.len() as i32
+            && pos.x >= 0
+            && pos.y >= 0
+    }
 }
 
-// impl Logic for TileMapCollision {
-//     type Event = ;
-//     type Reaction = ;
-//     type Ident = ;
-//     type IdentData = ;
-// }
+fn normalize(vec2: IVec2) -> IVec2 {
+    let mut vec2 = vec2;
+    if vec2.x > 1 {
+        vec2.x = 1;
+    }
+    if vec2.x < -1 {
+        vec2.x = -1;
+    }
+    if vec2.y > 1 {
+        vec2.y = 1;
+    }
+    if vec2.y < -1 {
+        vec2.y = -1;
+    }
+    vec2
+}

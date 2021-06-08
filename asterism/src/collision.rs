@@ -8,6 +8,7 @@ use crate::{Event, EventType, Logic, Reaction};
 use glam::Vec2;
 
 /// Information for each contact. If the entities at the indices `i` and `j` are both unfixed or both fixed, then `i < j`. If one is unfixed and the other is fixed, `i` will be the index of the unfixed entity.
+#[derive(PartialEq)]
 pub struct Contact {
     /// The index of the first contact in `centers`, `half_sizes`, `velocities`, `metadata`, and `displacements`.
     pub i: usize,
@@ -15,16 +16,6 @@ pub struct Contact {
     pub j: usize,
     /// The projected displacement of each contact---not actual restituted displacement. If both colliding bodies are fixed, or one of them is **not** solid, defaults to a `Vec2` with a magnitude of 0.0.
     pub displacement: Vec2,
-}
-
-impl PartialEq for Contact {
-    /// Two `Contacts`s are equal when the indices of their contacts and their displacements are the same.
-    fn eq(&self, other: &Self) -> bool {
-        self.i == other.i
-            && self.j == other.j
-            && self.displacement.x == other.displacement.x
-            && self.displacement.y == other.displacement.y
-    }
 }
 
 impl Contact {
@@ -35,7 +26,7 @@ impl Contact {
         } else if self.displacement.y.abs() < self.displacement.x.abs() {
             Vec2::new(0.0, self.displacement.y)
         } else {
-            Vec2::new(0.0, 0.0)
+            Vec2::ZERO
         }
     }
 }
@@ -90,18 +81,20 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
         // check contacts
         for i in 0..self.centers.len() {
             for j in i + 1..self.centers.len() {
-                // if i is fixed and other is unfixed, swap places
-                let should_swap = self.metadata[i].fixed && !self.metadata[j].fixed;
-                let temp_i = i;
-                let i = if should_swap { j } else { i };
-                let j = if should_swap { temp_i } else { j };
-
                 if intersects(
                     self.centers[i],
                     self.half_sizes[i],
                     self.centers[j],
                     self.half_sizes[j],
                 ) {
+                    // if i is fixed and other is unfixed, swap places
+                    let mut i = i;
+                    let mut j = j;
+
+                    if self.metadata[i].fixed && !self.metadata[j].fixed {
+                        std::mem::swap(&mut i, &mut j);
+                    }
+
                     let displacement = if self.metadata[i].solid
                         && self.metadata[j].solid
                         && !self.metadata[i].fixed
@@ -192,12 +185,10 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
     /// Returns unit vector of normal of displacement for the entity of the given ID in the given contact. I.e., if a contact is moved in a positive x direction after restitution _because of_ the other entity involved in collision, `sides_touched` will return `Vec2::new(1.0, 0.0)`. Panics if the given EntityID isn't that of either entity in the contact.
     pub fn sides_touched(&self, i: usize, j: usize) -> Vec2 {
         let should_swap = self.metadata[i].fixed && !self.metadata[j].fixed;
-        let temp_i = i;
         let mut i = i;
         let mut j = j;
         if should_swap {
-            i = j;
-            j = temp_i;
+            std::mem::swap(&mut i, &mut j);
         }
         let displacement = find_displacement(
             self.centers[i],
