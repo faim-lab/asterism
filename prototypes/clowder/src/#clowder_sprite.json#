@@ -1,0 +1,141 @@
+{
+    "sheet_name": "Clowder Sprite Sheet",
+    "num_entities": 5,
+    "entities": [
+	"entity_name": "Calico",
+	"sheet_index": 0
+	"seqs": [
+	    {
+		"seq_name": "Calico Running",
+		
+	    "start_sprite": 0,
+	    "sprites": [
+		{
+		    "seq_index": 0
+		    "frame": {"x":0,"y":0,"w":48,"h":48},
+		    "rotated": false,
+		    "trimmed": false,
+		    "size": {"w":48,"h":48}
+		},
+		{
+		    "seq_index": 1,
+		    "frame": {"x":48,"y":0,"w":48,"h":48},
+		    "rotated": false,
+		    "trimmed": false,
+		    "sprite_source_size": {"x":0,"y":0,"w":48,"h":48},
+		    "source_size": {"w":48,"h":48}
+		}
+		
+	    ]
+	    
+	    },]
+	"cycles": [0],
+	"cycles_status": [false],
+    ]
+    "seq": [
+	{
+	    "seq_name": "Calico",
+	    "sheet_index": 0,
+	    "start_sprite": 0,
+	    "sprites": [
+		{
+		    "seq_index": 0
+		    "frame": {"x":0,"y":0,"w":48,"h":48},
+		    "rotated": false,
+		    "trimmed": false,
+		    "size": {"w":48,"h":48}
+		},
+		{
+		    "seq_index": 1,
+		    "frame": {"x":48,"y":0,"w":48,"h":48},
+		    "rotated": false,
+		    "trimmed": false,
+		    "sprite_source_size": {"x":0,"y":0,"w":48,"h":48},
+		    "source_size": {"w":48,"h":48}
+		}
+		
+	    ]
+	    
+	},
+
+	{
+	    "seq_name": "Eli"
+	    "sheet_index": 1,
+	    "start_sprite": 0,
+	    "sprites": [
+		{
+		    "seq_index": 0
+		    "frame": {"x":0,"y":48,"w":48,"h":48},
+		    "rotated": false,
+		    "trimmed": false,
+		    "source_size": {"w":48,"h":48}
+		},
+		{
+		    "seq_index": 1,
+		    "frame": {"x":48,"y":48,"w":48,"h":48},
+		    "rotated": false,
+		    "trimmed": false,
+		    "source_size": {"w":48,"h":48}
+		}
+		
+	    ]
+	},
+
+	"seq_name": "Felix",
+	"sheet_index": 2,
+	"num_cycles": 
+	    
+
+    ]
+}
+
+
+{
+	"name": "felix1",
+	"frame": {"x":0,"y":96,"w":48,"h":48},
+	"rotated": false,
+	"trimmed": false,
+	"sprite_source_size": {"x":0,"y":0,"w":48,"h":48},
+	"source_size": {"w":48,"h":48}
+},
+{
+	"name": "felix2",
+	"frame": {"x":48,"y":96,"w":48,"h":48},
+	"rotated": false,
+	"trimmed": false,
+	"sprite_source_size": {"x":0,"y":0,"w":48,"h":48},
+	"source_size": {"w":48,"h":48}
+},
+{
+	"name": "rhubarb1",
+	"frame": {"x":0,"y":144,"w":48,"h":48},
+	"rotated": false,
+	"trimmed": false,
+	"sprite_source_size": {"x":0,"y":0,"w":48,"h":48},
+	"source_size": {"w":48,"h":48}
+},
+{
+	"name": "rhubarb2",
+	"frame": {"x":48,"y":144,"w":48,"h":48},
+	"rotated": false,
+	"trimmed": false,
+	"sprite_source_size": {"x":0,"y":0,"w":48,"h":48},
+	"source_size": {"w":48,"h":48}
+},
+{
+	"name": "squirt_puppy1",
+	"frame": {"x":0,"y":192,"w":48,"h":48},
+	"rotated": false,
+	"trimmed": false,
+	"sprite_source_size": {"x":0,"y":0,"w":48,"h":48},
+	"source_size": {"w":48,"h":48}
+},
+{
+	"name": "squirt_puppy2",
+	"frame": {"x":48,"y":192,"w":48,"h":48},
+	"rotated": false,
+	"trimmed": false,
+	"sprite_source_size": {"x":0,"y":0,"w":48,"h":48},
+	"source_size": {"w":48,"h":48}
+}
+

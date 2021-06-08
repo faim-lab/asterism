@@ -1,10 +1,25 @@
-[{
-	"name": "calico",
+{
+    "sheet_name": "Clowder Sprite Sheet",
+    "num_seq": 5,
+    "seq": [
+	{
+	    "seq_name": calico,
+	    "sheet_index": 0,
+	    "sprites": [
+		{
+		    "name": "calico",
 	"frame": {"x":0,"y":0,"w":48,"h":48},
 	"rotated": false,
 	"trimmed": false,
-	"sprite_source_size": {"x":0,"y":0,"w":48,"h":48},
-	"source_size": {"w":48,"h":48}
+	"size": {"w":48,"h":48}
+		}
+	    ]
+	    
+	}
+    ]
+}
+{
+	
 },
 {
 	"name": "calico2",
@@ -77,5 +92,5 @@
 	"trimmed": false,
 	"sprite_source_size": {"x":0,"y":0,"w":48,"h":48},
 	"source_size": {"w":48,"h":48}
-}]
+}
 

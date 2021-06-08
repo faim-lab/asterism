@@ -19,13 +19,6 @@ pub struct SimpleAnim {
     frame_cycle: u8,
 }
 
-//sprite sheet
-pub struct SpriteSheet {
-    image: Texture2D,
-    data: Vec<Sprite>,
-    start_sprite: Vec<usize>,
-}
-
 #[derive(Debug, Deserialize)]
 struct Rectangle {
     x: u64,
@@ -41,27 +34,49 @@ struct Size {
 }
 
 #[derive(Debug, Deserialize)]
+struct Cycle {
+    seq_index: u64,
+    state: bool,
+    priority: u64,
+}
+
+#[derive(Debug, Deserialize)]
 struct Sprite {
-    name: String,
+    index: u64,
     frame: Rectangle,
     rotated: bool,
     trimmed: bool,
-    sprite_source_size: Rectangle,
-    source_size: Size,
+    size: Size,
+}
+
+#[derive(Debug, Deserialize)]
+struct Sequence {
+    name: String,
+    current: u64,
+    sprites: Vec<Sprite>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Entity {
+    name: String,
+    index: u64,
+    default_seq: u64,
+    cycles: Vec<Cycle>,
+    seqs: Vec<Sequence>,
+}
+
+//sprite sheet
+pub struct SpriteSheet {
+    image: Texture2D,
+    entities: Vec<Entity>,
 }
 
 impl SpriteSheet {
-    async fn new(image_file: &str, data_file: Vec<Sprite>) -> Self {
+    async fn new(image_file: &str, data_file: Vec<Entity>) -> Self {
         Self {
             image: load_texture(image_file).await,
-            data: data_file,
-            start_sprite: Vec::new(),
+            entities: data_file,
         }
-    }
-
-    //the base/starting sprite for the sprite
-    fn assign_sprite(&mut self, assignment: usize) -> () {
-        self.start_sprite.push(assignment);
     }
 
     fn create_param(&self, index: usize) -> DrawTextureParams {
@@ -79,6 +94,15 @@ impl SpriteSheet {
 
         return texture;
     }
+
+    fn progress_seq(&mut self, entity_index: u64, seq_index: u64) -> () {
+        let seq = self.entities[entity_index][seq_index];
+        if seq.current < seq.sprites.len() - 1 {
+            seq.current = seq.current + 1;
+        } else {
+            seq.current = 0;
+        }
+    }
 }
 
 impl SimpleAnim {
@@ -94,22 +118,9 @@ impl SimpleAnim {
     //Loads a sprite sheet
     pub async fn load_sprite_sheet(&mut self, image_file: &str, data_file: &str) -> () {
         let file = File::open(data_file).unwrap();
-        let sprite_info: Vec<Sprite> =
+        let sprite_info: Vec<Entity> =
             serde_json::from_reader(file).expect("error while reading or parsing");
         self.sheet = Some(SpriteSheet::new(image_file, sprite_info).await);
-    }
-
-    //work on naming
-    //assigns a base row for different sprites
-    pub fn assign_rows(&mut self, assignments: Vec<usize>) -> () {
-        match &mut self.sheet {
-            None => {}
-            Some(s_sheet) => {
-                for i in assignments.iter() {
-                    s_sheet.assign_sprite(*i);
-                }
-            }
-        }
     }
 
     pub fn set_frames(&mut self, cycle: u8) -> () {
@@ -141,16 +152,41 @@ impl SimpleAnim {
     }
 
     //dist, of actual sprite to be drawn from start index on sprite sheet
-    pub fn draw_sprite(&self, x_pos: f32, y_pos: f32, start_index: usize, dist: usize) -> () {
+    fn draw_sprite(&mut self, x_pos: f32, y_pos: f32, entity_index: u64, seq_index: u64) -> () {
         draw_texture_ex(
             self.sheet.as_ref().unwrap().image,
             x_pos,
             y_pos,
             WHITE,
-            self.sheet
-                .as_ref()
-                .unwrap()
-                .create_param(self.sheet.as_ref().unwrap().start_sprite[start_index] + dist),
+            self.sheet.as_ref().unwrap().create_param(
+                self.sheet.as_ref().unwrap().entities[entity_index][seq_index].current,
+            ),
         );
+        self.sheet.progress_seq(entity_index, seq_index);
+    }
+
+    pub fn draw_entity(&self, x_pos: f32, y_pos: f32, entity_index: u64) {
+        let cur_cycle = Cycle::new(); //creates blank cycle
+
+        //goes through all the cycles for the entity
+        for (cycle, i) in self.sheet.as_ref().unwrap().entities[entity_index]
+            .cycles
+            .iter()
+            .enurmerate()
+        {
+            //if the cycle state is true
+            if cycle.state {
+                if i == 0 {
+                    cur_cycle = cycle;
+                } else {
+                    //if priorirty is less than the previous priority
+                    if cycle.priority < cur_cycle.priority {
+                        cur_cycle = cycle;
+                    }
+                }
+            }
+        }
+        //draw the sprite determinded
+        draw_sprite(x_pos, y_pos, entity_index, cur_cycle.seq_index);
     }
 }
