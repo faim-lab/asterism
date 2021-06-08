@@ -14,12 +14,12 @@ use std::fs::File;
 //simple animations across a spritesheet
 //animations draw on a set frame cycle
 pub struct SimpleAnim {
-    pub sheet: Option<SpriteSheet>,
+    pub sheet: SpriteSheet,
     pub frames_drawn: u8,
     frame_cycle: u8,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 struct Rectangle {
     x: u64,
     y: u64,
@@ -27,7 +27,7 @@ struct Rectangle {
     h: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 struct Size {
     w: u64,
     h: u64,
@@ -35,14 +35,14 @@ struct Size {
 
 #[derive(Debug, Deserialize)]
 struct Cycle {
-    seq_index: u64,
+    seq_index: usize,
     state: bool,
     priority: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 struct Sprite {
-    index: u64,
+    index: usize,
     frame: Rectangle,
     rotated: bool,
     trimmed: bool,
@@ -51,16 +51,17 @@ struct Sprite {
 
 #[derive(Debug, Deserialize)]
 struct Sequence {
-    name: String,
-    current: u64,
+    seq_name: String,
+    cycle_index: usize,
+    current: usize,
     sprites: Vec<Sprite>,
 }
 
 #[derive(Debug, Deserialize)]
 struct Entity {
     name: String,
-    index: u64,
-    default_seq: u64,
+    index: usize,
+    default_seq: usize,
     cycles: Vec<Cycle>,
     seqs: Vec<Sequence>,
 }
@@ -71,6 +72,16 @@ pub struct SpriteSheet {
     entities: Vec<Entity>,
 }
 
+impl Cycle {
+    fn new() -> Self {
+        Self {
+            seq_index: 0,
+            state: false,
+            priority: 255,
+        }
+    }
+}
+
 impl SpriteSheet {
     async fn new(image_file: &str, data_file: Vec<Entity>) -> Self {
         Self {
@@ -79,48 +90,43 @@ impl SpriteSheet {
         }
     }
 
-    fn create_param(&self, index: usize) -> DrawTextureParams {
+    fn create_param(&self, sprite: Sprite) -> DrawTextureParams {
         let mut texture = DrawTextureParams::default();
-        texture.dest_size = Some(Vec2::new(
-            self.data[index].source_size.w as f32,
-            self.data[index].source_size.h as f32,
-        ));
+        texture.dest_size = Some(Vec2::new(sprite.size.w as f32, sprite.size.h as f32));
         texture.source = Some(Rect::new(
-            self.data[index].frame.x as f32,
-            self.data[index].frame.y as f32,
-            self.data[index].frame.w as f32,
-            self.data[index].frame.h as f32,
+            sprite.frame.x as f32,
+            sprite.frame.y as f32,
+            sprite.frame.w as f32,
+            sprite.frame.h as f32,
         ));
 
         return texture;
     }
 
-    fn progress_seq(&mut self, entity_index: u64, seq_index: u64) -> () {
-        let seq = self.entities[entity_index][seq_index];
-        if seq.current < seq.sprites.len() - 1 {
-            seq.current = seq.current + 1;
+    fn progress_seq(&mut self, entity_index: usize, seq_index: usize) -> () {
+        if self.entities[entity_index].seqs[seq_index].current
+            < self.entities[entity_index].seqs[seq_index].sprites.len() - 1
+        {
+            self.entities[entity_index].seqs[seq_index].current =
+                self.entities[entity_index].seqs[seq_index].current + 1;
         } else {
-            seq.current = 0;
+            self.entities[entity_index].seqs[seq_index].current = 0;
         }
     }
 }
 
 impl SimpleAnim {
-    pub fn new() -> Self {
+    pub async fn new(image_file: &str, data_file: &str) -> Self {
         Self {
-            sheet: None,
+            sheet: SpriteSheet::new(
+                image_file,
+                serde_json::from_reader(File::open(data_file).unwrap())
+                    .expect("error while reading or parsing"),
+            )
+            .await,
             frames_drawn: 0,
             frame_cycle: 0,
         }
-    }
-
-    //Takes an image file and json file description of image file.
-    //Loads a sprite sheet
-    pub async fn load_sprite_sheet(&mut self, image_file: &str, data_file: &str) -> () {
-        let file = File::open(data_file).unwrap();
-        let sprite_info: Vec<Entity> =
-            serde_json::from_reader(file).expect("error while reading or parsing");
-        self.sheet = Some(SpriteSheet::new(image_file, sprite_info).await);
     }
 
     pub fn set_frames(&mut self, cycle: u8) -> () {
@@ -140,42 +146,40 @@ impl SimpleAnim {
         return self.frames_drawn == 0;
     }
 
-    pub fn sheet_loaded(&self) -> bool {
-        match &self.sheet {
-            None => {
-                return false;
-            }
-            Some(_) => {
-                return true;
-            }
-        }
-    }
-
     //dist, of actual sprite to be drawn from start index on sprite sheet
-    fn draw_sprite(&mut self, x_pos: f32, y_pos: f32, entity_index: u64, seq_index: u64) -> () {
+    fn draw_sprite(
+        &mut self,
+        x_pos: f32,
+        y_pos: f32,
+        is_cycle: bool,
+        entity_index: usize,
+        seq_index: usize,
+    ) -> () {
         draw_texture_ex(
-            self.sheet.as_ref().unwrap().image,
+            self.sheet.image,
             x_pos,
             y_pos,
             WHITE,
-            self.sheet.as_ref().unwrap().create_param(
-                self.sheet.as_ref().unwrap().entities[entity_index][seq_index].current,
+            self.sheet.create_param(
+                self.sheet.entities[entity_index].seqs[seq_index].sprites
+                    [self.sheet.entities[entity_index].seqs[seq_index].current],
             ),
         );
-        self.sheet.progress_seq(entity_index, seq_index);
+
+        if is_cycle && self.switch_frame() {
+            self.sheet.progress_seq(entity_index, seq_index);
+        }
     }
 
-    pub fn draw_entity(&self, x_pos: f32, y_pos: f32, entity_index: u64) {
-        let cur_cycle = Cycle::new(); //creates blank cycle
+    pub fn draw_entity(&mut self, x_pos: f32, y_pos: f32, entity_index: usize) {
+        let mut cur_cycle = &Cycle::new(); //creates blank cycle
+        let mut active_cycle = false; //is there a cycle that has been triggered
 
         //goes through all the cycles for the entity
-        for (cycle, i) in self.sheet.as_ref().unwrap().entities[entity_index]
-            .cycles
-            .iter()
-            .enurmerate()
-        {
+        for (i, cycle) in self.sheet.entities[entity_index].cycles.iter().enumerate() {
             //if the cycle state is true
             if cycle.state {
+                active_cycle = true;
                 if i == 0 {
                     cur_cycle = cycle;
                 } else {
@@ -187,6 +191,18 @@ impl SimpleAnim {
             }
         }
         //draw the sprite determinded
-        draw_sprite(x_pos, y_pos, entity_index, cur_cycle.seq_index);
+        if active_cycle {
+            self.draw_sprite(x_pos, y_pos, true, entity_index, cur_cycle.seq_index);
+        }
+        //no active cycles so draw default seq
+        else {
+            self.draw_sprite(
+                x_pos,
+                y_pos,
+                false,
+                entity_index,
+                self.sheet.entities[entity_index].default_seq,
+            );
+        }
     }
 }

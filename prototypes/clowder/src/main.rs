@@ -229,24 +229,10 @@ struct World {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let mut rows = Vec::<usize>::new();
-    let mut ball_in = 0; //assigns a starting sprite in the sprite sheet for each ball (cat)
-    for _ in 0..BALL_NUM {
-        rows.push(ball_in);
-        ball_in += 2;
+    let mut animation = SimpleAnim::new("src/clowder_sprite.png", "src/clowder_sprite.json").await;
 
-        if ball_in / 2 >= DIST_BALL as usize {
-            ball_in = 0;
-        }
-    }
-    //assigns a starting/base sprite for the paddle
-    rows.push((DIST_BALL * 2) as usize);
-    let mut animation = SimpleAnim::new();
-    animation
-        .load_sprite_sheet("src/clowder_sprite.png", "src/clowder_sprite.json")
-        .await;
     animation.set_frames(10); //arbitrary value that resets frames to create cycle
-    animation.assign_rows(rows);
+
     let mut world = World::new();
     let mut logics = Logics::new();
 
@@ -589,66 +575,6 @@ impl World {
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
     fn draw(&self, state: &mut FlatEntityState<StateID>, animation: &mut SimpleAnim) {
         clear_background(BASE_COLOR);
-        animation.incr_frames();
-
-        if animation.sheet_loaded() {
-            //dog (paddle)
-            match state.get_id_for_entity(BALL_NUM as usize) {
-                StateID::Running1 => {
-                    animation.draw_sprite(
-                        self.paddles.0.x as f32,
-                        self.paddles.0.y as f32,
-                        BALL_NUM as usize,
-                        0,
-                    );
-                    // swaps condiction from running 1 to running 2
-                    if animation.switch_frame() {
-                        state.conditions[BALL_NUM as usize][1] = true;
-                        state.conditions[BALL_NUM as usize][0] = false;
-                    }
-                }
-                StateID::Running2 => {
-                    animation.draw_sprite(
-                        self.paddles.0.x as f32,
-                        self.paddles.0.y as f32,
-                        BALL_NUM as usize,
-                        1,
-                    );
-
-                    //swaps condition from running 2 to running 1
-                    if animation.switch_frame() {
-                        state.conditions[BALL_NUM as usize][0] = true;
-                        state.conditions[BALL_NUM as usize][1] = false;
-                    }
-                }
-                StateID::Resting => {}
-            }
-            //balls
-            for ball in self.balls.iter() {
-                match state.get_id_for_entity(ball.id) {
-                    StateID::Running1 => {
-                        animation.draw_sprite(ball.pos.x as f32, ball.pos.y as f32, ball.id, 0);
-                        //swaps running1 to running2
-                        if animation.switch_frame() {
-                            state.conditions[ball.id][0] = false;
-                            state.conditions[ball.id][1] = true;
-                        }
-                    }
-                    StateID::Running2 => {
-                        animation.draw_sprite(ball.pos.x as f32, ball.pos.y as f32, ball.id, 1);
-
-                        //swaps from running2 to running1
-                        if animation.switch_frame() {
-                            state.conditions[ball.id][0] = true;
-                            state.conditions[ball.id][1] = false;
-                        }
-                    }
-                    StateID::Resting => {
-                        animation.draw_sprite(ball.pos.x as f32, ball.pos.y as f32, ball.id, 0);
-                    }
-                }
-            }
-        }
 
         //top 1 (left)
         draw_rectangle(
