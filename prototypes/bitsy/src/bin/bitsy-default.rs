@@ -12,4 +12,20 @@ fn window_conf() -> Conf {
 }
 
 #[macroquad::main(window_conf)]
-async fn main() {}
+async fn main() {
+    let mut game = Game::new();
+    init(&mut game);
+    run(game).await;
+}
+
+#[allow(unused)]
+fn init(game: &mut Game) {
+    let mut player = Player::new();
+    player.pos = IVec2::new(3, 3);
+    player.color = PURPLE;
+    let up = player.add_control_map(KeyCode::Up, true);
+    let down = player.add_control_map(KeyCode::Down, true);
+    let left = player.add_control_map(KeyCode::Left, true);
+    let right = player.add_control_map(KeyCode::Right, true);
+    let player_id = game.set_player(player);
+}

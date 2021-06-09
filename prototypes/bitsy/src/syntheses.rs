@@ -1,4 +1,5 @@
 use asterism::Logic;
+use macroquad::math::IVec2;
 
 use crate::collision::*;
 use crate::types::*;
@@ -26,18 +27,20 @@ impl Game {
     }
 
     pub(crate) fn player_col_synthesis(&mut self) {
-        if let Some(synthesis) = self.events.player_synth.col.as_ref() {
-            let i = self.state.player.idx();
-            let col_idx = self.state.get_col_idx(i, CollisionEnt::Player);
-            let mut col = self
-                .logics
-                .collision
-                .get_synthesis(ColIdent::EntIdx(col_idx));
-            let ctrl = self.logics.control.get_synthesis(i);
+        if let Some(player_id) = self.state.player {
+            if let Some(synthesis) = self.events.player_synth.col.as_ref() {
+                let i = player_id.idx();
+                let col_idx = self.state.get_col_idx(i, CollisionEnt::Player);
+                let mut col = self
+                    .logics
+                    .collision
+                    .get_synthesis(ColIdent::EntIdx(col_idx));
+                let ctrl = self.logics.control.get_synthesis(i);
 
-            if let TileMapColData::Ent { pos, .. } = col {
                 let mut player = Player::new();
-                player.pos = pos;
+                if let TileMapColData::Ent { pos, .. } = col {
+                    player.pos = pos;
+                }
 
                 for (actions, values) in ctrl.0.iter().zip(ctrl.1.iter()) {
                     let ctrl = (
@@ -56,117 +59,144 @@ impl Game {
                 player.color = *self
                     .colors
                     .colors
-                    .get(&EntID::Player(self.state.player))
+                    .get(&EntID::Player(player_id))
                     .expect("player color not set");
                 let player = synthesis(player);
 
-                pos = player.pos;
+                if let TileMapColData::Ent { pos, .. } = &mut col {
+                    *pos = player.pos;
+                }
                 self.logics
                     .collision
                     .update_synthesis(ColIdent::EntIdx(col_idx), col);
                 self.colors
                     .colors
-                    .insert(EntID::Player(self.state.player), player.color);
+                    .insert(EntID::Player(player_id), player.color);
             }
         }
     }
 
     pub(crate) fn player_ctrl_synthesis(&mut self) {
-        if let Some(synthesis) = self.events.player_synth.ctrl.as_ref() {
-            let i = self.state.player.idx();
-            let col_idx = self.state.get_col_idx(i, CollisionEnt::Player);
-            let col = self.logics.collision.get_synthesis(col_idx);
-            let mut ctrl = self.logics.control.get_synthesis(i);
+        if let Some(player_id) = self.state.player {
+            if let Some(synthesis) = self.events.player_synth.ctrl.as_ref() {
+                let i = player_id.idx();
+                let col_idx = self.state.get_col_idx(i, CollisionEnt::Player);
+                let col = self
+                    .logics
+                    .collision
+                    .get_synthesis(ColIdent::EntIdx(col_idx));
+                let mut ctrl = self.logics.control.get_synthesis(i);
 
-            let mut player = Player::new();
-            player.pos = col.center - col.half_size;
-            for (actions, values) in ctrl.0.iter().zip(ctrl.1.iter()) {
-                let ctrl = (
-                    actions.id,
-                    *actions.get_keycode(),
-                    actions.is_valid,
-                    *values,
-                );
-                player.controls.push(ctrl);
-            }
-            player.color = *self
-                .colors
-                .colors
-                .get(&EntID::Player(self.state.player))
-                .expect("player color not set");
-            let player = synthesis(player);
+                let mut player = Player::new();
+                if let TileMapColData::Ent { pos, .. } = col {
+                    player.pos = pos;
+                }
+                for (actions, values) in ctrl.0.iter().zip(ctrl.1.iter()) {
+                    let ctrl = (
+                        actions.id,
+                        *actions.get_keycode(),
+                        actions.is_valid,
+                        *values,
+                    );
+                    player.controls.push(ctrl);
+                }
+                player.color = *self
+                    .colors
+                    .colors
+                    .get(&EntID::Player(player_id))
+                    .expect("player color not set");
+                let player = synthesis(player);
 
-            for (((_, _, valid, vals), actions), values) in player
-                .controls
-                .iter()
-                .zip(ctrl.0.iter_mut())
-                .zip(ctrl.1.iter_mut())
-            {
-                actions.is_valid = *valid;
-                *values = *vals;
+                for (((_, _, valid, vals), actions), values) in player
+                    .controls
+                    .iter()
+                    .zip(ctrl.0.iter_mut())
+                    .zip(ctrl.1.iter_mut())
+                {
+                    actions.is_valid = *valid;
+                    *values = *vals;
+                }
+                self.logics.control.update_synthesis(i, ctrl);
             }
-            self.logics.control.update_synthesis(i, ctrl);
         }
     }
 
     pub(crate) fn player_rsrc_synthesis(&mut self) {
-        if let Some(synthesis) = self.events.player_synth.ctrl.as_ref() {
-            let i = self.state.player.idx();
-            let col_idx = self.state.get_col_idx(i, CollisionEnt::Player);
-            let col = self.logics.collision.get_synthesis(col_idx);
-            let mut ctrl = self.logics.control.get_synthesis(i);
+        if let Some(player_id) = self.state.player {
+            if let Some(synthesis) = self.events.player_synth.ctrl.as_ref() {
+                let i = player_id.idx();
+                let col_idx = self.state.get_col_idx(i, CollisionEnt::Player);
+                let col = self
+                    .logics
+                    .collision
+                    .get_synthesis(ColIdent::EntIdx(col_idx));
+                let mut ctrl = self.logics.control.get_synthesis(i);
 
-            let mut player = Player::new();
-            player.pos = col.center - col.half_size;
-            for (actions, values) in ctrl.0.iter().zip(ctrl.1.iter()) {
-                let ctrl = (
-                    actions.id,
-                    *actions.get_keycode(),
-                    actions.is_valid,
-                    *values,
-                );
-                player.controls.push(ctrl);
+                let mut player = Player::new();
+
+                if let TileMapColData::Ent { pos, .. } = col {
+                    player.pos = pos;
+                }
+
+                for (actions, values) in ctrl.0.iter().zip(ctrl.1.iter()) {
+                    let ctrl = (
+                        actions.id,
+                        *actions.get_keycode(),
+                        actions.is_valid,
+                        *values,
+                    );
+                    player.controls.push(ctrl);
+                }
+
+                player.color = *self
+                    .colors
+                    .colors
+                    .get(&EntID::Player(player_id))
+                    .expect("player color not set");
+                let player = synthesis(player);
+
+                for (((_, _, valid, vals), actions), values) in player
+                    .controls
+                    .iter()
+                    .zip(ctrl.0.iter_mut())
+                    .zip(ctrl.1.iter_mut())
+                {
+                    actions.is_valid = *valid;
+                    *values = *vals;
+                }
+                self.logics.control.update_synthesis(i, ctrl);
             }
-
-            player.color = *self
-                .colors
-                .colors
-                .get(&EntID::Player(self.state.player))
-                .expect("player color not set");
-            let player = synthesis(player);
-
-            for (((_, _, valid, vals), actions), values) in player
-                .controls
-                .iter()
-                .zip(ctrl.0.iter_mut())
-                .zip(ctrl.1.iter_mut())
-            {
-                actions.is_valid = *valid;
-                *values = *vals;
-            }
-            self.logics.control.update_synthesis(i, ctrl);
         }
     }
 
     pub(crate) fn tile_synthesis(&mut self) {
         if let Some(synthesis) = self.events.tile_synth.col.as_ref() {
             let map = self.state.rooms[self.state.current_room].map;
-            for (i, _) in map.iter().enumerate() {
-                let col_idx = self.state.get_col_idx(i, CollisionEnt::Tile);
-                let mut col = self.logics.collision.get_synthesis(col_idx);
+            for (y, row) in map.iter().enumerate() {
+                for (x, tile) in row.iter().enumerate() {
+                    if let Some(tile_id) = tile {
+                        let pos = IVec2::new(x as i32, y as i32);
+                        let mut col = self.logics.collision.get_synthesis(ColIdent::Position(pos));
 
-                let mut tile = Tile::new();
-                tile.pos = col.center - col.half_size;
-                tile.solid = col.solid;
-                // tile.color = *self
-                //     .colors
-                //     .colors
-                //     .get(&EntID::Tile(tile_id))
-                //     .expect("player color not set");
+                        let mut tile = Tile::new();
+                        if let TileMapColData::Position { solid, .. } = col {
+                            tile.solid = solid;
+                        }
+                        tile.color = *self
+                            .colors
+                            .colors
+                            .get(&EntID::Tile(*tile_id))
+                            .expect("tile color not set");
 
-                let tile = synthesis(tile);
-                col.center = tile.pos + col.half_size;
-                self.logics.collision.update_synthesis(col_idx, col);
+                        let tile = synthesis(tile);
+                        if let TileMapColData::Position { solid, .. } = &mut col {
+                            *solid = tile.solid;
+                        }
+                        self.logics
+                            .collision
+                            .update_synthesis(ColIdent::Position(pos), col);
+                    }
+                }
             }
         }
     }
@@ -175,22 +205,30 @@ impl Game {
         if let Some(synthesis) = self.events.character_synth.col.as_ref() {
             for (i, char_id) in self.state.characters.iter().enumerate() {
                 let col_idx = self.state.get_col_idx(i, CollisionEnt::Character);
-                let mut col = self.logics.collision.get_synthesis(col_idx);
+                let mut col = self
+                    .logics
+                    .collision
+                    .get_synthesis(ColIdent::EntIdx(col_idx));
 
                 let mut character = Character::new();
-                // get position from physics
-                character.pos = col.center;
+                if let TileMapColData::Ent { pos, .. } = col {
+                    character.pos = pos;
+                }
                 character.color = *self
                     .colors
                     .colors
                     .get(&EntID::Character(*char_id))
-                    .expect("player color not set");
+                    .expect("character color not set");
 
                 let character = synthesis(character);
 
-                col.center = character.pos + col.half_size;
+                if let TileMapColData::Ent { pos, .. } = &mut col {
+                    *pos = character.pos;
+                }
 
-                self.logics.collision.update_synthesis(col_idx, col);
+                self.logics
+                    .collision
+                    .update_synthesis(ColIdent::EntIdx(col_idx), col);
             }
         }
     }

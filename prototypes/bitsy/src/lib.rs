@@ -9,20 +9,19 @@
 //! drawing: I'm not doing the pixel art thing. The player, interactable characters, and tiles all have different colors
 //!
 //! TODO:
-//! - Write tilemap collision
-//! - Write syntheses functions
-//! - See what errors still persist from there
-//! - Add linking logics?
-//! - Game mode logics?
+//! - [x] Write tilemap collision
+//! - [x] Write syntheses functions
+//! - [ ] Write bitsy test game
+//! - [ ] See what errors still persist from there
+//! - [ ] Add linking logics?
+//! - [ ] Game mode logics?
 
-#![allow(unused)]
 #![allow(clippy::upper_case_acronyms)]
 #![allow(clippy::new_without_default)]
 
 use std::collections::BTreeMap;
 
 use asterism::{
-    collision::AabbCollision,
     control::{KeyboardControl, MacroquadInputWrapper},
     resources::QueuedResources,
 };
@@ -32,24 +31,38 @@ use macroquad::prelude::*;
 pub use asterism::control::{Action, ControlEventType, ControlReaction, Values};
 pub use asterism::resources::{ResourceEventType, ResourceReaction, Transaction};
 pub use asterism::Logic;
-pub use types::{ColEvent, CtrlEvent, RsrcEvent};
+pub use collision::*;
+pub use types::*;
 
 const TILE_SIZE: usize = 32;
-const WORLD_SIZE: usize = 8;
+pub const WORLD_SIZE: usize = 8;
 pub const GAME_SIZE: usize = TILE_SIZE * WORLD_SIZE;
 
 mod collision;
-use collision::*;
-mod types;
-use types::*;
 mod syntheses;
+mod types;
 use syntheses::*;
+mod entities;
 
 pub struct Game {
     pub state: State,
     pub logics: Logics,
     events: Events,
     colors: Colors,
+}
+
+impl Game {
+    pub fn new() -> Self {
+        Self {
+            state: State::new(),
+            logics: Logics::new(),
+            events: Events::new(),
+            colors: Colors {
+                background_color: DARKBLUE,
+                colors: BTreeMap::new(),
+            },
+        }
+    }
 }
 
 struct Colors {
@@ -64,25 +77,33 @@ pub(crate) struct Room {
 pub struct State {
     current_room: usize,
     rooms: Vec<Room>,
-    player: PlayerID,
+    player: Option<PlayerID>,
+    resources: Vec<RsrcID>,
+    rsrc_id_max: usize,
     characters: Vec<CharacterID>,
+    char_id_max: usize,
+    tile_type_count: usize,
     add_queue: Vec<Ent>,
     remove_queue: Vec<EntID>,
 }
 
 impl State {
-    fn new(player: PlayerID) -> Self {
+    fn new() -> Self {
         Self {
             current_room: 0,
             rooms: Vec::new(),
-            player,
+            player: None,
             characters: Vec::new(),
+            char_id_max: 0,
+            resources: Vec::new(),
+            rsrc_id_max: 0,
+            tile_type_count: 0,
             add_queue: Vec::new(),
             remove_queue: Vec::new(),
         }
     }
 
-    fn get_col_idx(&mut self, i: usize, ent: CollisionEnt) -> usize {
+    fn get_col_idx(&self, i: usize, ent: CollisionEnt) -> usize {
         match ent {
             CollisionEnt::Player => 0,
             CollisionEnt::Character => i + 1,
@@ -96,6 +117,16 @@ pub struct Logics {
     resources: QueuedResources<RsrcID, u16>,
 }
 
+impl Logics {
+    fn new() -> Self {
+        Self {
+            control: KeyboardControl::new(),
+            collision: TileMapCollision::new(),
+            resources: QueuedResources::new(),
+        }
+    }
+}
+
 type PredicateFn<Event> = Vec<(Event, Box<dyn Fn(&mut State, &mut Logics, &Event)>)>;
 
 pub struct Events {
@@ -106,6 +137,23 @@ pub struct Events {
     player_synth: PlayerSynth,
     tile_synth: TileSynth,
     character_synth: CharacterSynth,
+}
+
+impl Events {
+    fn new() -> Self {
+        Self {
+            collision: Vec::new(),
+            control: Vec::new(),
+            resources: Vec::new(),
+            player_synth: PlayerSynth {
+                ctrl: None,
+                col: None,
+                rsrc: None,
+            },
+            tile_synth: TileSynth { col: None },
+            character_synth: CharacterSynth { col: None },
+        }
+    }
 }
 
 struct PlayerSynth {
@@ -204,13 +252,35 @@ fn draw(game: &Game) {
                     .colors
                     .get(&EntID::Tile(*tile))
                     .expect("tile color undefined");
+                draw_rectangle(
+                    x as f32 * TILE_SIZE as f32,
+                    y as f32 * TILE_SIZE as f32,
+                    TILE_SIZE as f32,
+                    TILE_SIZE as f32,
+                    *color,
+                );
             }
         }
     }
 
-    let color = game
-        .colors
-        .colors
-        .get(&EntID::Player(game.state.player))
-        .expect("no player color defined");
+    if let Some(player) = game.state.player {
+        let color = game
+            .colors
+            .colors
+            .get(&EntID::Player(player))
+            .expect("no player color defined");
+        let pos = game.logics.collision.get_synthesis(ColIdent::EntIdx(
+            game.state.get_col_idx(0, CollisionEnt::Player),
+        ));
+        match pos {
+            TileMapColData::Ent { pos, .. } => draw_rectangle(
+                pos.x as f32 * TILE_SIZE as f32,
+                pos.y as f32 * TILE_SIZE as f32,
+                TILE_SIZE as f32,
+                TILE_SIZE as f32,
+                *color,
+            ),
+            _ => unreachable!(),
+        }
+    }
 }
