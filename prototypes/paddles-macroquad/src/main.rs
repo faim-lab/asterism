@@ -1,6 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
 use asterism::{
-    collision::{magnitude, AabbCollision},
+    collision::AabbCollision,
     control::{KeyboardControl, MacroquadInputWrapper, Values},
     physics::PointPhysics,
     resources::{QueuedResources, Transaction},
@@ -30,7 +30,7 @@ impl Default for ActionID {
 
 type CollisionID = usize;
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
 struct PoolID(usize);
 
 struct Logics {
@@ -241,26 +241,26 @@ impl World {
                 }
 
                 (4, 5) => {
-                    let sides_touched = logics.collision.sides_touched(contact, &4);
+                    let sides_touched = logics.collision.sides_touched(4, 5);
                     if sides_touched.x > 0.0 {
                         self.velocities[4].x *= -1.0;
                     } else {
                         self.velocities[4].y *= -1.0;
                     }
                     // self.change_angle(player);
-                    if magnitude(self.velocities[4]) < 4.0 {
+                    if self.velocities[4].length() < 4.0 {
                         self.velocities[4] *= 1.1;
                     }
                 }
                 (4, 6) => {
-                    let sides_touched = logics.collision.sides_touched(contact, &4);
+                    let sides_touched = logics.collision.sides_touched(4, 6);
                     if sides_touched.x < 0.0 {
                         self.velocities[4].x *= -1.0;
                     } else {
                         self.velocities[4].y *= -1.0;
                     }
                     // self.change_angle(player);
-                    if magnitude(self.velocities[4]) < 4.0 {
+                    if self.velocities[4].length() < 4.0 {
                         self.velocities[4] *= 1.1;
                     }
                 }

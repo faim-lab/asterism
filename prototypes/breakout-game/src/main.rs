@@ -3,7 +3,6 @@ use asterism::{
     control::{KeyboardControl, MacroquadInputWrapper},
     physics::PointPhysics,
     resources::{QueuedResources, Transaction},
-    Logic,
 };
 use macroquad::prelude::*;
 use std::io::{self, Write};
@@ -41,7 +40,7 @@ impl Default for CollisionID {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
 enum PoolID {
     Points,
 }
@@ -201,7 +200,7 @@ impl World {
                     logics.resources.items.clear();
                 }
                 (CollisionID::Ball, CollisionID::Paddle) => {
-                    let sides_touched = logics.collision.sides_touched(contact, &CollisionID::Ball);
+                    let sides_touched = logics.collision.sides_touched(contact.i, contact.j);
                     dbg!(sides_touched);
                     self.ball_vel.y *= -1.0;
                     if sides_touched.y < 0.0 {
@@ -217,8 +216,7 @@ impl World {
                 (CollisionID::Ball, CollisionID::TopWall) => self.ball_vel.y *= -1.0,
                 (CollisionID::Ball, CollisionID::Block(i, j)) => {
                     if !block_broken {
-                        let sides_touched =
-                            logics.collision.sides_touched(contact, &CollisionID::Ball);
+                        let sides_touched = logics.collision.sides_touched(contact.i, contact.j);
                         if sides_touched.x != 0.0 {
                             self.ball_vel.x *= -1.0;
                         } else if sides_touched.y != 0.0 {
@@ -345,10 +343,10 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
-        self.ball = collision.get_xy_pos_for_entity(CollisionID::Ball).unwrap();
+        self.ball = collision.centers[4] - collision.half_sizes[4];
     }
 
-    fn change_angle(&mut self) {
+    fn _change_angle(&mut self) {
         let paddle_center = (self.paddle + PADDLE_WIDTH / 2) as f32;
         let angle: f32 = (((self.ball.x + (BALL_SIZE / 2) as f32) - paddle_center)
             .max(-((PADDLE_WIDTH / 2) as f32))

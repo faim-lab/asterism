@@ -9,7 +9,7 @@ use std::ops::{Add, AddAssign};
 /// A resource logic that queues transactions, then applies them all at once when updating.
 pub struct QueuedResources<ID, Value>
 where
-    ID: Copy + Ord,
+    ID: Copy + Ord + std::fmt::Debug,
     Value: Add<Output = Value> + AddAssign + Ord + Copy,
 {
     /// The items involved, and their values.
@@ -22,7 +22,7 @@ where
 
 impl<ID, Value> Logic for QueuedResources<ID, Value>
 where
-    ID: Copy + Ord,
+    ID: Copy + Ord + std::fmt::Debug,
     Value: Add<Output = Value> + AddAssign + Ord + Copy,
 {
     type Event = ResourceEvent<ID>;
@@ -56,7 +56,7 @@ where
         *self
             .items
             .get(&ident)
-            .expect("requested pool doesn't exist in resource logic")
+            .unwrap_or_else(|| panic!("requested pool {:?} doesn't exist in resource logic", ident))
     }
 
     fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
@@ -66,7 +66,7 @@ where
 
 impl<ID, Value> QueuedResources<ID, Value>
 where
-    ID: Copy + Ord,
+    ID: Copy + Ord + std::fmt::Debug,
     Value: Add<Output = Value> + AddAssign + Ord + Copy,
 {
     pub fn new() -> Self {

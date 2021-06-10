@@ -8,7 +8,7 @@ macro_rules! id_impl_new {
     ($([$($derive:meta)*] $id_type:ident),*) => {
         $(
             $(#[$derive])*
-            #[derive(Clone, Copy, PartialEq, Eq)]
+            #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
             pub struct $id_type(usize);
 
             impl $id_type {
@@ -24,7 +24,7 @@ macro_rules! id_impl_new {
     };
 }
 
-id_impl_new!([derive(PartialOrd, Ord)] PlayerID, [derive(Ord, PartialOrd)] TileID, [derive(Ord, PartialOrd)] CharacterID, [derive(PartialOrd, Ord)] RsrcID);
+id_impl_new!([] PlayerID, [derive(Debug)] TileID, [] CharacterID, [derive(Debug)] RsrcID);
 
 pub enum Ent {
     Player(Player),

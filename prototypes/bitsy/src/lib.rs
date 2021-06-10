@@ -285,7 +285,7 @@ fn draw(game: &Game) {
                     .colors
                     .colors
                     .get(&EntID::Tile(*tile))
-                    .expect("tile color undefined");
+                    .unwrap_or_else(|| panic!("tile {} color undefined", tile.idx()));
                 draw_rectangle(
                     x as f32 * TILE_SIZE as f32,
                     y as f32 * TILE_SIZE as f32,
@@ -302,19 +302,18 @@ fn draw(game: &Game) {
             .colors
             .colors
             .get(&EntID::Character(*character))
-            .expect("no character color defined");
+            .unwrap_or_else(|| panic!("character {} color defined", character.idx()));
         let pos = game.logics.collision.get_synthesis(ColIdent::EntIdx(
             game.state.get_col_idx(i, CollisionEnt::Character),
         ));
-        match pos {
-            TileMapColData::Ent { pos, .. } => draw_rectangle(
+        if let TileMapColData::Ent { pos, .. } = pos {
+            draw_rectangle(
                 pos.x as f32 * TILE_SIZE as f32,
                 pos.y as f32 * TILE_SIZE as f32,
                 TILE_SIZE as f32,
                 TILE_SIZE as f32,
                 *color,
-            ),
-            _ => unreachable!(),
+            );
         }
     }
 
@@ -323,19 +322,18 @@ fn draw(game: &Game) {
             .colors
             .colors
             .get(&EntID::Player(player))
-            .expect("no player color defined");
+            .expect("player color not set");
         let pos = game.logics.collision.get_synthesis(ColIdent::EntIdx(
             game.state.get_col_idx(0, CollisionEnt::Player),
         ));
-        match pos {
-            TileMapColData::Ent { pos, .. } => draw_rectangle(
+        if let TileMapColData::Ent { pos, .. } = pos {
+            draw_rectangle(
                 pos.x as f32 * TILE_SIZE as f32,
                 pos.y as f32 * TILE_SIZE as f32,
                 TILE_SIZE as f32,
                 TILE_SIZE as f32,
                 *color,
-            ),
-            _ => unreachable!(),
+            );
         }
     }
 }

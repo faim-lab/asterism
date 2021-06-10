@@ -15,7 +15,7 @@ impl<ID> CollisionData<ID> {
     }
 }
 
-pub struct TileMapCollision<TileID, EntID> {
+pub struct TileMapCollision<TileID: std::fmt::Debug, EntID> {
     pub map: Vec<Vec<Option<TileID>>>,
     pub tile_solid: BTreeMap<TileID, bool>,
     pub positions: Vec<IVec2>,
@@ -71,7 +71,9 @@ pub enum TileMapColData<TileID, EntID> {
 
 impl<TileID, EntID> Reaction for CollisionReaction<TileID, EntID> {}
 
-impl<TileID: Copy + Eq + Ord, EntID: Copy> Logic for TileMapCollision<TileID, EntID> {
+impl<TileID: Copy + Eq + Ord + std::fmt::Debug, EntID: Copy> Logic
+    for TileMapCollision<TileID, EntID>
+{
     type Event = Contact;
     type Reaction = CollisionReaction<TileID, EntID>;
     type Ident = ColIdent;
@@ -112,7 +114,7 @@ impl<TileID: Copy + Eq + Ord, EntID: Copy> Logic for TileMapCollision<TileID, En
         match ident {
             ColIdent::Position(pos) => {
                 let id = self.map[pos.y as usize][pos.x as usize]
-                    .expect("no tile at requested position");
+                    .unwrap_or_else(|| panic!("no tile at position {}", pos));
                 TileMapColData::Position {
                     pos,
                     solid: self.tile_solid(&id),
@@ -168,7 +170,7 @@ impl<TileID: Copy + Eq + Ord, EntID: Copy> Logic for TileMapCollision<TileID, En
     }
 }
 
-impl<TileID: Eq + Ord + Copy, EntID> TileMapCollision<TileID, EntID> {
+impl<TileID: Eq + Ord + Copy + std::fmt::Debug, EntID> TileMapCollision<TileID, EntID> {
     pub fn new(width: usize, height: usize) -> Self {
         let mut collision = Self {
             map: Vec::new(),
@@ -303,7 +305,7 @@ impl<TileID: Eq + Ord + Copy, EntID> TileMapCollision<TileID, EntID> {
         *self
             .tile_solid
             .get(tile_id)
-            .expect("not specified if the tile is solid or not")
+            .unwrap_or_else(|| panic!("not specified if tile {:?} is solid or not", tile_id))
     }
 
     fn in_bounds(&self, pos: IVec2, moved: IVec2) -> bool {

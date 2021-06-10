@@ -195,7 +195,7 @@ impl Game {
                             .colors
                             .colors
                             .get(&EntID::Tile(*tile_id))
-                            .expect("tile color not set");
+                            .unwrap_or_else(|| panic!("tile {} color not set", tile_id.idx()));
 
                         let tile = synthesis(tile);
                         if let TileMapColData::Position { solid, .. } = &mut col {
@@ -227,7 +227,7 @@ impl Game {
                     .colors
                     .colors
                     .get(&EntID::Character(*char_id))
-                    .expect("character color not set");
+                    .unwrap_or_else(|| panic!("character {} color not set", char_id.idx()));
 
                 let character = synthesis(character);
 

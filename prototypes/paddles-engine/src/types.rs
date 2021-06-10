@@ -38,7 +38,7 @@ macro_rules! id_impl_new {
     };
 }
 
-id_impl_new!([] PaddleID, [] WallID, [] BallID, [derive(PartialOrd, Ord)] ScoreID, [derive(PartialOrd, Ord)] ActionID);
+id_impl_new!([] PaddleID, [] WallID, [] BallID, [derive(PartialOrd, Ord, Debug)] ScoreID, [derive(PartialOrd, Ord)] ActionID);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CollisionEnt {
@@ -47,7 +47,7 @@ pub enum CollisionEnt {
     Ball,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum RsrcPool {
     Score(ScoreID),
 }

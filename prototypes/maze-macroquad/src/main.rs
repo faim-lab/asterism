@@ -21,7 +21,7 @@ enum CollisionID {
     Portal(usize, usize),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
 enum PoolID {
     Points,
 }
