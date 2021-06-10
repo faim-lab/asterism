@@ -11,9 +11,10 @@
 //! TODO:
 //! - [x] Write tilemap collision
 //! - [x] Write syntheses functions
-//! - [ ] Write bitsy test game
-//! - [ ] See what errors still persist from there
-//! - [ ] Add linking logics?
+//! - [x] Write bitsy test game
+//! - [x] See what errors still persist from there
+//! - [ ] Add linking logics
+//! - [ ] Add resource logics/inventory
 //! - [ ] Game mode logics?
 
 #![allow(clippy::upper_case_acronyms)]
@@ -44,6 +45,16 @@ mod types;
 use syntheses::*;
 mod entities;
 
+pub fn window_conf() -> Conf {
+    Conf {
+        window_title: "extreme dungeon crawler".to_owned(),
+        window_width: GAME_SIZE as i32,
+        window_height: GAME_SIZE as i32,
+        fullscreen: false,
+        ..Default::default()
+    }
+}
+
 pub struct Game {
     pub state: State,
     pub logics: Logics,
@@ -70,13 +81,8 @@ struct Colors {
     colors: BTreeMap<EntID, Color>,
 }
 
-pub(crate) struct Room {
-    pub map: [[Option<TileID>; WORLD_SIZE]; WORLD_SIZE],
-}
-
 pub struct State {
-    current_room: usize,
-    rooms: Vec<Room>,
+    map: [[Option<TileID>; WORLD_SIZE]; WORLD_SIZE],
     player: Option<PlayerID>,
     resources: Vec<RsrcID>,
     rsrc_id_max: usize,
@@ -90,8 +96,7 @@ pub struct State {
 impl State {
     fn new() -> Self {
         Self {
-            current_room: 0,
-            rooms: Vec::new(),
+            map: [[None; WORLD_SIZE]; WORLD_SIZE],
             player: None,
             characters: Vec::new(),
             char_id_max: 0,
@@ -112,16 +117,16 @@ impl State {
 }
 
 pub struct Logics {
-    control: KeyboardControl<ActionID, MacroquadInputWrapper>,
-    collision: TileMapCollision<TileID, CollisionEnt>,
-    resources: QueuedResources<RsrcID, u16>,
+    pub control: KeyboardControl<ActionID, MacroquadInputWrapper>,
+    pub collision: TileMapCollision<TileID, CollisionEnt>,
+    pub resources: QueuedResources<RsrcID, u16>,
 }
 
 impl Logics {
     fn new() -> Self {
         Self {
             control: KeyboardControl::new(),
-            collision: TileMapCollision::new(),
+            collision: TileMapCollision::new(WORLD_SIZE, WORLD_SIZE),
             resources: QueuedResources::new(),
         }
     }
@@ -139,23 +144,6 @@ pub struct Events {
     character_synth: CharacterSynth,
 }
 
-impl Events {
-    fn new() -> Self {
-        Self {
-            collision: Vec::new(),
-            control: Vec::new(),
-            resources: Vec::new(),
-            player_synth: PlayerSynth {
-                ctrl: None,
-                col: None,
-                rsrc: None,
-            },
-            tile_synth: TileSynth { col: None },
-            character_synth: CharacterSynth { col: None },
-        }
-    }
-}
-
 struct PlayerSynth {
     ctrl: Option<Synthesis<Player>>,
     col: Option<Synthesis<Player>>,
@@ -168,6 +156,53 @@ struct TileSynth {
 
 struct CharacterSynth {
     col: Option<Synthesis<Character>>,
+}
+
+impl Events {
+    fn new() -> Self {
+        Self {
+            collision: Vec::new(),
+            control: Vec::new(),
+            resources: Vec::new(),
+            player_synth: PlayerSynth {
+                ctrl: None,
+                col: Some(Box::new(|mut player: Player| {
+                    let mut vert_moved = false;
+                    if player.controls[0].3.changed_by > 0.0 {
+                        player.pos.y = (player.pos.y - 1).max(0);
+                        player.amt_moved.y = -1;
+                        vert_moved = true;
+                    }
+                    if player.controls[1].3.changed_by > 0.0 {
+                        player.pos.y = (player.pos.y + 1).min(WORLD_SIZE as i32 - 1);
+                        player.amt_moved.y = 1;
+                        vert_moved = true;
+                    }
+                    if !vert_moved {
+                        player.amt_moved.y = 0;
+                    }
+                    let mut horiz_moved = false;
+                    if player.controls[2].3.changed_by > 0.0 {
+                        player.pos.x = (player.pos.x - 1).max(0);
+                        player.amt_moved.x = -1;
+                        horiz_moved = true;
+                    }
+                    if player.controls[3].3.changed_by > 0.0 {
+                        player.pos.x = (player.pos.x + 1).min(WORLD_SIZE as i32 - 1);
+                        player.amt_moved.x = 1;
+                        horiz_moved = true;
+                    }
+                    if !horiz_moved {
+                        player.amt_moved.x = 0;
+                    }
+                    player
+                })),
+                rsrc: None,
+            },
+            tile_synth: TileSynth { col: None },
+            character_synth: CharacterSynth { col: None },
+        }
+    }
 }
 
 pub async fn run(mut game: Game) {
@@ -243,8 +278,7 @@ fn resources(game: &mut Game) {
 
 fn draw(game: &Game) {
     clear_background(game.colors.background_color);
-    let map = game.state.rooms[game.state.current_room].map;
-    for (y, row) in map.iter().enumerate() {
+    for (y, row) in game.state.map.iter().enumerate() {
         for (x, tile) in row.iter().enumerate() {
             if let Some(tile) = tile {
                 let color = game
@@ -260,6 +294,27 @@ fn draw(game: &Game) {
                     *color,
                 );
             }
+        }
+    }
+
+    for (i, character) in game.state.characters.iter().enumerate() {
+        let color = game
+            .colors
+            .colors
+            .get(&EntID::Character(*character))
+            .expect("no character color defined");
+        let pos = game.logics.collision.get_synthesis(ColIdent::EntIdx(
+            game.state.get_col_idx(i, CollisionEnt::Character),
+        ));
+        match pos {
+            TileMapColData::Ent { pos, .. } => draw_rectangle(
+                pos.x as f32 * TILE_SIZE as f32,
+                pos.y as f32 * TILE_SIZE as f32,
+                TILE_SIZE as f32,
+                TILE_SIZE as f32,
+                *color,
+            ),
+            _ => unreachable!(),
         }
     }
 

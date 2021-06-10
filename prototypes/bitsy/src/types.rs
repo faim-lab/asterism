@@ -24,7 +24,7 @@ macro_rules! id_impl_new {
     };
 }
 
-id_impl_new!([derive(PartialOrd, Ord)] PlayerID, [derive(Ord, PartialOrd)] TileID, [derive(Ord, PartialOrd)] CharacterID, [derive(PartialOrd, Ord)] RsrcID, [derive(PartialOrd, Ord)] ActionID);
+id_impl_new!([derive(PartialOrd, Ord)] PlayerID, [derive(Ord, PartialOrd)] TileID, [derive(Ord, PartialOrd)] CharacterID, [derive(PartialOrd, Ord)] RsrcID);
 
 pub enum Ent {
     Player(Player),
@@ -39,9 +39,18 @@ pub enum EntID {
     Character(CharacterID),
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+pub enum ActionID {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
 // players are unfixed
 pub struct Player {
     pub pos: IVec2,
+    pub amt_moved: IVec2,
     pub color: Color,
     pub inventory: BTreeMap<RsrcID, (u16, u16, u16)>,
     pub controls: Vec<(ActionID, KeyCode, bool, Values)>,
@@ -51,20 +60,31 @@ impl Player {
     pub fn new() -> Self {
         Self {
             pos: IVec2::ZERO,
+            amt_moved: IVec2::ZERO,
             color: WHITE,
             inventory: BTreeMap::new(),
-            controls: Vec::new(),
+            controls: vec![
+                (ActionID::Up, KeyCode::Up, true, Values::new()),
+                (ActionID::Down, KeyCode::Down, true, Values::new()),
+                (ActionID::Left, KeyCode::Left, true, Values::new()),
+                (ActionID::Right, KeyCode::Right, true, Values::new()),
+            ],
         }
     }
 
-    pub fn add_control_map(&mut self, keycode: KeyCode, valid: bool) -> ActionID {
-        let act_id = ActionID(self.controls.len());
-        self.controls.push((act_id, keycode, valid, Values::new()));
-        act_id
+    pub fn set_control_map(&mut self, action: ActionID, keycode: KeyCode, valid: bool) {
+        let (_, keycode_old, valid_old, _) = self
+            .controls
+            .iter_mut()
+            .find(|(act_id, ..)| *act_id == action)
+            .unwrap();
+        *keycode_old = keycode;
+        *valid_old = valid;
     }
 }
 
 // tiles can be solid or not
+#[derive(Clone, Copy)]
 pub struct Tile {
     pub solid: bool,
     pub color: Color,
@@ -74,7 +94,15 @@ impl Tile {
     pub fn new() -> Self {
         Self {
             solid: false,
-            color: SKYBLUE,
+            // randomly generate tile color using hsl
+            color: {
+                use macroquad::rand::gen_range;
+                hsl_to_rgb(
+                    gen_range(0.0, 1.0),
+                    gen_range(0.7, 1.0),
+                    gen_range(0.3, 0.7),
+                )
+            },
         }
     }
 }

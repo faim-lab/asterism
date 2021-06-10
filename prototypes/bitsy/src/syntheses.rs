@@ -30,26 +30,26 @@ impl Game {
         if let Some(player_id) = self.state.player {
             if let Some(synthesis) = self.events.player_synth.col.as_ref() {
                 let i = player_id.idx();
-                let col_idx = self.state.get_col_idx(i, CollisionEnt::Player);
-                let mut col = self
-                    .logics
-                    .collision
-                    .get_synthesis(ColIdent::EntIdx(col_idx));
+                let mut col = self.logics.collision.get_synthesis(ColIdent::EntIdx(i));
                 let ctrl = self.logics.control.get_synthesis(i);
 
                 let mut player = Player::new();
-                if let TileMapColData::Ent { pos, .. } = col {
+                if let TileMapColData::Ent { pos, amt_moved, .. } = col {
                     player.pos = pos;
+                    player.amt_moved = amt_moved;
                 }
 
-                for (actions, values) in ctrl.0.iter().zip(ctrl.1.iter()) {
-                    let ctrl = (
+                for (player, (actions, values)) in player
+                    .controls
+                    .iter_mut()
+                    .zip(ctrl.0.iter().zip(ctrl.1.iter()))
+                {
+                    *player = (
                         actions.id,
                         *actions.get_keycode(),
                         actions.is_valid,
                         *values,
                     );
-                    player.controls.push(ctrl);
                 }
 
                 for (item, vals) in self.logics.resources.items.iter() {
@@ -63,12 +63,14 @@ impl Game {
                     .expect("player color not set");
                 let player = synthesis(player);
 
-                if let TileMapColData::Ent { pos, .. } = &mut col {
+                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut col {
                     *pos = player.pos;
+                    *amt_moved = player.amt_moved;
                 }
+
                 self.logics
                     .collision
-                    .update_synthesis(ColIdent::EntIdx(col_idx), col);
+                    .update_synthesis(ColIdent::EntIdx(i), col);
                 self.colors
                     .colors
                     .insert(EntID::Player(player_id), player.color);
@@ -91,15 +93,20 @@ impl Game {
                 if let TileMapColData::Ent { pos, .. } = col {
                     player.pos = pos;
                 }
-                for (actions, values) in ctrl.0.iter().zip(ctrl.1.iter()) {
-                    let ctrl = (
+
+                for (player, (actions, values)) in player
+                    .controls
+                    .iter_mut()
+                    .zip(ctrl.0.iter().zip(ctrl.1.iter()))
+                {
+                    *player = (
                         actions.id,
                         *actions.get_keycode(),
                         actions.is_valid,
                         *values,
                     );
-                    player.controls.push(ctrl);
                 }
+
                 player.color = *self
                     .colors
                     .colors
@@ -138,14 +145,17 @@ impl Game {
                     player.pos = pos;
                 }
 
-                for (actions, values) in ctrl.0.iter().zip(ctrl.1.iter()) {
-                    let ctrl = (
+                for (player, (actions, values)) in player
+                    .controls
+                    .iter_mut()
+                    .zip(ctrl.0.iter().zip(ctrl.1.iter()))
+                {
+                    *player = (
                         actions.id,
                         *actions.get_keycode(),
                         actions.is_valid,
                         *values,
                     );
-                    player.controls.push(ctrl);
                 }
 
                 player.color = *self
@@ -171,8 +181,7 @@ impl Game {
 
     pub(crate) fn tile_synthesis(&mut self) {
         if let Some(synthesis) = self.events.tile_synth.col.as_ref() {
-            let map = self.state.rooms[self.state.current_room].map;
-            for (y, row) in map.iter().enumerate() {
+            for (y, row) in self.state.map.iter().enumerate() {
                 for (x, tile) in row.iter().enumerate() {
                     if let Some(tile_id) = tile {
                         let pos = IVec2::new(x as i32, y as i32);

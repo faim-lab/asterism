@@ -174,10 +174,7 @@ where
             self.values.resize_with(locus_idx + 1, Default::default);
         }
         self.mapping[locus_idx].push(Action::new(id, keycode, InputType::Digital, valid));
-        self.values[locus_idx].push(Values {
-            value: 0.0,
-            changed_by: 0.0,
-        });
+        self.values[locus_idx].push(Values::new());
     }
 }
 
@@ -206,7 +203,7 @@ pub enum InputType {
 }
 
 /// Information about the player's input related to one action.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Values {
     /// How much the value of the input was changed last frame.
     pub changed_by: f32,

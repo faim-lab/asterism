@@ -62,6 +62,7 @@ pub enum TileMapColData<TileID, EntID> {
     },
     Ent {
         pos: IVec2,
+        amt_moved: IVec2,
         solid: bool,
         fixed: bool,
         id: EntID,
@@ -122,6 +123,7 @@ impl<TileID: Copy + Eq + Ord, EntID: Copy> Logic for TileMapCollision<TileID, En
                 let meta = &self.metadata[idx];
                 TileMapColData::Ent {
                     pos: self.positions[idx],
+                    amt_moved: self.amt_moved[idx],
                     solid: meta.solid,
                     fixed: meta.fixed,
                     id: meta.id,
@@ -143,12 +145,14 @@ impl<TileID: Copy + Eq + Ord, EntID: Copy> Logic for TileMapCollision<TileID, En
                 ColIdent::EntIdx(idx),
                 TileMapColData::Ent {
                     pos,
+                    amt_moved,
                     solid,
                     fixed,
                     id,
                 },
             ) => {
                 self.positions[idx] = pos;
+                self.amt_moved[idx] = amt_moved;
                 let meta = &mut self.metadata[idx];
                 meta.solid = solid;
                 meta.fixed = fixed;
@@ -165,15 +169,17 @@ impl<TileID: Copy + Eq + Ord, EntID: Copy> Logic for TileMapCollision<TileID, En
 }
 
 impl<TileID: Eq + Ord + Copy, EntID> TileMapCollision<TileID, EntID> {
-    pub fn new() -> Self {
-        Self {
+    pub fn new(width: usize, height: usize) -> Self {
+        let mut collision = Self {
             map: Vec::new(),
             tile_solid: BTreeMap::new(),
             positions: Vec::new(),
             metadata: Vec::new(),
             amt_moved: Vec::new(),
             contacts: Vec::new(),
-        }
+        };
+        collision.clear_and_resize_map(width, height);
+        collision
     }
 
     pub fn clear_and_resize_map(&mut self, width: usize, height: usize) {
@@ -207,7 +213,7 @@ impl<TileID: Eq + Ord + Copy, EntID> TileMapCollision<TileID, EntID> {
                 .iter()
                 .zip(self.metadata.iter())
                 .enumerate()
-                .skip(i)
+                .skip(i + 1)
             {
                 if pos_i == pos_j {
                     let mut i = i;
