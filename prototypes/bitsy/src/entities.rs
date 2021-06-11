@@ -44,7 +44,11 @@ impl Game {
     pub fn set_player(&mut self, player: Player) -> PlayerID {
         let id = PlayerID::new(0);
         self.colors.colors.insert(EntID::Player(id), player.color);
-        self.logics.consume_player(player);
+        for _ in player.inventory.iter() {
+            self.log_rsrc();
+        }
+        self.logics
+            .consume_player(player, self.state.player.is_none());
         self.state.player = Some(id);
         id
     }
@@ -62,12 +66,15 @@ impl Game {
         id
     }
 
-    pub fn add_rsrc(&mut self, resource: Resource) -> RsrcID {
+    pub fn log_rsrc(&mut self) -> RsrcID {
         let id = RsrcID::new(self.state.rsrc_id_max);
-        self.logics.consume_rsrc(id, resource);
         self.state.rsrc_id_max += 1;
         self.state.resources.push(id);
         id
+    }
+
+    pub fn set_num_rooms(&mut self, rooms: usize) {
+        self.state.rooms.resize_with(rooms, Room::default);
     }
 
     /// Loads a tilemap with maximum 10 different kinds of tiles (numbers 0-9). A space (' ') marks a place on the map without any tiles. The tile types are read from in the parameter `tiles`.
@@ -86,9 +93,12 @@ impl Game {
     /// 0000000
     /// "#;
     ///
-    /// game.load_tilemap_from_str(&tiles, map);
+    /// game.add_room_from_str(map);
     /// ```
-    pub fn load_tilemap_from_str(&mut self, map: &str) -> Result<(), String> {
+    pub fn add_room_from_str(&mut self, map: &str) -> Result<(), String> {
+        let room = self.state.rooms.len();
+        self.state.rooms.push(Room::default());
+
         let map = map.trim();
 
         let map_length = WORLD_SIZE * WORLD_SIZE + WORLD_SIZE - 1;
@@ -106,9 +116,9 @@ impl Game {
             if ch.is_digit(10) {
                 let tile_idx = ch.to_string().parse::<usize>().unwrap();
                 if tile_idx > self.state.tile_type_count {
-                    return Err("tile ".to_string() + &tile_idx.to_string() + " not found");
+                    return Err(format!("tile {} not found", tile_idx));
                 }
-                self.add_tile_at_pos(TileID::new(tile_idx), IVec2::new(x as i32, y as i32));
+                self.add_tile_at_pos(TileID::new(tile_idx), room, IVec2::new(x as i32, y as i32));
                 x += 1;
             } else if ch == ' ' {
                 x += 1;
@@ -116,7 +126,7 @@ impl Game {
                 y += 1;
                 x = 0;
             } else {
-                return Err("unrecognized character: '".to_string() + &ch.to_string() + "'");
+                return Err(format!("unrecognized character: '{}'", ch));
             }
         }
         Ok(())
@@ -132,17 +142,28 @@ impl Game {
         id
     }
 
-    pub fn add_tile_at_pos(&mut self, tile: TileID, pos: IVec2) {
-        self.state.map[pos.y as usize][pos.x as usize] = Some(tile);
-        self.logics.collision.map[pos.y as usize][pos.x as usize] = Some(tile);
+    pub fn add_tile_at_pos(&mut self, tile: TileID, room: usize, pos: IVec2) {
+        self.state.rooms[room].map[pos.y as usize][pos.x as usize] = Some(tile);
     }
 
-    // pub fn set_current_room(&mut self, room: usize) {
-    //     self.state.current_room = room;
-    //     self.logics
-    //         .collision
-    //         .clear_and_resize_map(WORLD_SIZE, WORLD_SIZE);
-    // }
+    pub fn set_current_room(&mut self, room: usize) {
+        self.state.current_room = room;
+        self.logics
+            .collision
+            .clear_and_resize_map(WORLD_SIZE, WORLD_SIZE);
+
+        for (row, col_row) in self
+            .state
+            .get_current_room()
+            .map
+            .iter()
+            .zip(self.logics.collision.map.iter_mut())
+        {
+            for (tile, col_tile) in row.iter().zip(col_row.iter_mut()) {
+                *col_tile = *tile;
+            }
+        }
+    }
 
     pub fn remove_character(&mut self, character: CharacterID) {
         let ent_i = self
@@ -190,8 +211,8 @@ impl Game {
         self.state.characters.remove(ent_i);
     }
 
-    pub fn remove_tile_at_pos(&mut self, pos: IVec2) {
-        self.state.map[pos.y as usize][pos.x as usize] = None;
+    pub fn remove_tile_at_pos(&mut self, room: usize, pos: IVec2) {
+        self.state.rooms[room].map[pos.y as usize][pos.x as usize] = None;
         self.logics
             .collision
             .handle_predicate(&CollisionReaction::RemoveTileAtPos(pos));
@@ -232,15 +253,31 @@ impl Game {
 }
 
 impl Logics {
-    pub fn consume_player(&mut self, player: Player) {
-        self.collision.positions.insert(0, player.pos);
-        self.collision.amt_moved.insert(0, player.amt_moved);
-        self.collision
-            .metadata
-            .insert(0, CollisionData::new(true, false, CollisionEnt::Player));
+    pub fn consume_player(&mut self, player: Player, new: bool) {
+        if new {
+            self.collision.positions.insert(0, player.pos);
+            self.collision.amt_moved.insert(0, player.amt_moved);
+            self.collision
+                .metadata
+                .insert(0, CollisionData::new(true, false, CollisionEnt::Player));
+        } else {
+            self.collision.positions[0] = player.pos;
+            self.collision.amt_moved[0] = player.amt_moved;
+            self.collision.metadata[0] = CollisionData::new(true, false, CollisionEnt::Player);
+        }
+
+        if !self.control.mapping.is_empty() {
+            self.control.mapping[0].clear();
+            self.control.values[0].clear();
+        }
 
         for (act_id, keycode, valid, _) in player.controls {
             self.control.add_key_map(0, keycode, act_id, valid);
+        }
+
+        self.resources.items.clear();
+        for (i, rsrc) in player.inventory.into_iter().enumerate() {
+            self.consume_rsrc(RsrcID::new(i), rsrc);
         }
     }
 

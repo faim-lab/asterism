@@ -154,7 +154,7 @@ where
     }
 
     /// Returns the [Values] for the action with the given ID in the given set of mappings.
-    pub fn get_action_in_set(&self, action_set: usize, id: ID) -> Option<Values> {
+    pub fn get_action_in_set(&self, action_set: <Self as Logic>::Ident, id: ID) -> Option<Values> {
         if let Some(i) = self.mapping[action_set].iter().position(|act| act.id == id) {
             return Some(self.values[action_set][i]);
         }
@@ -164,7 +164,7 @@ where
     /// Adds a single keymap to the logic.
     pub fn add_key_map(
         &mut self,
-        locus_idx: usize,
+        locus_idx: <Self as Logic>::Ident,
         keycode: Wrapper::KeyCode,
         id: ID,
         valid: bool,
@@ -233,11 +233,11 @@ pub struct Action<ID, KeyCode: Copy> {
 }
 
 impl<ID, KeyCode: Copy> Action<ID, KeyCode> {
-    pub fn new(id: ID, keycode: KeyCode, input_type: InputType, valid: bool) -> Self {
+    pub fn new(id: ID, keycode: KeyCode, input_type: InputType, is_valid: bool) -> Self {
         Self {
             id,
             key_input: KeyInput { keycode },
-            is_valid: valid,
+            is_valid,
             input_type,
         }
     }

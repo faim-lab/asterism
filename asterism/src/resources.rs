@@ -60,7 +60,11 @@ where
     }
 
     fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
-        self.items.entry(ident).and_modify(|vals| *vals = data);
+        let vals = self
+            .items
+            .get_mut(&ident)
+            .unwrap_or_else(|| panic!("pool {:?} not found", ident));
+        *vals = data;
     }
 }
 

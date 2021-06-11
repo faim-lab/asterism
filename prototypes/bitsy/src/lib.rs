@@ -14,8 +14,10 @@
 //! - [x] Write bitsy test game
 //! - [x] See what errors still persist from there
 //! - [ ] Add linking logics
-//! - [ ] Add resource logics/inventory
-//! - [ ] Game mode logics?
+//! - [x] Add resource logics/inventory (I think????)
+//! - [ ] Adding/removing entities
+//!     - ...does adding entities require shifting syntheses around as well... ew
+//! - [ ] Game mode logics/dialogue?
 
 #![allow(clippy::upper_case_acronyms)]
 #![allow(clippy::new_without_default)]
@@ -81,12 +83,18 @@ struct Colors {
     colors: BTreeMap<EntID, Color>,
 }
 
+#[derive(Default)]
+pub struct Room {
+    pub map: [[Option<TileID>; WORLD_SIZE]; WORLD_SIZE],
+}
+
 pub struct State {
-    map: [[Option<TileID>; WORLD_SIZE]; WORLD_SIZE],
-    player: Option<PlayerID>,
-    resources: Vec<RsrcID>,
+    current_room: usize,
+    pub rooms: Vec<Room>,
+    pub player: Option<PlayerID>,
+    pub resources: Vec<RsrcID>,
     rsrc_id_max: usize,
-    characters: Vec<CharacterID>,
+    pub characters: Vec<CharacterID>,
     char_id_max: usize,
     tile_type_count: usize,
     add_queue: Vec<Ent>,
@@ -96,7 +104,8 @@ pub struct State {
 impl State {
     fn new() -> Self {
         Self {
-            map: [[None; WORLD_SIZE]; WORLD_SIZE],
+            current_room: 0,
+            rooms: Vec::new(),
             player: None,
             characters: Vec::new(),
             char_id_max: 0,
@@ -106,6 +115,10 @@ impl State {
             add_queue: Vec::new(),
             remove_queue: Vec::new(),
         }
+    }
+
+    fn get_current_room(&self) -> &Room {
+        &self.rooms[self.current_room]
     }
 
     fn get_col_idx(&self, i: usize, ent: CollisionEnt) -> usize {
@@ -206,33 +219,28 @@ impl Events {
 }
 
 pub async fn run(mut game: Game) {
-    use std::time::*;
-    let mut available_time = 0.0;
-    let mut since = Instant::now();
-    const DT: f32 = 1.0 / 60.0;
+    if game.state.rooms.len() >= game.state.current_room {
+        game.state
+            .rooms
+            .resize_with(game.state.current_room + 1, Room::default);
+    }
+    game.set_current_room(game.state.current_room);
 
     loop {
         if is_key_down(KeyCode::Escape) {
             break;
         }
         draw(&game);
-        available_time += since.elapsed().as_secs_f32();
-        since = Instant::now();
 
-        // framerate
-        while available_time >= DT {
-            available_time -= DT;
+        let add_queue = std::mem::take(&mut game.state.add_queue);
+        for _ent in add_queue {}
 
-            let add_queue = std::mem::take(&mut game.state.add_queue);
-            for _ent in add_queue {}
+        control(&mut game);
+        collision(&mut game);
+        resources(&mut game);
 
-            control(&mut game);
-            collision(&mut game);
-            resources(&mut game);
-
-            let remove_queue = std::mem::take(&mut game.state.remove_queue);
-            for _ent in remove_queue {}
-        }
+        let remove_queue = std::mem::take(&mut game.state.remove_queue);
+        for _ent in remove_queue {}
 
         next_frame().await;
     }
@@ -278,7 +286,7 @@ fn resources(game: &mut Game) {
 
 fn draw(game: &Game) {
     clear_background(game.colors.background_color);
-    for (y, row) in game.state.map.iter().enumerate() {
+    for (y, row) in game.state.get_current_room().map.iter().enumerate() {
         for (x, tile) in row.iter().enumerate() {
             if let Some(tile) = tile {
                 let color = game

@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use asterism::control::Values;
 use macroquad::{color::*, input::KeyCode, math::IVec2};
 
@@ -52,7 +50,7 @@ pub struct Player {
     pub pos: IVec2,
     pub amt_moved: IVec2,
     pub color: Color,
-    pub inventory: BTreeMap<RsrcID, (u16, u16, u16)>,
+    pub inventory: Vec<Resource>,
     pub controls: Vec<(ActionID, KeyCode, bool, Values)>,
 }
 
@@ -62,7 +60,7 @@ impl Player {
             pos: IVec2::ZERO,
             amt_moved: IVec2::ZERO,
             color: WHITE,
-            inventory: BTreeMap::new(),
+            inventory: Vec::new(),
             controls: vec![
                 (ActionID::Up, KeyCode::Up, true, Values::new()),
                 (ActionID::Down, KeyCode::Down, true, Values::new()),
@@ -80,6 +78,10 @@ impl Player {
             .unwrap();
         *keycode_old = keycode;
         *valid_old = valid;
+    }
+
+    pub fn add_inventory_item(&mut self, rsrc: Resource) {
+        self.inventory.push(rsrc);
     }
 }
 
@@ -122,7 +124,7 @@ impl Character {
     }
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone)]
 pub struct Resource {
     pub val: u16,
     pub min: u16,
@@ -131,7 +133,11 @@ pub struct Resource {
 
 impl Resource {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            val: 0,
+            min: u16::MIN,
+            max: u16::MAX,
+        }
     }
 }
 

@@ -13,6 +13,10 @@ fn init(game: &mut Game) {
     let mut player = Player::new();
     player.pos = IVec2::new(3, 3);
     player.color = PURPLE;
+
+    let num_rocks = Resource::new();
+    player.add_inventory_item(num_rocks);
+
     let player_id = game.set_player(player);
 
     let mut character = Character::new();
@@ -38,17 +42,26 @@ fn init(game: &mut Game) {
 00000000
     "#;
 
-    game.load_tilemap_from_str(map).unwrap();
+    game.add_room_from_str(map).unwrap();
 
     game.add_collision_predicate(
         Contact::Ent(player_id.idx(), char_id.idx() + 1),
+        Box::new(|state: &mut State, logics: &mut Logics, _: &ColEvent| {
+            logics
+                .resources
+                .handle_predicate(&(state.resources[0], Transaction::Change(1)));
+        }),
+    );
+
+    game.add_rsrc_predicate(
+        game.state.resources[0],
+        ResourceEventType::PoolUpdated,
         Box::new(
-            |_state: &mut State, logics: &mut Logics, event: &ColEvent| {
-                if let Contact::Ent(i, _) = event {
-                    logics
-                        .collision
-                        .handle_predicate(&CollisionReaction::SetEntPos(*i, IVec2::new(6, 6)));
-                }
+            |_state: &mut State, logics: &mut Logics, event: &RsrcEvent| {
+                println!(
+                    "got a rock (total rocks: {})",
+                    logics.resources.get_synthesis(event.pool).0
+                );
             },
         ),
     );
