@@ -28,18 +28,17 @@ impl Game {
     }
 
     pub(crate) fn player_col_synthesis(&mut self) {
-        if let Some(player_id) = self.state.player {
+        if self.state.player {
             if let Some(synthesis) = self.events.player_synth.col.as_ref() {
-                let i = player_id.idx();
-                let mut col = self.logics.collision.get_synthesis(ColIdent::EntIdx(i));
+                let mut col = self.logics.collision.get_synthesis(ColIdent::EntIdx(0));
 
                 let rsrc = self
                     .state
                     .resources
                     .iter()
-                    .map(|rsrc_id| self.logics.resources.get_synthesis(*rsrc_id));
+                    .map(|rsrc_id| (*rsrc_id, self.logics.resources.get_synthesis(*rsrc_id)));
 
-                let player = self.build_player(&col, &self.logics.control.get_synthesis(i), rsrc);
+                let player = self.build_player(&col, &self.logics.control.get_synthesis(0), rsrc);
 
                 let player = synthesis(player);
 
@@ -50,26 +49,23 @@ impl Game {
 
                 self.logics
                     .collision
-                    .update_synthesis(ColIdent::EntIdx(i), col);
-                self.colors
-                    .colors
-                    .insert(EntID::Player(player_id), player.color);
+                    .update_synthesis(ColIdent::EntIdx(0), col);
+                self.colors.colors.insert(EntID::Player, player.color);
             }
         }
     }
 
     pub(crate) fn player_ctrl_synthesis(&mut self) {
-        if let Some(player_id) = self.state.player {
+        if self.state.player {
             if let Some(synthesis) = self.events.player_synth.ctrl.as_ref() {
-                let i = player_id.idx();
-                let col_idx = self.state.get_col_idx(i, CollisionEnt::Player);
-                let mut ctrl = self.logics.control.get_synthesis(i);
+                let col_idx = 0;
+                let mut ctrl = self.logics.control.get_synthesis(0);
 
                 let rsrc = self
                     .state
                     .resources
                     .iter()
-                    .map(|rsrc_id| self.logics.resources.get_synthesis(*rsrc_id));
+                    .map(|rsrc_id| (*rsrc_id, self.logics.resources.get_synthesis(*rsrc_id)));
 
                 let player = self.build_player(
                     &self
@@ -91,35 +87,32 @@ impl Game {
                     actions.is_valid = *valid;
                     *values = *vals;
                 }
-                self.logics.control.update_synthesis(i, ctrl);
+                self.logics.control.update_synthesis(0, ctrl);
             }
         }
     }
 
     pub(crate) fn player_rsrc_synthesis(&mut self) {
-        if let Some(player_id) = self.state.player {
+        if self.state.player {
             if let Some(synthesis) = self.events.player_synth.ctrl.as_ref() {
-                let i = player_id.idx();
-                let col_idx = self.state.get_col_idx(i, CollisionEnt::Player);
+                let col_idx = self.state.get_col_idx(0, CollisionEnt::Player);
                 let rsrc = self
                     .state
                     .resources
                     .iter()
-                    .map(|rsrc_id| self.logics.resources.get_synthesis(*rsrc_id));
+                    .map(|rsrc_id| (*rsrc_id, self.logics.resources.get_synthesis(*rsrc_id)));
 
                 let player = self.build_player(
                     &self
                         .logics
                         .collision
                         .get_synthesis(ColIdent::EntIdx(col_idx)),
-                    &self.logics.control.get_synthesis(i),
+                    &self.logics.control.get_synthesis(0),
                     rsrc,
                 );
                 let player = synthesis(player);
 
-                // not sure about this logic, the RsrcID::new() part feels wrong...
-                for (i, rsrc) in player.inventory.into_iter().enumerate() {
-                    let id = RsrcID::new(i);
+                for (id, rsrc) in player.inventory.into_iter() {
                     if self.logics.resources.items.contains_key(&id) {
                         self.logics
                             .resources
@@ -206,7 +199,7 @@ impl Game {
             Vec<Action<ActionID, macroquad::input::KeyCode>>,
             Vec<Values>,
         ),
-        rsrc: impl Iterator<Item = (u16, u16, u16)>,
+        rsrc: impl Iterator<Item = (RsrcID, (u16, u16, u16))>,
     ) -> Player {
         let mut player = Player::new();
         if let TileMapColData::Ent { pos, amt_moved, .. } = col {
@@ -227,15 +220,12 @@ impl Game {
             );
         }
 
-        // every resource in this logic belongs to the player
-        //
-        // in a more complex inventory system, keeping track of what RsrcIDs belong to who in the game state? here it's kind of pointless
-        for vals in rsrc {
-            let mut rsrc = Resource::new();
-            rsrc.val = vals.0;
-            rsrc.min = vals.1;
-            rsrc.max = vals.2;
-            player.inventory.push(rsrc);
+        for (id, vals) in rsrc {
+            let mut resource = Resource::new();
+            resource.val = vals.0;
+            resource.min = vals.1;
+            resource.max = vals.2;
+            player.inventory.push((id, resource));
         }
 
         player

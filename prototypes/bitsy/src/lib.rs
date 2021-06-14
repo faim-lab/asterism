@@ -91,7 +91,7 @@ pub struct Room {
 pub struct State {
     current_room: usize,
     pub rooms: Vec<Room>,
-    pub player: Option<PlayerID>,
+    pub player: bool,
     pub resources: Vec<RsrcID>,
     rsrc_id_max: usize,
     pub characters: Vec<CharacterID>,
@@ -106,7 +106,7 @@ impl State {
         Self {
             current_room: 0,
             rooms: Vec::new(),
-            player: None,
+            player: false,
             characters: Vec::new(),
             char_id_max: 0,
             resources: Vec::new(),
@@ -121,11 +121,18 @@ impl State {
         &self.rooms[self.current_room]
     }
 
-    fn get_col_idx(&self, i: usize, ent: CollisionEnt) -> usize {
+    pub fn get_col_idx(&self, i: usize, ent: CollisionEnt) -> usize {
         match ent {
             CollisionEnt::Player => 0,
             CollisionEnt::Character => i + 1,
         }
+    }
+
+    pub fn queue_remove(&mut self, ent: EntID) {
+        self.remove_queue.push(ent);
+    }
+    pub fn queue_add(&mut self, ent: Ent) {
+        self.add_queue.push(ent);
     }
 }
 
@@ -240,7 +247,33 @@ pub async fn run(mut game: Game) {
         resources(&mut game);
 
         let remove_queue = std::mem::take(&mut game.state.remove_queue);
-        for _ent in remove_queue {}
+        for ent in remove_queue {
+            match ent {
+                EntID::Player => {
+                    game.remove_player();
+                }
+                EntID::Tile(id) => {
+                    let mut remove = Vec::new();
+                    for (room_idx, room) in game.state.rooms.iter().enumerate() {
+                        for (y, row) in room.map.iter().enumerate() {
+                            for (x, tile) in row.iter().enumerate() {
+                                if let Some(tile) = tile {
+                                    if *tile == id {
+                                        remove.push((room_idx, IVec2::new(x as i32, y as i32)));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    for (i, pos) in remove {
+                        game.remove_tile_at_pos(i, pos);
+                    }
+                }
+                EntID::Character(id) => {
+                    game.remove_character(id);
+                }
+            }
+        }
 
         next_frame().await;
     }
@@ -286,7 +319,7 @@ fn resources(game: &mut Game) {
 
 fn draw(game: &Game) {
     clear_background(game.colors.background_color);
-    for (y, row) in game.state.get_current_room().map.iter().enumerate() {
+    for (y, row) in game.logics.collision.map.iter().enumerate() {
         for (x, tile) in row.iter().enumerate() {
             if let Some(tile) = tile {
                 let color = game
@@ -325,11 +358,11 @@ fn draw(game: &Game) {
         }
     }
 
-    if let Some(player) = game.state.player {
+    if game.state.player {
         let color = game
             .colors
             .colors
-            .get(&EntID::Player(player))
+            .get(&EntID::Player)
             .expect("player color not set");
         let pos = game.logics.collision.get_synthesis(ColIdent::EntIdx(
             game.state.get_col_idx(0, CollisionEnt::Player),

@@ -14,10 +14,11 @@ fn init(game: &mut Game) {
     player.pos = IVec2::new(3, 3);
     player.color = PURPLE;
 
+    let rocks = game.log_rsrc();
     let num_rocks = Resource::new();
-    player.add_inventory_item(num_rocks);
+    player.add_inventory_item(rocks, num_rocks);
 
-    let player_id = game.set_player(player);
+    game.set_player(player);
 
     let mut character = Character::new();
     character.pos = IVec2::new(1, 2);
@@ -45,7 +46,7 @@ fn init(game: &mut Game) {
     game.add_room_from_str(map).unwrap();
 
     game.add_collision_predicate(
-        Contact::Ent(player_id.idx(), char_id.idx() + 1),
+        Contact::Ent(0, char_id.idx() + 1),
         Box::new(|state: &mut State, logics: &mut Logics, _: &ColEvent| {
             logics
                 .resources
@@ -57,11 +58,12 @@ fn init(game: &mut Game) {
         game.state.resources[0],
         ResourceEventType::PoolUpdated,
         Box::new(
-            |_state: &mut State, logics: &mut Logics, event: &RsrcEvent| {
+            |state: &mut State, logics: &mut Logics, event: &RsrcEvent| {
                 println!(
                     "got a rock (total rocks: {})",
                     logics.resources.get_synthesis(event.pool).0
                 );
+                state.queue_remove(EntID::Character(state.characters[0]));
             },
         ),
     );

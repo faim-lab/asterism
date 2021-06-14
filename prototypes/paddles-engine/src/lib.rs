@@ -224,6 +224,25 @@ impl Game {
         );
         self.state.paddle_id_max += 1;
         self.state.paddles.push(id);
+
+        // collision events
+        for (col_event, _) in self.events.collision.iter_mut() {
+            if let ColEvent::ByIndex(i, j) = col_event {
+                if *i <= id.idx() {
+                    *i += 1;
+                }
+                if *j <= id.idx() {
+                    *j += 1;
+                }
+            }
+        }
+
+        // control events
+        for (ctrl_event, _) in self.events.control.iter_mut() {
+            if ctrl_event.set <= id.idx() {
+                ctrl_event.set += 1;
+            }
+        }
         id
     }
 
@@ -236,6 +255,19 @@ impl Game {
         );
         self.state.ball_id_max += 1;
         self.state.balls.push(id);
+
+        // collision events
+        for (col_event, _) in self.events.collision.iter_mut() {
+            if let ColEvent::ByIndex(i, j) = col_event {
+                if *i <= id.idx() {
+                    *i += 1;
+                }
+                if *j <= id.idx() {
+                    *j += 1;
+                }
+            }
+        }
+
         id
     }
 
@@ -248,6 +280,19 @@ impl Game {
         );
         self.state.wall_id_max += 1;
         self.state.walls.push(id);
+
+        // collision events
+        for (col_event, _) in self.events.collision.iter_mut() {
+            if let ColEvent::ByIndex(i, j) = col_event {
+                if *i <= id.idx() {
+                    *i += 1;
+                }
+                if *j <= id.idx() {
+                    *j += 1;
+                }
+            }
+        }
+
         id
     }
 

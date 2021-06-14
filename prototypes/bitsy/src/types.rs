@@ -22,7 +22,7 @@ macro_rules! id_impl_new {
     };
 }
 
-id_impl_new!([] PlayerID, [derive(Debug)] TileID, [] CharacterID, [derive(Debug)] RsrcID);
+id_impl_new!([derive(Debug)] TileID, [] CharacterID, [derive(Debug)] RsrcID);
 
 pub enum Ent {
     Player(Player),
@@ -32,7 +32,7 @@ pub enum Ent {
 
 #[derive(PartialOrd, Ord, PartialEq, Eq)]
 pub enum EntID {
-    Player(PlayerID),
+    Player,
     Tile(TileID),
     Character(CharacterID),
 }
@@ -50,7 +50,7 @@ pub struct Player {
     pub pos: IVec2,
     pub amt_moved: IVec2,
     pub color: Color,
-    pub inventory: Vec<Resource>,
+    pub inventory: Vec<(RsrcID, Resource)>,
     pub controls: Vec<(ActionID, KeyCode, bool, Values)>,
 }
 
@@ -80,8 +80,8 @@ impl Player {
         *valid_old = valid;
     }
 
-    pub fn add_inventory_item(&mut self, rsrc: Resource) {
-        self.inventory.push(rsrc);
+    pub fn add_inventory_item(&mut self, id: RsrcID, rsrc: Resource) {
+        self.inventory.push((id, rsrc));
     }
 }
 

@@ -21,7 +21,7 @@ pub trait Logic {
     type Ident: Clone + Copy;
     type IdentData;
 
-    /// checks if a predicate (event) is occuring
+    /// checks if a predicate is occuring
     fn check_predicate(&self, event: &Self::Event) -> bool;
 
     /// processes the reaction if a predicate condition is met
