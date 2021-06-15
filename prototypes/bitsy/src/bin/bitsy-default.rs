@@ -25,14 +25,18 @@ fn init(game: &mut Game) {
     character.color = PINK;
     let char_id = game.add_character(character);
 
-    for _ in 0..3 {
-        let mut tile = Tile::new();
-        tile.solid = true;
-        game.log_tile_info(tile);
-    }
+    let mut tile = Tile::new();
+    tile.solid = true;
+    game.log_tile_info(tile);
+
+    game.log_tile_info(Tile::new());
+
+    let mut tile = Tile::new();
+    tile.solid = true;
+    game.log_tile_info(tile);
 
     #[rustfmt::skip]
-    let map = r#"
+    let maps = [r#"
 00000000
 0      0
 0   1  0
@@ -41,9 +45,22 @@ fn init(game: &mut Game) {
 0      0
 0      0
 00000000
-    "#;
+    "#,
+r#"
+00000000
+0      0
+0      0
+0      0
+0      0
+0      0
+0      0
+00000000
+    "#
+    ];
 
-    game.add_room_from_str(map).unwrap();
+    for map in maps.iter() {
+        game.add_room_from_str(map).unwrap();
+    }
 
     game.add_collision_predicate(
         Contact::Ent(0, char_id.idx() + 1),
