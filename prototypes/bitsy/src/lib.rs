@@ -94,15 +94,13 @@ pub struct Room {
 }
 
 pub struct State {
-    current_room: usize,
     pub rooms: Vec<Room>,
     pub player: bool,
     pub resources: Vec<RsrcID>,
     rsrc_id_max: usize,
     pub characters: Vec<CharacterID>,
     char_id_max: usize,
-    pub links: Vec<(usize, IVec2)>,
-    pub link_ids: Vec<LinkID>,
+    pub links: BTreeMap<LinkID, (usize, IVec2)>,
     link_id_max: usize,
     tile_type_count: usize,
     add_queue: Vec<Ent>,
@@ -112,24 +110,18 @@ pub struct State {
 impl State {
     fn new() -> Self {
         Self {
-            current_room: 0,
             rooms: Vec::new(),
             player: false,
             characters: Vec::new(),
             char_id_max: 0,
             resources: Vec::new(),
             rsrc_id_max: 0,
-            links: Vec::new(),
-            link_ids: Vec::new(),
+            links: BTreeMap::new(),
             link_id_max: 0,
             tile_type_count: 0,
             add_queue: Vec::new(),
             remove_queue: Vec::new(),
         }
-    }
-
-    fn get_current_room(&self) -> &Room {
-        &self.rooms[self.current_room]
     }
 
     pub fn get_col_idx(&self, i: usize, ent: CollisionEnt) -> usize {
@@ -258,18 +250,15 @@ impl Events {
 }
 
 pub async fn run(mut game: Game) {
-    if game.state.rooms.len() <= game.state.current_room {
-        game.state
-            .rooms
-            .resize_with(game.state.current_room + 1, Room::default);
-    }
     game.logics
         .collision
         .clear_and_resize_map(WORLD_SIZE, WORLD_SIZE);
 
-    for (row, col_row) in game
-        .state
-        .get_current_room()
+    let current_node = game.logics.linking.graphs[0].current_node;
+    let node = game.logics.linking.graphs[0].nodes[current_node];
+    let current_room = game.state.links.get(&node).unwrap().0;
+
+    for (row, col_row) in game.state.rooms[current_room]
         .map
         .iter()
         .zip(game.logics.collision.map.iter_mut())
@@ -289,9 +278,9 @@ pub async fn run(mut game: Game) {
         for _ent in add_queue {}
 
         control(&mut game);
-        collision(&mut game);
+        collision(&mut game, current_room);
         resources(&mut game);
-        linking(&mut game);
+        linking(&mut game, current_room);
 
         let remove_queue = std::mem::take(&mut game.state.remove_queue);
         for ent in remove_queue {
@@ -337,13 +326,13 @@ fn control(game: &mut Game) {
     }
 }
 
-fn collision(game: &mut Game) {
+fn collision(game: &mut Game, current_room: usize) {
     game.player_col_synthesis();
     game.tile_synthesis();
     game.character_synthesis();
 
     game.logics.collision.update();
-    let predicates = &game.events.predicates[game.state.current_room];
+    let predicates = &game.events.predicates[current_room];
 
     for (predicate, reaction) in predicates.collision.iter() {
         if game.logics.collision.check_predicate(predicate) {
@@ -364,10 +353,10 @@ fn resources(game: &mut Game) {
     }
 }
 
-fn linking(game: &mut Game) {
+fn linking(game: &mut Game, current_room: usize) {
     game.logics.linking.update();
 
-    let predicates = &game.events.predicates[game.state.current_room];
+    let predicates = &game.events.predicates[current_room];
 
     for (predicate, reaction) in predicates.linking.iter() {
         if game.logics.linking.check_predicate(predicate) {

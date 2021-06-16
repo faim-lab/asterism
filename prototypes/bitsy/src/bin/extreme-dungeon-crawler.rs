@@ -10,6 +10,7 @@ async fn main() {
 }
 
 fn init(game: &mut Game) {
+    game.set_background(BLACK);
     let mut player = Player::new();
     player.pos = IVec2::new(3, 3);
     player.color = PURPLE;
@@ -22,8 +23,16 @@ fn init(game: &mut Game) {
 
     let mut character = Character::new();
     character.pos = IVec2::new(1, 2);
-    character.color = PINK;
+    character.color = BROWN;
     let char_id = game.add_character(character);
+
+    let mut tile = Tile::new();
+    tile.solid = true;
+    game.log_tile_info(tile);
+
+    let mut tile = Tile::new();
+    tile.solid = true;
+    game.log_tile_info(tile);
 
     let mut tile = Tile::new();
     tile.solid = true;
@@ -31,22 +40,13 @@ fn init(game: &mut Game) {
 
     game.log_tile_info(Tile::new());
 
-    let mut tile = Tile::new();
-    tile.solid = true;
-    game.log_tile_info(tile);
-
-    // invisible tile
-    let mut tile = Tile::new();
-    tile.color = game.colors.background_color;
-    game.log_tile_info(tile);
-
     #[rustfmt::skip]
     let maps = [r#"
 00000000
 0      0
-0   1  0
-0 1    0
 0   2  0
+0      0
+0      0
 0  3   0
 0      0
 00000000
@@ -56,9 +56,9 @@ r#"
 00000000
 0      0
 0      0
+0   1  0
 0      0
-0      0
-0      0
+0 1    0
 0      0
 00000000
     "#
@@ -83,14 +83,11 @@ r#"
     game.add_rsrc_predicate(
         game.state.resources[0],
         ResourceEventType::PoolUpdated,
-        Box::new(
-            |state: &mut State, logics: &mut Logics, event: &RsrcEvent| {
-                println!(
-                    "got a rock (total rocks: {})",
-                    logics.resources.get_synthesis(event.pool).0
-                );
-                state.queue_remove(EntID::Character(state.characters[0]));
-            },
-        ),
+        Box::new(|_: &mut State, logics: &mut Logics, event: &RsrcEvent| {
+            println!(
+                "got a rock (total rocks: {})",
+                logics.resources.get_synthesis(event.pool).0
+            );
+        }),
     );
 }
