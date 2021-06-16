@@ -13,10 +13,12 @@
 //! - [x] Write syntheses functions
 //! - [x] Write bitsy test game
 //! - [x] See what errors still persist from there
-//! - [ ] Add linking logics
 //! - [x] Add resource logics/inventory (I think????)
-//! - [ ] Adding/removing entities
-//!     - ...does adding entities require shifting syntheses around as well... ew
+//! - [x] Adding/removing entities
+//! - [ ] Add linking logics
+//!     - [x] graph/state machine struct
+//!     - [ ] composing multiple queries
+//!         - [ ] query tables???
 //! - [ ] Game mode logics/dialogue?
 
 #![allow(clippy::upper_case_acronyms)]
@@ -26,15 +28,18 @@ use std::collections::BTreeMap;
 
 use asterism::{
     control::{KeyboardControl, MacroquadInputWrapper},
+    linking::GraphedLinking,
     resources::QueuedResources,
 };
 use macroquad::prelude::*;
 
 // reexports
 pub use asterism::control::{Action, ControlEventType, ControlReaction, Values};
+pub use asterism::linking::{LinkingEvent, LinkingEventType, LinkingReaction};
 pub use asterism::resources::{ResourceEventType, ResourceReaction, Transaction};
 pub use asterism::Logic;
 pub use collision::*;
+pub use entities::set_current_room;
 pub use types::*;
 
 const TILE_SIZE: usize = 32;
@@ -60,8 +65,8 @@ pub fn window_conf() -> Conf {
 pub struct Game {
     pub state: State,
     pub logics: Logics,
-    events: Events,
-    colors: Colors,
+    pub events: Events,
+    pub colors: Colors,
 }
 
 impl Game {
@@ -78,9 +83,9 @@ impl Game {
     }
 }
 
-struct Colors {
-    background_color: Color,
-    colors: BTreeMap<EntID, Color>,
+pub struct Colors {
+    pub background_color: Color,
+    pub colors: BTreeMap<EntID, Color>,
 }
 
 #[derive(Default)]
@@ -96,6 +101,9 @@ pub struct State {
     rsrc_id_max: usize,
     pub characters: Vec<CharacterID>,
     char_id_max: usize,
+    pub links: Vec<(usize, IVec2)>,
+    pub link_ids: Vec<LinkID>,
+    link_id_max: usize,
     tile_type_count: usize,
     add_queue: Vec<Ent>,
     remove_queue: Vec<EntID>,
@@ -111,6 +119,9 @@ impl State {
             char_id_max: 0,
             resources: Vec::new(),
             rsrc_id_max: 0,
+            links: Vec::new(),
+            link_ids: Vec::new(),
+            link_id_max: 0,
             tile_type_count: 0,
             add_queue: Vec::new(),
             remove_queue: Vec::new(),
@@ -140,6 +151,7 @@ pub struct Logics {
     pub control: KeyboardControl<ActionID, MacroquadInputWrapper>,
     pub collision: TileMapCollision<TileID, CollisionEnt>,
     pub resources: QueuedResources<RsrcID, u16>,
+    pub linking: GraphedLinking<LinkID>,
 }
 
 impl Logics {
@@ -148,6 +160,11 @@ impl Logics {
             control: KeyboardControl::new(),
             collision: TileMapCollision::new(WORLD_SIZE, WORLD_SIZE),
             resources: QueuedResources::new(),
+            linking: {
+                let mut linking = GraphedLinking::new();
+                linking.add_graph(0, []);
+                linking
+            },
         }
     }
 }
@@ -155,13 +172,28 @@ impl Logics {
 type PredicateFn<Event> = Vec<(Event, Box<dyn Fn(&mut State, &mut Logics, &Event)>)>;
 
 pub struct Events {
-    collision: PredicateFn<ColEvent>,
-    control: PredicateFn<CtrlEvent>,
-    resources: PredicateFn<RsrcEvent>,
+    // honestly this is more like a game mode logic than a linking logic, but
+    pub predicates: Vec<Predicates>,
+    pub resources: PredicateFn<RsrcEvent>,
+    pub control: PredicateFn<CtrlEvent>,
 
     player_synth: PlayerSynth,
     tile_synth: TileSynth,
     character_synth: CharacterSynth,
+}
+
+pub struct Predicates {
+    pub collision: PredicateFn<ColEvent>,
+    pub linking: PredicateFn<LinkingEvent>,
+}
+
+impl Predicates {
+    fn new() -> Self {
+        Self {
+            collision: Vec::new(),
+            linking: Vec::new(),
+        }
+    }
 }
 
 struct PlayerSynth {
@@ -181,7 +213,7 @@ struct CharacterSynth {
 impl Events {
     fn new() -> Self {
         Self {
-            collision: Vec::new(),
+            predicates: Vec::new(),
             control: Vec::new(),
             resources: Vec::new(),
             player_synth: PlayerSynth {
@@ -226,12 +258,26 @@ impl Events {
 }
 
 pub async fn run(mut game: Game) {
-    if game.state.rooms.len() >= game.state.current_room {
+    if game.state.rooms.len() <= game.state.current_room {
         game.state
             .rooms
             .resize_with(game.state.current_room + 1, Room::default);
     }
-    game.set_current_room(game.state.current_room);
+    game.logics
+        .collision
+        .clear_and_resize_map(WORLD_SIZE, WORLD_SIZE);
+
+    for (row, col_row) in game
+        .state
+        .get_current_room()
+        .map
+        .iter()
+        .zip(game.logics.collision.map.iter_mut())
+    {
+        for (tile, col_tile) in row.iter().zip(col_row.iter_mut()) {
+            *col_tile = *tile;
+        }
+    }
 
     loop {
         if is_key_down(KeyCode::Escape) {
@@ -245,6 +291,7 @@ pub async fn run(mut game: Game) {
         control(&mut game);
         collision(&mut game);
         resources(&mut game);
+        linking(&mut game);
 
         let remove_queue = std::mem::take(&mut game.state.remove_queue);
         for ent in remove_queue {
@@ -283,7 +330,6 @@ fn control(game: &mut Game) {
     game.player_ctrl_synthesis();
 
     game.logics.control.update(&());
-
     for (predicate, reaction) in game.events.control.iter() {
         if game.logics.control.check_predicate(predicate) {
             reaction(&mut game.state, &mut game.logics, predicate);
@@ -297,8 +343,9 @@ fn collision(game: &mut Game) {
     game.character_synthesis();
 
     game.logics.collision.update();
+    let predicates = &game.events.predicates[game.state.current_room];
 
-    for (predicate, reaction) in game.events.collision.iter() {
+    for (predicate, reaction) in predicates.collision.iter() {
         if game.logics.collision.check_predicate(predicate) {
             reaction(&mut game.state, &mut game.logics, predicate);
         }
@@ -312,6 +359,18 @@ fn resources(game: &mut Game) {
 
     for (predicate, reaction) in game.events.resources.iter() {
         if game.logics.resources.check_predicate(predicate) {
+            reaction(&mut game.state, &mut game.logics, predicate);
+        }
+    }
+}
+
+fn linking(game: &mut Game) {
+    game.logics.linking.update();
+
+    let predicates = &game.events.predicates[game.state.current_room];
+
+    for (predicate, reaction) in predicates.linking.iter() {
+        if game.logics.linking.check_predicate(predicate) {
             reaction(&mut game.state, &mut game.logics, predicate);
         }
     }
@@ -338,24 +397,20 @@ fn draw(game: &Game) {
         }
     }
 
-    for (i, character) in game.state.characters.iter().enumerate() {
+    for (i, pos) in game.logics.collision.positions.iter().skip(1).enumerate() {
+        let character = game.state.characters[i];
         let color = game
             .colors
             .colors
-            .get(&EntID::Character(*character))
+            .get(&EntID::Character(character))
             .unwrap_or_else(|| panic!("character {} color defined", character.idx()));
-        let pos = game.logics.collision.get_synthesis(ColIdent::EntIdx(
-            game.state.get_col_idx(i, CollisionEnt::Character),
-        ));
-        if let TileMapColData::Ent { pos, .. } = pos {
-            draw_rectangle(
-                pos.x as f32 * TILE_SIZE as f32,
-                pos.y as f32 * TILE_SIZE as f32,
-                TILE_SIZE as f32,
-                TILE_SIZE as f32,
-                *color,
-            );
-        }
+        draw_rectangle(
+            pos.x as f32 * TILE_SIZE as f32,
+            pos.y as f32 * TILE_SIZE as f32,
+            TILE_SIZE as f32,
+            TILE_SIZE as f32,
+            *color,
+        );
     }
 
     if game.state.player {

@@ -22,7 +22,7 @@ macro_rules! id_impl_new {
     };
 }
 
-id_impl_new!([derive(Debug)] TileID, [] CharacterID, [derive(Debug)] RsrcID);
+id_impl_new!([derive(Debug)] TileID, [] CharacterID, [derive(Debug)] RsrcID, [] LinkID);
 
 pub enum Ent {
     Player(Player),

@@ -186,11 +186,18 @@ impl<TileID: Eq + Ord + Copy + std::fmt::Debug, EntID> TileMapCollision<TileID, 
 
     pub fn clear_and_resize_map(&mut self, width: usize, height: usize) {
         self.map.clear();
+
         self.map.resize_with(height, || {
             let mut vec = Vec::with_capacity(width);
             vec.resize_with(width, || None);
             vec
         });
+    }
+
+    pub fn clear_entities(&mut self) {
+        self.positions.clear();
+        self.amt_moved.clear();
+        self.metadata.clear();
     }
 
     pub fn clear_tile_data(&mut self) {

@@ -1,20 +1,22 @@
 //! # Linking logics
 //!
-//! Linking logics present the idea that some things, in some context, are related or connected to each other. They maintain, enumerate, and follow/activate directed connections between concepts.
+//! Linking logics present the idea that some things, in some context, are connected to each other. They maintain, enumerate, and follow/activate directed connections between concepts.
 //!
-//! Linking logics are incredibly broad and have a wide range of uses. They're slightly confusing to visualize; see [StateMachine][asterism::graph::StateMachine] documentation for more information.
-use crate::graph::*;
+//! Linking logics are incredibly broad and have a wide range of uses.
+use crate::graph::StateMachine;
 use crate::{Event, EventType, Logic, Reaction};
 
-/// A generic linking logic.
-pub struct GraphedLinking {
+/// A generic linking logic. See [StateMachine][asterism::graph::StateMachine] documentation for more information.
+///
+/// I think this is the exact same code as FlatEntityState actually. The difference might make become more clear when rendering?
+pub struct GraphedLinking<NodeID: Copy + Eq> {
     /// A vec of state machines
-    pub graphs: Vec<StateMachine<usize>>,
+    pub graphs: Vec<StateMachine<NodeID>>,
     /// If the state machine has just traversed an edge or not
     pub just_traversed: Vec<bool>,
 }
 
-impl GraphedLinking {
+impl<NodeID: Copy + Eq> GraphedLinking<NodeID> {
     pub fn new() -> Self {
         Self {
             graphs: Vec::new(),
@@ -46,14 +48,15 @@ impl GraphedLinking {
     pub fn add_graph<const NUM_NODES: usize>(
         &mut self,
         starting_pos: usize,
-        edges: [&[usize]; NUM_NODES],
+        edges: [(NodeID, &[NodeID]); NUM_NODES],
     ) {
         let mut graph = StateMachine::new();
-        graph.add_nodes((0..NUM_NODES).collect::<Vec<_>>().as_slice());
+        let (ids, edges): (Vec<_>, Vec<_>) = edges.iter().cloned().unzip();
+        graph.add_nodes(ids.as_slice());
         graph.current_node = starting_pos;
         for (from, node_edges) in edges.iter().enumerate() {
             for to in node_edges.iter() {
-                graph.add_edge(from, *to);
+                graph.add_edge(from, ids.iter().position(|id| to == id).unwrap());
             }
         }
         self.graphs.push(graph);
@@ -64,7 +67,7 @@ impl GraphedLinking {
 pub struct LinkingEvent {
     pub graph: usize,
     pub node: usize,
-    event_type: LinkingEventType,
+    pub event_type: LinkingEventType,
 }
 
 pub enum LinkingEventType {
@@ -83,11 +86,15 @@ impl Event for LinkingEvent {
 pub enum LinkingReaction {
     Activate(usize, usize),
     Traverse(usize, usize),
+    // AddNode(usize),
+    // AddEdge(usize, (usize, usize))
+    // RemoveNode(usize),
+    // RemoveEdge(usize, (usize, usize)),
 }
 
 impl Reaction for LinkingReaction {}
 
-impl Logic for GraphedLinking {
+impl<NodeID: Copy + Eq> Logic for GraphedLinking<NodeID> {
     type Event = LinkingEvent;
     type Reaction = LinkingReaction;
 

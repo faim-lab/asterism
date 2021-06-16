@@ -35,6 +35,11 @@ fn init(game: &mut Game) {
     tile.solid = true;
     game.log_tile_info(tile);
 
+    // invisible tile
+    let mut tile = Tile::new();
+    tile.color = game.colors.background_color;
+    game.log_tile_info(tile);
+
     #[rustfmt::skip]
     let maps = [r#"
 00000000
@@ -42,10 +47,11 @@ fn init(game: &mut Game) {
 0   1  0
 0 1    0
 0   2  0
-0      0
+0  3   0
 0      0
 00000000
     "#,
+
 r#"
 00000000
 0      0
@@ -64,12 +70,15 @@ r#"
 
     game.add_collision_predicate(
         Contact::Ent(0, char_id.idx() + 1),
+        0,
         Box::new(|state: &mut State, logics: &mut Logics, _: &ColEvent| {
             logics
                 .resources
                 .handle_predicate(&(state.resources[0], Transaction::Change(1)));
         }),
     );
+
+    game.add_link((0, IVec2::new(3, 5)), (1, IVec2::new(1, 1)));
 
     game.add_rsrc_predicate(
         game.state.resources[0],

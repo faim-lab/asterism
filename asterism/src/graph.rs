@@ -28,6 +28,11 @@ impl<NodeID: Copy> StateMachine<NodeID> {
         self.conditions.fill(false);
     }
 
+    /// set current node, reset condition table
+    pub fn get_current_node(&self) -> NodeID {
+        self.nodes[self.current_node]
+    }
+
     pub fn add_node(&mut self, node: NodeID) {
         self.nodes.push(node);
         self.resize_matrix();
