@@ -92,6 +92,12 @@ impl SpriteSheet {
 
     fn create_param(&self, sprite: Sprite) -> DrawTextureParams {
         let mut texture = DrawTextureParams::default();
+        //only for newer verison of macroqaud texture.flip_x = sprite.rotated;
+
+        if sprite.rotated {
+            texture.rotation = 180.0;
+        }
+
         texture.dest_size = Some(Vec2::new(sprite.size.w as f32, sprite.size.h as f32));
         texture.source = Some(Rect::new(
             sprite.frame.x as f32,
@@ -104,12 +110,15 @@ impl SpriteSheet {
     }
 
     fn progress_seq(&mut self, entity_index: usize, seq_index: usize) -> () {
+        //checks that increasing will not result in index out of bounds error
         if self.entities[entity_index].seqs[seq_index].current
             < self.entities[entity_index].seqs[seq_index].sprites.len() - 1
         {
             self.entities[entity_index].seqs[seq_index].current =
                 self.entities[entity_index].seqs[seq_index].current + 1;
-        } else {
+        }
+        //loops back to the start
+        else {
             self.entities[entity_index].seqs[seq_index].current = 0;
         }
     }
@@ -129,10 +138,12 @@ impl SimpleAnim {
         }
     }
 
+    //determines how many frames are drawn before looping
     pub fn set_frames(&mut self, cycle: u8) -> () {
         self.frame_cycle = cycle;
     }
 
+    //incriments frames drawn
     pub fn incr_frames(&mut self) -> () {
         if self.frames_drawn >= self.frame_cycle {
             self.frames_drawn = 0;
@@ -146,6 +157,17 @@ impl SimpleAnim {
         return self.frames_drawn == 0;
     }
 
+    pub fn flip_entity_x(&mut self, entity_index: usize) {
+        for seq in self.sheet.entities[entity_index].seqs.iter_mut() {
+            for sprite in seq.sprites.iter_mut() {
+                sprite.rotated = !sprite.rotated;
+            }
+        }
+    }
+    //turns a cycle state to true
+    pub fn activate_cycle(&mut self, entity_index: usize, cycle_index: usize) {
+        self.sheet.entities[entity_index].cycles[cycle_index].state = true;
+    }
     //dist, of actual sprite to be drawn from start index on sprite sheet
     fn draw_sprite(
         &mut self,
@@ -166,6 +188,8 @@ impl SimpleAnim {
             ),
         );
 
+        //moves sprite in seq; if the sprite is in a animation cycle
+        //& the frames need to be switched
         if is_cycle && self.switch_frame() {
             self.sheet.progress_seq(entity_index, seq_index);
         }
@@ -191,6 +215,7 @@ impl SimpleAnim {
             }
         }
         //draw the sprite determinded
+        //if there is an active cycle draw that sprite
         if active_cycle {
             self.draw_sprite(x_pos, y_pos, true, entity_index, cur_cycle.seq_index);
         }

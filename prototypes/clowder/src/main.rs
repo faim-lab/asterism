@@ -219,7 +219,7 @@ async fn main() {
     }
 
     loop {
-        if let Ok(cont) = world.update(&mut logics) {
+        if let Ok(cont) = world.update(&mut logics, &mut animation) {
             if !cont {
                 break;
             }
@@ -247,10 +247,10 @@ impl World {
         }
     }
 
-    fn update(&mut self, logics: &mut Logics) -> Result<bool> {
+    fn update(&mut self, logics: &mut Logics, animation: &mut SimpleAnim) -> Result<bool> {
         self.project_control(&mut logics.control);
         logics.control.update(&());
-        self.unproject_control(&logics.control);
+        self.unproject_control(&logics.control, animation);
 
         self.project_physics(&mut logics.physics);
         logics.physics.update();
@@ -290,8 +290,10 @@ impl World {
                     if self.balls[i].vel.x != 0.0 {
                         if sides_touched.x != 0.0 {
                             self.balls[i].vel.x = sides_touched.x * -1.0;
+                            animation.flip_entity_x(self.balls[i].id);
                         } else if sides_touched.y != 0.0 {
                             self.balls[i].vel.x = sides_touched.y * -1.0;
+                            animation.flip_entity_x(self.balls[i].id);
                         }
                     }
 
@@ -300,6 +302,7 @@ impl World {
                             self.balls[i].vel.y = sides_touched.x * -1.0;
                         } else if sides_touched.y != 0.0 {
                             self.balls[i].vel.y = sides_touched.y * -1.0;
+                            animation.activate_cycle(self.balls[i].id, 0);
                         }
                     } else {
                         if sides_touched.y != 0.0 {
@@ -307,6 +310,7 @@ impl World {
                         }
                         if sides_touched.x != 0.0 {
                             self.balls[i].vel.x *= -1.0;
+                            animation.flip_entity_x(self.balls[i].id);
                         }
                     }
                 }
@@ -319,15 +323,19 @@ impl World {
                     if (self.balls[i].vel.x, self.balls[i].vel.y) == (0.0, 0.0) {
                         if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
                             self.balls[i].vel = Vec2::new(sides_touched.x, sides_touched.y);
+                            animation.activate_cycle(self.balls[i].id, 0);
                         }
                     } else if (self.balls[j].vel.x, self.balls[j].vel.y) == (0.0, 0.0) {
                         if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
                             self.balls[j].vel = Vec2::new(sides_touched.x, sides_touched.y);
                         }
+                        animation.activate_cycle(self.balls[j].id, 0);
                     } else {
                         if sides_touched.x != 0.0 {
                             self.balls[i].vel.x *= -1.0;
                             self.balls[j].vel.x *= -1.0;
+                            animation.flip_entity_x(self.balls[i].id);
+                            animation.flip_entity_x(self.balls[j].id);
                         }
                         if sides_touched.y != 0.0 {
                             self.balls[i].vel.y *= -1.0;
@@ -345,6 +353,7 @@ impl World {
                     if (self.balls[i].vel.x, self.balls[i].vel.y) == (0.0, 0.0) {
                         if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
                             self.balls[i].vel = Vec2::new(sides_touched.x, sides_touched.y);
+                            animation.activate_cycle(self.balls[i].id, 0);
                         }
                     } else {
                         if sides_touched.y != 0.0 {
@@ -352,6 +361,7 @@ impl World {
                         }
                         if sides_touched.x != 0.0 {
                             self.balls[i].vel.x *= -1.0;
+                            animation.flip_entity_x(self.balls[i].id);
                         }
                     }
 
@@ -393,7 +403,20 @@ impl World {
         control.mapping[0][4].is_valid = true;
     }
 
-    fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
+    fn unproject_control(
+        &mut self,
+        control: &MacroQuadKeyboardControl<ActionID>,
+        animation: &mut SimpleAnim,
+    ) {
+        //if any button is being pressed, dog is running so cycle is active
+        if control.values[0][0].value > 0.0
+            || control.values[0][1].value > 0.0
+            || control.values[0][2].value > 0.0
+            || control.values[0][3].value > 0.0
+        {
+            animation.activate_cycle(4, 0);
+        }
+
         self.paddles.0.x = ((self.paddles.0.x - control.values[0][0].value as f32
             + control.values[0][1].value as f32) //confusing, incorporate ActionIds
             .max(0.0) as f32)
