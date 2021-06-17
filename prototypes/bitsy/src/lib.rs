@@ -51,6 +51,7 @@ mod syntheses;
 mod types;
 use syntheses::*;
 mod entities;
+mod tables;
 
 pub fn window_conf() -> Conf {
     Conf {
@@ -279,6 +280,7 @@ pub async fn run(mut game: Game) {
 
         control(&mut game);
         collision(&mut game, current_room);
+        tables::test(&mut game.logics);
         resources(&mut game);
         linking(&mut game, current_room);
 

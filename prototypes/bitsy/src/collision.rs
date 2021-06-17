@@ -4,9 +4,9 @@ use asterism::{Event, Logic, Reaction};
 use macroquad::math::IVec2;
 
 pub struct CollisionData<ID> {
-    solid: bool,
-    fixed: bool,
-    id: ID,
+    pub solid: bool,
+    pub fixed: bool,
+    pub id: ID,
 }
 
 impl<ID> CollisionData<ID> {
@@ -24,7 +24,7 @@ pub struct TileMapCollision<TileID: std::fmt::Debug, EntID> {
     pub contacts: Vec<Contact>,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Contact {
     Ent(usize, usize),
     Tile(usize, IVec2),

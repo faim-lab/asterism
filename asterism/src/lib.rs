@@ -17,6 +17,7 @@ pub mod linking;
 pub mod physics;
 pub mod resources;
 
+// pub trait Logic: QueryTable<(<Self as Logic>::Ident, <Self as Logic>::IdentData)>
 pub trait Logic {
     type Event: Event;
     type Reaction: Reaction;
@@ -46,3 +47,10 @@ pub trait Event {
 pub trait EventType {}
 
 pub trait Reaction {}
+
+/// Builds a query table over each "unit" of a logic.
+///
+/// kind of weird! Couldn't figure out how to get an iterator working. I don't like the reallocations but I don't think it's worse than what I'm doing in the engines with building syntheses every frame.
+pub trait QueryTable<QueryOver> {
+    fn predicate(&self, predicate: impl Fn(&QueryOver) -> bool) -> Vec<QueryOver>;
+}
