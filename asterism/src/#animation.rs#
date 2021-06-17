@@ -104,12 +104,15 @@ impl SpriteSheet {
     }
 
     fn progress_seq(&mut self, entity_index: usize, seq_index: usize) -> () {
-        if self.entities[entity_index].seqs[seq_index].current
+//checks that increasing will not result in index out of bounds error
+	if self.entities[entity_index].seqs[seq_index].current
             < self.entities[entity_index].seqs[seq_index].sprites.len() - 1
         {
             self.entities[entity_index].seqs[seq_index].current =
                 self.entities[entity_index].seqs[seq_index].current + 1;
-        } else {
+        }
+	//loops back to the start
+	else {
             self.entities[entity_index].seqs[seq_index].current = 0;
         }
     }
@@ -129,10 +132,12 @@ impl SimpleAnim {
         }
     }
 
+    //determines how many frames are drawn before looping
     pub fn set_frames(&mut self, cycle: u8) -> () {
         self.frame_cycle = cycle;
     }
 
+    //incriments frames drawn
     pub fn incr_frames(&mut self) -> () {
         if self.frames_drawn >= self.frame_cycle {
             self.frames_drawn = 0;
@@ -166,6 +171,8 @@ impl SimpleAnim {
             ),
         );
 
+	//moves sprite in seq; if the sprite is in a animation cycle
+	//& the frames need to be switched
         if is_cycle && self.switch_frame() {
             self.sheet.progress_seq(entity_index, seq_index);
         }
@@ -191,6 +198,7 @@ impl SimpleAnim {
             }
         }
         //draw the sprite determinded
+	//if there is an active cycle draw that sprite
         if active_cycle {
             self.draw_sprite(x_pos, y_pos, true, entity_index, cur_cycle.seq_index);
         }
