@@ -3,13 +3,12 @@
 //! Animation handles the sprites and images to be rendered as well as handles
 //! the process of rendering them
 
-use crate::entity_state::FlatEntityState;
 use json::*;
 use macroquad::prelude::*;
 use serde;
 use serde::Deserialize;
 use serde_json;
-use std::fs::File;
+use std::fs;
 
 //simple animations across a spritesheet
 //animations draw on a set frame cycle
@@ -83,20 +82,16 @@ impl Cycle {
 }
 
 impl SpriteSheet {
-    async fn new(image_file: &str, data_file: Vec<Entity>) -> Self {
+    fn new(image_file: Texture2D, data_file: Vec<Entity>) -> Self {
         Self {
-            image: load_texture(image_file).await,
+            image: image_file,
             entities: data_file,
         }
     }
 
     fn create_param(&self, sprite: Sprite) -> DrawTextureParams {
         let mut texture = DrawTextureParams::default();
-        //only for newer verison of macroqaud texture.flip_x = sprite.rotated;
-
-        if sprite.rotated {
-            texture.rotation = 180.0;
-        }
+        texture.flip_x = sprite.rotated;
 
         texture.dest_size = Some(Vec2::new(sprite.size.w as f32, sprite.size.h as f32));
         texture.source = Some(Rect::new(
@@ -128,11 +123,12 @@ impl SimpleAnim {
     pub async fn new(image_file: &str, data_file: &str) -> Self {
         Self {
             sheet: SpriteSheet::new(
-                image_file,
-                serde_json::from_reader(File::open(data_file).unwrap())
+                macroquad::texture::load_texture(image_file)
+                    .await
+                    .expect("error reading"),
+                serde_json::from_str(&fs::read_to_string(data_file).unwrap())
                     .expect("error while reading or parsing"),
-            )
-            .await,
+            ),
             frames_drawn: 0,
             frame_cycle: 0,
         }

@@ -201,8 +201,9 @@ struct World {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    println!("start");
     let mut animation = SimpleAnim::new("src/clowder_sprite.png", "src/clowder_sprite.json").await;
-
+    println!("done");
     animation.set_frames(10); //arbitrary value that resets frames to create cycle
 
     let mut world = World::new();
