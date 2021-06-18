@@ -153,10 +153,18 @@ impl SimpleAnim {
         return self.frames_drawn == 0;
     }
 
-    pub fn flip_entity_x(&mut self, entity_index: usize) {
+    pub fn entity_rotate_true(&mut self, entity_index: usize) {
         for seq in self.sheet.entities[entity_index].seqs.iter_mut() {
             for sprite in seq.sprites.iter_mut() {
-                sprite.rotated = !sprite.rotated;
+                sprite.rotated = true;
+            }
+        }
+    }
+
+    pub fn entity_rotate_false(&mut self, entity_index: usize) {
+        for seq in self.sheet.entities[entity_index].seqs.iter_mut() {
+            for sprite in seq.sprites.iter_mut() {
+                sprite.rotated = false;
             }
         }
     }

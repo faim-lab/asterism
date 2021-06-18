@@ -255,7 +255,7 @@ impl World {
 
         self.project_physics(&mut logics.physics);
         logics.physics.update();
-        self.unproject_physics(&logics.physics);
+        self.unproject_physics(&logics.physics, animation);
 
         self.project_collision(&mut logics.collision, &mut logics.control);
         logics.collision.update();
@@ -291,10 +291,10 @@ impl World {
                     if self.balls[i].vel.x != 0.0 {
                         if sides_touched.x != 0.0 {
                             self.balls[i].vel.x = sides_touched.x * -1.0;
-                            animation.flip_entity_x(self.balls[i].id);
+                            
                         } else if sides_touched.y != 0.0 {
                             self.balls[i].vel.x = sides_touched.y * -1.0;
-                            animation.flip_entity_x(self.balls[i].id);
+                           
                         }
                     }
 
@@ -311,7 +311,7 @@ impl World {
                         }
                         if sides_touched.x != 0.0 {
                             self.balls[i].vel.x *= -1.0;
-                            animation.flip_entity_x(self.balls[i].id);
+                            
                         }
                     }
                 }
@@ -335,8 +335,7 @@ impl World {
                         if sides_touched.x != 0.0 {
                             self.balls[i].vel.x *= -1.0;
                             self.balls[j].vel.x *= -1.0;
-                            animation.flip_entity_x(self.balls[i].id);
-                            animation.flip_entity_x(self.balls[j].id);
+                            
                         }
                         if sides_touched.y != 0.0 {
                             self.balls[i].vel.y *= -1.0;
@@ -362,7 +361,7 @@ impl World {
                         }
                         if sides_touched.x != 0.0 {
                             self.balls[i].vel.x *= -1.0;
-                            animation.flip_entity_x(self.balls[i].id);
+                            
                         }
                     }
 
@@ -437,7 +436,7 @@ impl World {
         }
     }
 
-    fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
+    fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>, animation: &mut SimpleAnim) {
         for ((ball, pos), vel) in self
             .balls
             .iter_mut()
@@ -446,6 +445,15 @@ impl World {
         {
             ball.pos = *pos;
             ball.vel = *vel;
+
+	    if ball.vel.x > 0.0
+	    {
+		animation.entity_rotate_true(ball.id);
+	    }
+	    else
+	    {
+		animation.entity_rotate_false(ball.id);
+	    }
         }
     }
 
