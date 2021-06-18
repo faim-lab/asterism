@@ -2,14 +2,15 @@
 //!
 //! Resource logics communicate that generic or specific resources can be created, destroyed, converted, or transferred between abstract or concrete locations. They create, destroy, and exchange (usually) discrete quantities of generic or specific resources in or between abstract or concrete locations on demand or over time, and trigger other actions when these transactions take place.
 
-use crate::{Event, EventType, Logic, Reaction};
+use crate::{Event, EventType, Logic, QueryTable, Reaction};
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 use std::ops::{Add, AddAssign};
 
 /// A resource logic that queues transactions, then applies them all at once when updating.
 pub struct QueuedResources<ID, Value>
 where
-    ID: Copy + Ord + std::fmt::Debug,
+    ID: Copy + Ord + Debug,
     Value: Add<Output = Value> + AddAssign + Ord + Copy,
 {
     /// The items involved, and their values.
@@ -22,7 +23,7 @@ where
 
 impl<ID, Value> Logic for QueuedResources<ID, Value>
 where
-    ID: Copy + Ord + std::fmt::Debug,
+    ID: Copy + Ord + Debug,
     Value: Add<Output = Value> + AddAssign + Ord + Copy,
 {
     type Event = ResourceEvent<ID>;
@@ -30,23 +31,6 @@ where
 
     type Ident = ID;
     type IdentData = (Value, Value, Value);
-
-    fn check_predicate(&self, event: &Self::Event) -> bool {
-        match &event.event_type {
-            ResourceEventType::PoolUpdated => {
-                self.completed.iter().any(|transaction| match transaction {
-                    Ok(id) => *id == event.pool,
-                    _ => false,
-                })
-            }
-            ResourceEventType::TransactionUnsuccessful(rsrc_err) => {
-                self.completed.iter().any(|transaction| match transaction {
-                    Err((id, err)) => *id == event.pool && err == rsrc_err,
-                    _ => false,
-                })
-            }
-        }
-    }
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         self.transactions.push(*reaction);
@@ -70,7 +54,7 @@ where
 
 impl<ID, Value> QueuedResources<ID, Value>
 where
-    ID: Copy + Ord + std::fmt::Debug,
+    ID: Copy + Ord + Debug,
     Value: Add<Output = Value> + AddAssign + Ord + Copy,
 {
     pub fn new() -> Self {
@@ -156,7 +140,7 @@ where
 }
 
 /// Errors possible when trying to complete a transaction.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ResourceError {
     PoolNotFound,
     TooBig,
@@ -165,6 +149,7 @@ pub enum ResourceError {
 
 pub type ResourceReaction<ID, Value> = (ID, Transaction<Value>);
 
+/// this type should just be a result <__<
 #[derive(PartialEq, Eq)]
 pub struct ResourceEvent<ID> {
     pub pool: ID,
@@ -185,5 +170,52 @@ impl<ID: Ord> Event for ResourceEvent<ID> {
     type EventType = ResourceEventType;
     fn get_type(&self) -> &Self::EventType {
         &self.event_type
+    }
+}
+
+type QueryOver<ID, Value> = (
+    <QueuedResources<ID, Value> as Logic>::Ident,
+    <QueuedResources<ID, Value> as Logic>::IdentData,
+);
+impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy>
+    QueryTable<QueryOver<ID, Value>> for QueuedResources<ID, Value>
+{
+    fn check_predicate(
+        &self,
+        predicate: impl Fn(&QueryOver<ID, Value>) -> bool,
+    ) -> Vec<QueryOver<ID, Value>> {
+        self.items
+            .iter()
+            .filter_map(|(id, values)| {
+                let query_over = (*id, *values);
+                predicate(&query_over).then(|| query_over)
+            })
+            .collect()
+    }
+}
+
+impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy>
+    QueryTable<ResourceEvent<ID>> for QueuedResources<ID, Value>
+{
+    fn check_predicate(
+        &self,
+        predicate: impl Fn(&ResourceEvent<ID>) -> bool,
+    ) -> Vec<ResourceEvent<ID>> {
+        self.completed
+            .iter()
+            .filter_map(|completed| {
+                let query_over = match completed {
+                    Ok(id) => ResourceEvent {
+                        pool: *id,
+                        event_type: ResourceEventType::PoolUpdated,
+                    },
+                    Err((id, err)) => ResourceEvent {
+                        pool: *id,
+                        event_type: ResourceEventType::TransactionUnsuccessful(*err),
+                    },
+                };
+                predicate(&query_over).then(|| query_over)
+            })
+            .collect()
     }
 }

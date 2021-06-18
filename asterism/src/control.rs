@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::{Event, EventType, Logic, Reaction};
+use crate::{Event, EventType, Logic, QueryTable, Reaction};
 
 /// Information for a key/button press.
 trait Input {
@@ -40,21 +40,8 @@ where
 
     /// for each control locus
     type Ident = usize;
-    /// values are only included for reference; modifying values will not change the data in the logic
-    type IdentData = (Vec<Action<ID, Wrapper::KeyCode>>, Vec<Values>);
-
-    fn check_predicate(&self, event: &Self::Event) -> bool {
-        if let Some(values) = self.get_action_in_set(event.set, event.action_id) {
-            match event.event_type {
-                ControlEventType::KeyPressed => values.changed_by > 0.0,
-                ControlEventType::KeyReleased => values.changed_by < 0.0,
-                ControlEventType::KeyHeld => values.value > 0.0,
-                ControlEventType::KeyUnheld => values.value == 0.0,
-            }
-        } else {
-            false
-        }
-    }
+    /// values are only included for reference; modifying values will not change the data in the logic. Not super sure about this type...
+    type IdentData = Vec<Action<ID, Wrapper::KeyCode>>;
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         match reaction {
@@ -75,11 +62,11 @@ where
     }
 
     fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
-        (self.mapping[ident].clone(), self.values[ident].clone())
+        self.mapping[ident].clone()
     }
 
     fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
-        self.mapping[ident] = data.0;
+        self.mapping[ident] = data;
     }
 }
 
@@ -280,6 +267,61 @@ pub enum ControlEventType {
 
 impl EventType for ControlEventType {}
 
+type QueryOver<ID, Wrapper> = (
+    <KeyboardControl<ID, Wrapper> as Logic>::Ident,
+    <KeyboardControl<ID, Wrapper> as Logic>::IdentData,
+);
+impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryOver<ID, Wrapper>>
+    for KeyboardControl<ID, Wrapper>
+{
+    fn check_predicate(
+        &self,
+        predicate: impl Fn(&QueryOver<ID, Wrapper>) -> bool,
+    ) -> Vec<QueryOver<ID, Wrapper>> {
+        (0..self.mapping.len())
+            .filter_map(|i| {
+                let query_over = (i, self.get_synthesis(i));
+                predicate(&query_over).then(|| query_over)
+            })
+            .collect()
+    }
+}
+
+type QueryEvent<ID, Wrapper> = <KeyboardControl<ID, Wrapper> as Logic>::Event;
+impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryEvent<ID, Wrapper>>
+    for KeyboardControl<ID, Wrapper>
+{
+    // I feel like this should get rid of check_predicate
+    fn check_predicate(
+        &self,
+        predicate: impl Fn(&QueryEvent<ID, Wrapper>) -> bool,
+    ) -> Vec<QueryEvent<ID, Wrapper>> {
+        let mut events = Vec::new();
+        for (i, val_set) in self.values.iter().enumerate() {
+            for (action, values) in val_set.iter().enumerate() {
+                let event_type = if values.changed_by > 0.0 {
+                    ControlEventType::KeyPressed
+                } else if values.changed_by < 0.0 {
+                    ControlEventType::KeyReleased
+                } else if values.value != 0.0 {
+                    ControlEventType::KeyHeld
+                } else {
+                    ControlEventType::KeyUnheld
+                };
+                let event = ControlEvent {
+                    set: i,
+                    action_id: self.mapping[i][action].id,
+                    event_type,
+                };
+                if predicate(&event) {
+                    events.push(event);
+                }
+            }
+        }
+        events
+    }
+}
+
 /// A wrapper to help keep track of input information that preexisting input handlers may not offer, but that we need.
 pub trait InputWrapper {
     type KeyCode: Copy + Eq;
@@ -328,7 +370,7 @@ impl InputWrapper for MacroquadInputWrapper {
 use winit::event::VirtualKeyCode;
 use winit_input_helper::WinitInputHelper;
 
-/// WinitInputHelper doesn't handle key repeat properly (may depend on system?), so track the keys pressed last and this frame.
+/// WinitInputHelper doesn't handle key repeat properly because of key repeat, so track the keys pressed last and this frame.
 pub struct WinitInputWrapper {
     this_frame_keys: BTreeSet<VirtualKeyCode>,
     last_frame_keys: BTreeSet<VirtualKeyCode>,

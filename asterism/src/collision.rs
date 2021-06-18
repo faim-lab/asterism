@@ -4,11 +4,11 @@
 //!
 //! Note: Collision is hard and may be broken.
 
-use crate::{Event, EventType, Logic, Reaction};
+use crate::{Event, EventType, Logic, QueryTable, Reaction};
 use glam::Vec2;
 
 /// Information for each contact. If the entities at the indices `i` and `j` are both unfixed or both fixed, then `i < j`. If one is unfixed and the other is fixed, `i` will be the index of the unfixed entity.
-#[derive(PartialEq)]
+#[derive(PartialEq, Copy, Clone)]
 pub struct Contact {
     /// The index of the first contact in `centers`, `half_sizes`, `velocities`, `metadata`, and `displacements`.
     pub i: usize,
@@ -226,23 +226,11 @@ pub struct AabbColData {
 }
 
 impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
-    type Event = CollisionEvent<ID>;
+    type Event = CollisionEvent;
     type Reaction = CollisionReaction<ID>;
 
     type Ident = usize;
     type IdentData = AabbColData;
-
-    fn check_predicate(&self, event: &Self::Event) -> bool {
-        // this search is truly incredible for both performance and instruction cache
-        self.contacts
-            .iter()
-            .any(|Contact { i, j, .. }| match event {
-                CollisionEvent::ByIndex(ev_i, ev_j) => i == ev_i && j == ev_j,
-                CollisionEvent::ByType(id_i, id_j) => {
-                    self.metadata[*i].id == *id_i && self.metadata[*j].id == *id_j
-                }
-            })
-    }
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         match reaction {
@@ -323,13 +311,9 @@ pub enum CollisionReaction<ID> {
 
 impl<ID> Reaction for CollisionReaction<ID> {}
 
-pub enum CollisionEvent<ID> {
-    ByIndex(usize, usize),
-    ByType(ID, ID),
-}
+pub type CollisionEvent = (usize, usize);
 
-// usize = unique identifier for each entity, id -> entitytype????
-impl<ID> Event for CollisionEvent<ID> {
+impl Event for CollisionEvent {
     type EventType = CollisionEventType;
 
     fn get_type(&self) -> &Self::EventType {
@@ -342,6 +326,33 @@ pub enum CollisionEventType {
 }
 
 impl EventType for CollisionEventType {}
+
+type QueryOver<ID> = (
+    <AabbCollision<ID> as Logic>::Ident,
+    <AabbCollision<ID> as Logic>::IdentData,
+);
+impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for AabbCollision<ID> {
+    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID>) -> bool) -> Vec<QueryOver<ID>> {
+        (0..self.centers.len())
+            .filter_map(|i| {
+                let query_over = (i, self.get_synthesis(i));
+                predicate(&query_over).then(|| query_over)
+            })
+            .collect()
+    }
+}
+
+impl<ID: Copy + Eq> QueryTable<(usize, usize)> for AabbCollision<ID> {
+    fn check_predicate(&self, predicate: impl Fn(&(usize, usize)) -> bool) -> Vec<(usize, usize)> {
+        self.contacts
+            .iter()
+            .filter_map(|contact| {
+                let contact_event = (contact.i, contact.j);
+                predicate(&contact_event).then(|| contact_event)
+            })
+            .collect()
+    }
+}
 
 // inlined for performance
 #[inline(always)]

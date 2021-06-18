@@ -4,7 +4,7 @@
 //!
 //! Linking logics are incredibly broad and have a wide range of uses.
 use crate::graph::StateMachine;
-use crate::{Event, EventType, Logic, Reaction};
+use crate::{Event, EventType, Logic, QueryTable, Reaction};
 
 /// A generic linking logic. See [StateMachine][asterism::graph::StateMachine] documentation for more information.
 ///
@@ -100,15 +100,8 @@ impl<NodeID: Copy + Eq> Logic for GraphedLinking<NodeID> {
 
     /// index of graph
     type Ident = usize;
-    /// current position in logic + condition table?
-    type IdentData = (usize, Vec<bool>);
-
-    fn check_predicate(&self, event: &Self::Event) -> bool {
-        match event.get_type() {
-            LinkingEventType::Activated => self.graphs[event.graph].conditions[event.node],
-            LinkingEventType::Traversed => self.just_traversed[event.graph],
-        }
-    }
+    /// list of graph nodes and edges
+    type IdentData = (Vec<NodeID>, Vec<Vec<bool>>);
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         match reaction {
@@ -122,13 +115,70 @@ impl<NodeID: Copy + Eq> Logic for GraphedLinking<NodeID> {
 
     fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
         let graph = &self.graphs[ident];
-        (graph.current_node, graph.conditions.clone())
+        (graph.nodes.clone(), graph.edges.clone())
     }
 
     fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
         let graph = &mut self.graphs[ident];
-        graph.current_node = data.0;
-        assert_eq!(data.1.len(), graph.conditions.len());
-        graph.conditions = data.1;
+        assert_eq!(data.0.len(), graph.nodes.len());
+        assert_eq!(data.1.len(), graph.nodes.len());
+        if !data.1.is_empty() {
+            assert_eq!(data.1[0].len(), graph.nodes.len());
+        }
+        graph.nodes = data.0;
+        graph.edges = data.1;
+    }
+}
+
+type QueryOver<ID> = (
+    <GraphedLinking<ID> as Logic>::Ident,
+    <GraphedLinking<ID> as Logic>::IdentData,
+);
+impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for GraphedLinking<ID> {
+    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID>) -> bool) -> Vec<QueryOver<ID>> {
+        (0..self.graphs.len())
+            .filter_map(|i| {
+                let query_over = (i, self.get_synthesis(i));
+                predicate(&query_over).then(|| query_over)
+            })
+            .collect()
+    }
+}
+
+type QueryEvent<ID> = <GraphedLinking<ID> as Logic>::Event;
+
+impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for GraphedLinking<ID> {
+    fn check_predicate(&self, predicate: impl Fn(&QueryEvent<ID>) -> bool) -> Vec<QueryEvent<ID>> {
+        let mut events = Vec::new();
+        for (i, (graph, traversed)) in self
+            .graphs
+            .iter()
+            .zip(self.just_traversed.iter())
+            .enumerate()
+        {
+            if *traversed {
+                let event = LinkingEvent {
+                    graph: i,
+                    node: graph.current_node,
+                    event_type: LinkingEventType::Traversed,
+                };
+                if predicate(&event) {
+                    events.push(event);
+                }
+            }
+            for (node, activated) in graph.conditions.iter().enumerate() {
+                if *activated && node != graph.current_node {
+                    let event = LinkingEvent {
+                        graph: i,
+                        node,
+                        event_type: LinkingEventType::Activated,
+                    };
+                    if predicate(&event) {
+                        events.push(event);
+                    }
+                }
+            }
+        }
+        events
     }
 }

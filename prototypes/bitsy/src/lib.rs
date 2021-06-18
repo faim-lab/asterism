@@ -37,7 +37,7 @@ use macroquad::prelude::*;
 pub use asterism::control::{Action, ControlEventType, ControlReaction, Values};
 pub use asterism::linking::{LinkingEvent, LinkingEventType, LinkingReaction};
 pub use asterism::resources::{ResourceEventType, ResourceReaction, Transaction};
-pub use asterism::Logic;
+pub use asterism::{Logic, QueryTable};
 pub use collision::*;
 pub use entities::set_current_room;
 pub use types::*;

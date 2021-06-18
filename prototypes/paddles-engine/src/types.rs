@@ -214,5 +214,5 @@ use asterism::control::ControlEvent;
 use asterism::resources::ResourceEvent;
 
 pub type CtrlEvent = ControlEvent<ActionID>;
-pub type ColEvent = CollisionEvent<CollisionEnt>;
+pub type ColEvent = CollisionEvent;
 pub type RsrcEvent = ResourceEvent<RsrcPool>;

@@ -3,7 +3,7 @@
 //! Entity-state logics communicate that game entities act in different ways or have different capabilities at different times, in ways that are intrinsic to each such entity. They govern the finite, discrete states of a set of game characters or other entities, update states when necessary, and condition the operators of other logics on entities' discrete states.
 
 use crate::graph::StateMachine;
-use crate::{Event, EventType, Logic, Reaction};
+use crate::{Event, EventType, Logic, QueryTable, Reaction};
 
 /// An entity-state logic for flat entity state machines.
 pub struct FlatEntityState<ID: Copy + Eq> {
@@ -110,13 +110,6 @@ impl<ID: Copy + Eq> Logic for FlatEntityState<ID> {
     /// current position in logic + condition table?
     type IdentData = (usize, Vec<bool>);
 
-    fn check_predicate(&self, event: &Self::Event) -> bool {
-        match event.get_type() {
-            EntityEventType::Activated => self.graphs[event.graph].conditions[event.node],
-            EntityEventType::Traversed => self.just_traversed[event.graph],
-        }
-    }
-
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         match reaction {
             EntityReaction::Activate(graph, node) => self.graphs[*graph].conditions[*node] = true,
@@ -137,5 +130,29 @@ impl<ID: Copy + Eq> Logic for FlatEntityState<ID> {
         graph.current_node = data.0;
         assert_eq!(data.1.len(), graph.conditions.len());
         graph.conditions = data.1;
+    }
+}
+
+type QueryOver<ID> = (
+    <FlatEntityState<ID> as Logic>::Ident,
+    <FlatEntityState<ID> as Logic>::IdentData,
+);
+impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for FlatEntityState<ID> {
+    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID>) -> bool) -> Vec<QueryOver<ID>> {
+        (0..self.graphs.len())
+            .filter_map(|i| {
+                let query_over = (i, self.get_synthesis(i));
+                predicate(&query_over).then(|| query_over)
+            })
+            .collect()
+    }
+}
+
+type QueryEvent<ID> = <FlatEntityState<ID> as Logic>::Event;
+
+impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for FlatEntityState<ID> {
+    fn check_predicate(&self, _predicate: impl Fn(&QueryEvent<ID>) -> bool) -> Vec<QueryEvent<ID>> {
+        // unsure what the types should be
+        todo!()
     }
 }

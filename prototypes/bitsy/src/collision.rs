@@ -79,10 +79,6 @@ impl<TileID: Copy + Eq + Ord + std::fmt::Debug, EntID: Copy> Logic
     type Ident = ColIdent;
     type IdentData = TileMapColData<TileID, EntID>;
 
-    fn check_predicate(&self, event: &Self::Event) -> bool {
-        self.contacts.iter().any(|contact| event == contact)
-    }
-
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         match reaction {
             CollisionReaction::SetTileAtPos(pos, id) => {

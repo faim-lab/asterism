@@ -6,7 +6,7 @@ use std::fmt::Debug;
 impl<TileID: Debug + Copy + Eq + Ord, EntID: Copy>
     QueryTable<(ColIdent, TileMapColData<TileID, EntID>)> for TileMapCollision<TileID, EntID>
 {
-    fn predicate(
+    fn check_predicate(
         &self,
         predicate: impl Fn(&(ColIdent, TileMapColData<TileID, EntID>)) -> bool,
     ) -> Vec<(ColIdent, TileMapColData<TileID, EntID>)> {
@@ -28,21 +28,21 @@ impl<TileID: Debug + Copy + Eq + Ord, EntID: Copy>
         }
 
         // entities
-        for i in 0..self.positions.len() {
-            let ident = ColIdent::EntIdx(i);
-            let synthesis = self.get_synthesis(ident);
-            let query_over = (ident, synthesis);
-            if predicate(&query_over) {
-                idents.push(query_over);
-            }
-        }
+        let mut ents = (0..self.positions.len())
+            .filter_map(|i| {
+                let ident = ColIdent::EntIdx(i);
+                let query_over = (ident, self.get_synthesis(ident));
+                predicate(&query_over).then(|| query_over)
+            })
+            .collect();
+        idents.append(&mut ents);
 
         idents
     }
 }
 
 impl<TileID: Debug, EntID> QueryTable<Contact> for TileMapCollision<TileID, EntID> {
-    fn predicate(&self, predicate: impl Fn(&Contact) -> bool) -> Vec<Contact> {
+    fn check_predicate(&self, predicate: impl Fn(&Contact) -> bool) -> Vec<Contact> {
         self.contacts
             .iter()
             .filter_map(|contact| {
@@ -61,7 +61,7 @@ use crate::Logics;
 
 pub fn test(logics: &mut Logics) {
     // all contacts between player and character
-    let player_contacts = logics.collision.predicate(|contact| -> bool {
+    let player_contacts = logics.collision.check_predicate(|contact| -> bool {
         match contact {
             Contact::Ent(i, _) => logics.collision.metadata[*i].id == CollisionEnt::Player,
             Contact::Tile(i, _) => logics.collision.metadata[*i].id == CollisionEnt::Player,

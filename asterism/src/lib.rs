@@ -1,4 +1,3 @@
-#![allow(clippy::new_without_default)]
 //! # Asterism
 //!
 //! An asterism is a pattern people can see in stars, and while there is a fixed set of true constellations we can come up with as many asterisms as we like.
@@ -9,6 +8,7 @@
 //!
 //! Requires at least Rust 1.51---if this doesn't compile, update your rustc.
 
+#![allow(clippy::new_without_default)]
 pub mod collision;
 pub mod control;
 pub mod entity_state;
@@ -17,17 +17,16 @@ pub mod linking;
 pub mod physics;
 pub mod resources;
 
-// pub trait Logic: QueryTable<(<Self as Logic>::Ident, <Self as Logic>::IdentData)>
-pub trait Logic {
+pub trait Logic:
+    QueryTable<(<Self as Logic>::Ident, <Self as Logic>::IdentData)>
+    + QueryTable<<Self as Logic>::Event>
+{
     type Event: Event;
     type Reaction: Reaction;
 
     /// a single unit/entity within the logic
     type Ident: Clone + Copy;
     type IdentData;
-
-    /// checks if a predicate is occuring
-    fn check_predicate(&self, event: &Self::Event) -> bool;
 
     /// processes the reaction if a predicate condition is met
     fn handle_predicate(&mut self, reaction: &Self::Reaction);
@@ -52,5 +51,5 @@ pub trait Reaction {}
 ///
 /// kind of weird! Couldn't figure out how to get an iterator working. I don't like the reallocations but I don't think it's worse than what I'm doing in the engines with building syntheses every frame.
 pub trait QueryTable<QueryOver> {
-    fn predicate(&self, predicate: impl Fn(&QueryOver) -> bool) -> Vec<QueryOver>;
+    fn check_predicate(&self, predicate: impl Fn(&QueryOver) -> bool) -> Vec<QueryOver>;
 }
