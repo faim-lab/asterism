@@ -4,8 +4,6 @@
 //!
 //! We're currently trying to consider analog as well as digital inputs, but we haven't implemented controller support, so some of these fields don't really make sense yet.
 
-use std::collections::BTreeSet;
-
 use crate::{Event, EventType, Logic, QueryTable, Reaction};
 
 /// Information for a key/button press.
@@ -367,15 +365,21 @@ impl InputWrapper for MacroquadInputWrapper {
     }
 }
 
+#[cfg(feature = "winit-render")]
+use std::collections::BTreeSet;
+#[cfg(feature = "winit-render")]
 use winit::event::VirtualKeyCode;
+#[cfg(feature = "winit-render")]
 use winit_input_helper::WinitInputHelper;
 
 /// WinitInputHelper doesn't handle key repeat properly because of key repeat, so track the keys pressed last and this frame.
+#[cfg(feature = "winit-render")]
 pub struct WinitInputWrapper {
     this_frame_keys: BTreeSet<VirtualKeyCode>,
     last_frame_keys: BTreeSet<VirtualKeyCode>,
 }
 
+#[cfg(feature = "winit-render")]
 impl InputWrapper for WinitInputWrapper {
     type KeyCode = VirtualKeyCode;
     type InputHelper = WinitInputHelper;

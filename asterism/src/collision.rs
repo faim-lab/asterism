@@ -5,7 +5,7 @@
 //! Note: Collision is hard and may be broken.
 
 use crate::{Event, EventType, Logic, QueryTable, Reaction};
-use glam::Vec2;
+use macroquad::math::Vec2;
 
 /// Information for each contact. If the entities at the indices `i` and `j` are both unfixed or both fixed, then `i < j`. If one is unfixed and the other is fixed, `i` will be the index of the unfixed entity.
 #[derive(PartialEq, Copy, Clone)]

@@ -3,7 +3,7 @@
 //! Physics logics communicate that physical laws govern the movement of some in-game entities. They update and honor objects' physical properties like position, velocity, density, etc., according to physical laws integrated over time.
 
 use crate::{Event, EventType, Logic, QueryTable, Reaction};
-use glam::Vec2;
+use macroquad::math::Vec2;
 
 /// A physics logic using 2d points.
 pub struct PointPhysics {
