@@ -417,6 +417,15 @@ impl World {
             animation.activate_cycle(4, 0);
         }
 
+	if control.values[0][0].value > 0.0
+	{
+	    animation.entity_rotate_false(4);
+	}
+	else if control.values[0][1].value > 0.0
+	{
+	    animation.entity_rotate_true(4);
+	}
+
         self.paddles.0.x = ((self.paddles.0.x - control.values[0][0].value as f32
             + control.values[0][1].value as f32) //confusing, incorporate ActionIds
             .max(0.0) as f32)
