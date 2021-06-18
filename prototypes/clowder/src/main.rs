@@ -4,7 +4,6 @@ use asterism::{
     animation::SimpleAnim,
     collision::AabbCollision,
     control::{KeyboardControl, MacroQuadKeyboardControl},
-    entity_state::FlatEntityState,
     physics::PointPhysics,
     resources::{PoolInfo, QueuedResources, Transaction},
 };
@@ -333,13 +332,13 @@ impl World {
                         animation.activate_cycle(self.balls[j].id, 0);
                     } else {
                         if sides_touched.x != 0.0 {
-                            self.balls[i].vel.x *= -1.0;
-                            self.balls[j].vel.x *= -1.0;
+                            self.balls[i].vel.x *= -1.01;
+                            self.balls[j].vel.x *= -1.01;
                             
                         }
                         if sides_touched.y != 0.0 {
-                            self.balls[i].vel.y *= -1.0;
-                            self.balls[j].vel.y *= -1.0;
+                            self.balls[i].vel.y *= -1.01;
+                            self.balls[j].vel.y *= -1.01;
                         }
                     }
                 }
@@ -417,10 +416,12 @@ impl World {
             animation.activate_cycle(4, 0);
         }
 
+	//if moving left
 	if control.values[0][0].value > 0.0
 	{
 	    animation.entity_rotate_false(4);
 	}
+	//if moving right
 	else if control.values[0][1].value > 0.0
 	{
 	    animation.entity_rotate_true(4);
@@ -454,11 +455,17 @@ impl World {
         {
             ball.pos = *pos;
             ball.vel = *vel;
-
+	    //not moving
+	    if ball.vel.x == 0.0 && ball.vel.y == 0.0
+	    {
+		animation.deactivate_cycle(ball.id, 0);
+	    }
+	    //if moving left
 	    if ball.vel.x > 0.0
 	    {
 		animation.entity_rotate_true(ball.id);
 	    }
+	    //moving right
 	    else
 	    {
 		animation.entity_rotate_false(ball.id);

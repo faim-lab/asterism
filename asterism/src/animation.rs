@@ -32,7 +32,7 @@ struct Size {
     h: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 struct Cycle {
     seq_index: usize,
     state: bool,
@@ -48,7 +48,7 @@ struct Sprite {
     size: Size,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct Sequence {
     seq_name: String,
     cycle_index: usize,
@@ -56,7 +56,7 @@ struct Sequence {
     sprites: Vec<Sprite>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct Entity {
     name: String,
     sheet_index: usize,
@@ -171,6 +171,11 @@ impl SimpleAnim {
     //turns a cycle state to true
     pub fn activate_cycle(&mut self, entity_index: usize, cycle_index: usize) {
         self.sheet.entities[entity_index].cycles[cycle_index].state = true;
+    }
+
+    //turns cycle state to false
+    pub fn deactivate_cycle(&mut self, entity_index: usize, cycle_index: usize) {
+        self.sheet.entities[entity_index].cycles[cycle_index].state = false;
     }
     //dist, of actual sprite to be drawn from start index on sprite sheet
     fn draw_sprite(
