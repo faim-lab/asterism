@@ -496,7 +496,7 @@ impl World {
 
     fn change_angle(&mut self, player: Player, ball_index: usize) {
         let ball = &mut self.balls[ball_index];
-        let Vec2 { x, y } = &mut ball.vel;
+        
         let paddle_center = match player {
             Player::P1 => self.paddles.0.x + (PADDLE_WIDTH / 2) as f32,
         } as f32;
@@ -506,9 +506,9 @@ impl World {
             / PADDLE_WIDTH as f32)
             .abs()
             * 80.0;
-        let magnitude = f32::sqrt(*x * *x + *y * *y);
-        *x = angle.to_radians().sin() * magnitude * if *x < 0.0 { -1.0 } else { 1.0 };
-        *y = angle.to_radians().cos() * magnitude * if *y < 0.0 { -1.0 } else { 1.0 };
+        let magnitude = f32::sqrt(ball.vel.x * ball.vel.x + ball.vel.y * ball.vel.y);
+        ball.vel.x = angle.to_radians().sin() * magnitude * if ball.vel.x < 0.0 { -1.0 } else { 1.0 };
+        ball.vel.y = angle.to_radians().cos() * magnitude * if ball.vel.y < 0.0 { -1.0 } else { 1.0 };
     }
 
     fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
