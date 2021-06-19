@@ -40,13 +40,8 @@ impl Game {
                 let mut paddle = Paddle::new();
                 paddle.pos = col.center - col.half_size;
                 paddle.size = col.half_size * 2.0;
-                for (actions, values) in ctrl.0.iter().zip(ctrl.1.iter()) {
-                    let ctrl = (
-                        actions.id,
-                        *actions.get_keycode(),
-                        actions.is_valid,
-                        *values,
-                    );
+                for actions in ctrl.iter() {
+                    let ctrl = (actions.id, *actions.get_keycode(), actions.is_valid);
                     paddle.controls.push(ctrl);
                 }
 
@@ -68,25 +63,14 @@ impl Game {
                 let mut paddle = Paddle::new();
                 paddle.pos = col.center - col.half_size;
                 paddle.size = col.half_size * 2.0;
-                for (actions, values) in ctrl.0.iter().zip(ctrl.1.iter()) {
-                    let ctrl = (
-                        actions.id,
-                        *actions.get_keycode(),
-                        actions.is_valid,
-                        *values,
-                    );
+                for actions in ctrl.iter() {
+                    let ctrl = (actions.id, *actions.get_keycode(), actions.is_valid);
                     paddle.controls.push(ctrl);
                 }
                 let paddle = synthesis(paddle);
 
-                for (((_, _, valid, vals), actions), values) in paddle
-                    .controls
-                    .iter()
-                    .zip(ctrl.0.iter_mut())
-                    .zip(ctrl.1.iter_mut())
-                {
+                for ((_, _, valid), actions) in paddle.controls.iter().zip(ctrl.iter_mut()) {
                     actions.is_valid = *valid;
-                    *values = *vals;
                 }
                 self.logics.control.update_synthesis(paddle_id.idx(), ctrl);
             }

@@ -1,5 +1,4 @@
 use crate::Logics;
-use asterism::control::Values;
 
 use macroquad::{input::KeyCode, math::Vec2};
 
@@ -56,7 +55,7 @@ pub enum RsrcPool {
 pub struct Paddle {
     pub pos: Vec2,
     pub size: Vec2,
-    pub controls: Vec<(ActionID, KeyCode, bool, Values)>,
+    pub controls: Vec<(ActionID, KeyCode, bool)>,
 }
 
 impl Paddle {
@@ -74,7 +73,7 @@ impl Paddle {
 
     pub fn add_control_map(&mut self, keycode: KeyCode, valid: bool) -> ActionID {
         let act_id = ActionID(self.controls.len());
-        self.controls.push((act_id, keycode, valid, Values::new()));
+        self.controls.push((act_id, keycode, valid));
         act_id
     }
 }
@@ -159,7 +158,7 @@ impl Logics {
             },
         );
 
-        for (act_id, keycode, valid, _) in paddle.controls {
+        for (act_id, keycode, valid) in paddle.controls {
             self.control.add_key_map(id.0, keycode, act_id, valid);
         }
     }

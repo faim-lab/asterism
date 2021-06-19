@@ -9,15 +9,17 @@ use asterism::{
 use macroquad::prelude::*;
 
 mod syntheses;
+mod tables;
 mod types;
 use syntheses::*;
+use tables::*;
 
 // reexports
 pub use asterism::collision::{AabbColData, AabbCollision, CollisionReaction};
 pub use asterism::control::{Action, ControlEventType, ControlReaction, Values};
 pub use asterism::physics::{PhysicsEvent, PhysicsReaction, PointPhysData};
 pub use asterism::resources::{ResourceEventType, ResourceReaction, Transaction};
-pub use asterism::Logic;
+pub use asterism::{Logic, QueryTable};
 pub use types::{
     ActionID, Ball, BallID, CollisionEnt, Paddle, PaddleID, RsrcPool, Score, ScoreID, Wall, WallID,
 };
@@ -104,13 +106,11 @@ impl State {
     }
 }
 
-type PredicateFn<Event> = Vec<(Event, Box<dyn Fn(&mut State, &mut Logics, &Event)>)>;
-
 pub struct Events {
-    pub control: PredicateFn<CtrlEvent>,
-    pub collision: PredicateFn<ColEvent>,
-    pub resources: PredicateFn<RsrcEvent>,
-    pub physics: PredicateFn<PhysicsEvent>,
+    pub control: Vec<PredicateFn<CtrlEvent>>,
+    pub collision: Vec<PredicateFn<ColEvent>>,
+    pub resources: Vec<PredicateFn<RsrcEvent>>,
+    pub physics: Vec<PredicateFn<PhysicsEvent>>,
 
     paddle_synth: PaddleSynth,
     ball_synth: BallSynth,
@@ -173,47 +173,6 @@ impl Game {
         }
     }
 
-    pub fn add_ctrl_predicate(
-        &mut self,
-        paddle: PaddleID,
-        action: ActionID,
-        key_event: ControlEventType,
-        on_key_event: Box<dyn Fn(&mut State, &mut Logics, &CtrlEvent)>,
-    ) {
-        let key_event = CtrlEvent {
-            event_type: key_event,
-            action_id: action,
-            set: paddle.idx(),
-        };
-        self.events.control.push((key_event, on_key_event));
-    }
-
-    pub fn add_collision_predicate(
-        &mut self,
-        col1: (usize, CollisionEnt),
-        col2: (usize, CollisionEnt),
-        on_collide: Box<dyn Fn(&mut State, &mut Logics, &ColEvent)>,
-    ) {
-        let col_event = ColEvent::ByIndex(
-            self.state.get_col_idx(col1.0, col1.1),
-            self.state.get_col_idx(col2.0, col2.1),
-        );
-        self.events.collision.push((col_event, on_collide));
-    }
-
-    pub fn add_rsrc_predicate(
-        &mut self,
-        pool: RsrcPool,
-        rsrc_event: ResourceEventType,
-        on_rsrc_event: Box<dyn Fn(&mut State, &mut Logics, &RsrcEvent)>,
-    ) {
-        let rsrc_event = RsrcEvent {
-            pool,
-            event_type: rsrc_event,
-        };
-        self.events.resources.push((rsrc_event, on_rsrc_event));
-    }
-
     pub fn add_paddle(&mut self, paddle: Paddle) -> PaddleID {
         let id = PaddleID::new(self.state.paddle_id_max);
         self.logics.consume_paddle(
@@ -224,25 +183,6 @@ impl Game {
         );
         self.state.paddle_id_max += 1;
         self.state.paddles.push(id);
-
-        // collision events
-        for (col_event, _) in self.events.collision.iter_mut() {
-            if let ColEvent::ByIndex(i, j) = col_event {
-                if *i <= id.idx() {
-                    *i += 1;
-                }
-                if *j <= id.idx() {
-                    *j += 1;
-                }
-            }
-        }
-
-        // control events
-        for (ctrl_event, _) in self.events.control.iter_mut() {
-            if ctrl_event.set <= id.idx() {
-                ctrl_event.set += 1;
-            }
-        }
         id
     }
 
@@ -256,18 +196,6 @@ impl Game {
         self.state.ball_id_max += 1;
         self.state.balls.push(id);
 
-        // collision events
-        for (col_event, _) in self.events.collision.iter_mut() {
-            if let ColEvent::ByIndex(i, j) = col_event {
-                if *i <= id.idx() {
-                    *i += 1;
-                }
-                if *j <= id.idx() {
-                    *j += 1;
-                }
-            }
-        }
-
         id
     }
 
@@ -280,18 +208,6 @@ impl Game {
         );
         self.state.wall_id_max += 1;
         self.state.walls.push(id);
-
-        // collision events
-        for (col_event, _) in self.events.collision.iter_mut() {
-            if let ColEvent::ByIndex(i, j) = col_event {
-                if *i <= id.idx() {
-                    *i += 1;
-                }
-                if *j <= id.idx() {
-                    *j += 1;
-                }
-            }
-        }
 
         id
     }
@@ -318,42 +234,6 @@ impl Game {
                 self.state.get_col_idx(ent_i, CollisionEnt::Paddle),
             ));
 
-        let mut remove = Vec::new();
-        // collision events
-        for (idx, (col_event, _)) in self.events.collision.iter_mut().enumerate() {
-            if let ColEvent::ByIndex(i, j) = col_event {
-                if EntID::Paddle(paddle) == self.state.get_id(*i) {
-                    remove.push(idx);
-                }
-                if EntID::Paddle(paddle) == self.state.get_id(*j) {
-                    remove.push(idx);
-                }
-                if *i > ent_i {
-                    *i -= 1;
-                }
-                if *j > ent_i {
-                    *j -= 1;
-                }
-            }
-        }
-        for i in remove.iter().rev() {
-            let _ = self.events.collision.remove(*i);
-        }
-
-        // control events
-        remove.clear();
-        for (idx, (ctrl_event, _)) in self.events.control.iter_mut().enumerate() {
-            if ctrl_event.set == ent_i {
-                remove.push(idx);
-            }
-            if ctrl_event.set > ent_i {
-                ctrl_event.set -= 1;
-            }
-        }
-        for i in remove.into_iter().rev() {
-            let _ = self.events.control.remove(i);
-        }
-
         self.state.paddles.remove(ent_i);
     }
 
@@ -370,26 +250,6 @@ impl Game {
                 self.state.get_col_idx(ent_i, CollisionEnt::Wall),
             ));
 
-        let mut remove = Vec::new();
-        for (idx, (col_event, _)) in self.events.collision.iter_mut().enumerate() {
-            if let ColEvent::ByIndex(i, j) = col_event {
-                if EntID::Wall(wall) == self.state.get_id(*i) {
-                    remove.push(idx);
-                }
-                if EntID::Wall(wall) == self.state.get_id(*j) {
-                    remove.push(idx);
-                }
-                if *i > ent_i {
-                    *i -= 1;
-                }
-                if *j > ent_i {
-                    *j -= 1;
-                }
-            }
-        }
-        for i in remove.into_iter().rev() {
-            let _ = self.events.collision.remove(i);
-        }
         self.state.walls.remove(ent_i);
     }
 
@@ -409,27 +269,6 @@ impl Game {
                 self.state.get_col_idx(ent_i, CollisionEnt::Ball),
             ));
 
-        let mut remove = Vec::new();
-        // idk what a physics event is, no-op
-        for (idx, (col_event, _)) in self.events.collision.iter_mut().enumerate() {
-            if let ColEvent::ByIndex(i, j) = col_event {
-                if EntID::Ball(ball) == self.state.get_id(*i) {
-                    remove.push(idx);
-                }
-                if EntID::Ball(ball) == self.state.get_id(*j) {
-                    remove.push(idx);
-                }
-                if *i > ent_i {
-                    *i -= 1;
-                }
-                if *j > ent_i {
-                    *j -= 1;
-                }
-            }
-        }
-        for i in remove.into_iter() {
-            let _ = self.events.collision.remove(i);
-        }
         self.state.balls.remove(ent_i);
     }
 
@@ -443,15 +282,6 @@ impl Game {
         let rsrc = RsrcPool::Score(score);
         self.logics.resources.items.remove(&rsrc);
 
-        let mut remove = Vec::new();
-        for (idx, (rsrc_event, _)) in self.events.resources.iter().enumerate() {
-            if RsrcPool::Score(score) == rsrc_event.pool {
-                remove.push(idx);
-            }
-        }
-        for i in remove.into_iter() {
-            let _ = self.events.resources.remove(i);
-        }
         self.state.scores.remove(ent_i);
     }
 }
@@ -525,9 +355,13 @@ fn control(game: &mut Game) {
 
     game.logics.control.update(&());
 
-    for (predicate, reaction) in game.events.control.iter() {
-        if game.logics.control.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, predicate);
+    for PredicateFn {
+        predicate,
+        reaction,
+    } in game.events.control.iter()
+    {
+        for event in game.logics.control.check_predicate(predicate) {
+            reaction(&mut game.state, &mut game.logics, &event);
         }
     }
 }
@@ -537,9 +371,13 @@ fn physics(game: &mut Game) {
 
     game.logics.physics.update();
 
-    for (predicate, reaction) in game.events.physics.iter() {
-        if game.logics.physics.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, predicate);
+    for PredicateFn {
+        predicate,
+        reaction,
+    } in game.events.physics.iter()
+    {
+        for event in game.logics.physics.check_predicate(predicate) {
+            reaction(&mut game.state, &mut game.logics, &event);
         }
     }
 }
@@ -551,9 +389,13 @@ fn collision(game: &mut Game) {
 
     game.logics.collision.update();
 
-    for (predicate, reaction) in game.events.collision.iter() {
-        if game.logics.collision.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, predicate);
+    for PredicateFn {
+        predicate,
+        reaction,
+    } in game.events.collision.iter()
+    {
+        for event in game.logics.collision.check_predicate(predicate) {
+            reaction(&mut game.state, &mut game.logics, &event);
         }
     }
 }
@@ -563,9 +405,13 @@ fn resources(game: &mut Game) {
 
     game.logics.resources.update();
 
-    for (predicate, reaction) in game.events.resources.iter() {
-        if game.logics.resources.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, predicate);
+    for PredicateFn {
+        predicate,
+        reaction,
+    } in game.events.resources.iter()
+    {
+        for event in game.logics.resources.check_predicate(predicate) {
+            reaction(&mut game.state, &mut game.logics, &event);
         }
     }
 }

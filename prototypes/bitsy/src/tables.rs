@@ -61,7 +61,7 @@ use crate::Logics;
 
 pub fn test(logics: &mut Logics) {
     // all contacts between player and character
-    let player_contacts = logics.collision.check_predicate(|contact| -> bool {
+    let player_contacts = query(logics, |contact| -> bool {
         match contact {
             Contact::Ent(i, _) => logics.collision.metadata[*i].id == CollisionEnt::Player,
             Contact::Tile(i, _) => logics.collision.metadata[*i].id == CollisionEnt::Player,
@@ -71,4 +71,8 @@ pub fn test(logics: &mut Logics) {
     for _ in player_contacts {
         println!("player touched a thing");
     }
+}
+
+fn query(logics: &mut Logics, predicate: impl Fn(&Contact) -> bool) -> Vec<Contact> {
+    logics.collision.check_predicate(predicate)
 }
