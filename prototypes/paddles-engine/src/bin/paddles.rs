@@ -68,7 +68,7 @@ fn init(game: &mut Game) {
         HEIGHT as f32 / 2.0 - PADDLE_HEIGHT as f32 / 2.0,
     ));
     paddle1.set_size(Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32));
-    let paddle1 = game.add_paddle(paddle1);
+    game.add_paddle(paddle1);
 
     // paddle 2
     let mut paddle2 = Paddle::new();
@@ -81,48 +81,74 @@ fn init(game: &mut Game) {
     ));
     paddle2.set_size(Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32));
 
-    let paddle2 = game.add_paddle(paddle2);
+    game.add_paddle(paddle2);
 
-    let score1 = game.add_score(Score::new());
-    let score2 = game.add_score(Score::new());
+    game.add_score(Score::new());
+    game.add_score(Score::new());
 
     game.add_ctrl_predicate(
-        Box::new(move |ctrl: &CtrlEvent| -> bool {
-            (ctrl.action_id == action_q || ctrl.action_id == action_o)
-                && ctrl.event_type == ControlEventType::KeyHeld
+        CtrlEvent {
+            set: 1,
+            action_id: action_o,
+            event_type: ControlEventType::KeyHeld,
+        },
+        Box::new(|_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
+            let mut paddle_col = logics.collision.get_synthesis(event.set);
+            paddle_col.center.y -= 1.0;
+            paddle_col.vel.y = (paddle_col.vel.y.abs() - 1.0).max(-1.0);
+            logics.collision.update_synthesis(event.set, paddle_col);
         }),
-        Box::new(
-            |state: &mut State, logics: &mut Logics, event: &CtrlEvent| {
-                let mut paddle_col = logics.collision.get_synthesis(event.set);
-                paddle_col.center.y -= 1.0;
-                paddle_col.vel.y = (paddle_col.vel.y.abs() - 1.0).max(-1.0);
-                logics.collision.update_synthesis(event.set, paddle_col);
-            },
-        ),
     );
 
     game.add_ctrl_predicate(
-        Box::new(move |ctrl: &CtrlEvent| -> bool {
-            (ctrl.action_id == action_a || ctrl.action_id == action_l)
-                && ctrl.event_type == ControlEventType::KeyHeld
+        CtrlEvent {
+            set: 0,
+            action_id: action_q,
+            event_type: ControlEventType::KeyHeld,
+        },
+        Box::new(|_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
+            let mut paddle_col = logics.collision.get_synthesis(event.set);
+            paddle_col.center.y -= 1.0;
+            paddle_col.vel.y = (paddle_col.vel.y.abs() - 1.0).max(-1.0);
+            logics.collision.update_synthesis(event.set, paddle_col);
         }),
-        Box::new(
-            |state: &mut State, logics: &mut Logics, event: &CtrlEvent| {
-                let mut paddle_col = logics.collision.get_synthesis(event.set);
-                paddle_col.center.y += 1.0;
-                paddle_col.vel.y = (paddle_col.vel.y.abs() + 1.0).min(1.0);
-                logics.collision.update_synthesis(event.set, paddle_col);
-            },
-        ),
     );
 
-    let inc_score = |_: &mut State, logics: &mut Logics, event: &ColEvent| {
-        let change_score = match event.1 {
-            0 => 1,
-            1 => 0,
-            _ => {
-                unreachable!()
-            }
+    game.add_ctrl_predicate(
+        CtrlEvent {
+            set: 1,
+            action_id: action_a,
+            event_type: ControlEventType::KeyHeld,
+        },
+        Box::new(|_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
+            let mut paddle_col = logics.collision.get_synthesis(event.set);
+            paddle_col.center.y += 1.0;
+            paddle_col.vel.y = (paddle_col.vel.y.abs() + 1.0).min(1.0);
+            logics.collision.update_synthesis(event.set, paddle_col);
+        }),
+    );
+
+    game.add_ctrl_predicate(
+        CtrlEvent {
+            set: 0,
+            action_id: action_l,
+            event_type: ControlEventType::KeyHeld,
+        },
+        Box::new(|_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
+            let mut paddle_col = logics.collision.get_synthesis(event.set);
+            paddle_col.center.y += 1.0;
+            paddle_col.vel.y = (paddle_col.vel.y.abs() + 1.0).min(1.0);
+            logics.collision.update_synthesis(event.set, paddle_col);
+        }),
+    );
+
+    let inc_score = move |state: &mut State, logics: &mut Logics, event: &AColEvent| {
+        let change_score = if event.1 == state.get_col_idx(left_wall.idx(), CollisionEnt::Wall) {
+            1
+        } else if event.1 == state.get_col_idx(right_wall.idx(), CollisionEnt::Wall) {
+            0
+        } else {
+            unreachable!("{}", event.1)
         };
         logics.resources.handle_predicate(&(
             RsrcPool::Score(ScoreID::new(change_score)),
@@ -131,16 +157,22 @@ fn init(game: &mut Game) {
     };
 
     game.add_collision_predicate(
-        // gives an error about lifetimes. can you curry in rust??????
-        Box::new(|contact: &ColEvent| -> bool {
-            contact.0 == ball.idx()
-                && (contact.1 == game.state.get_col_idx(left_wall.idx(), CollisionEnt::Wall)
-                    || contact.1 == game.state.get_col_idx(right_wall.idx(), CollisionEnt::Wall))
-        }),
+        ColEvent::ByIdx(
+            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
+            game.state.get_col_idx(left_wall.idx(), CollisionEnt::Wall),
+        ),
         Box::new(inc_score),
     );
 
-    let reset_ball = |state: &mut State, logics: &mut Logics, event: &RsrcEvent| {
+    game.add_collision_predicate(
+        ColEvent::ByIdx(
+            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
+            game.state.get_col_idx(right_wall.idx(), CollisionEnt::Wall),
+        ),
+        Box::new(inc_score),
+    );
+
+    let reset_ball = |state: &mut State, logics: &mut Logics, event: &ARsrcEvent| {
         let RsrcPool::Score(score_id) = event.pool;
         logics
             .physics
@@ -166,12 +198,9 @@ fn init(game: &mut Game) {
             ));
     };
 
-    game.add_rsrc_predicate(
-        Box::new(|rsrc: &RsrcEvent| -> bool { rsrc.event_type == ResourceEventType::PoolUpdated }),
-        Box::new(reset_ball),
-    );
+    game.add_rsrc_predicate(RsrcEvent { success: true }, Box::new(reset_ball));
 
-    let bounce_ball = |state: &mut State, logics: &mut Logics, (i, j): &ColEvent| {
+    let bounce_ball = |state: &mut State, logics: &mut Logics, (i, j): &AColEvent| {
         let id = state.get_id(*i);
         if let EntID::Ball(ball_id) = id {
             let sides_touched = logics.collision.sides_touched(*i, *j);
@@ -187,14 +216,28 @@ fn init(game: &mut Game) {
     };
 
     game.add_collision_predicate(
-        Box::new(|(i, j): &ColEvent| -> bool {
-            game.logics.collision.metadata[*i].id == CollisionEnt::Ball
-                && game.logics.collision.metadata[*j].id == CollisionEnt::Wall
-        }),
+        ColEvent::ByIdx(
+            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
+            game.state.get_col_idx(top_wall.idx(), CollisionEnt::Wall),
+        ),
         Box::new(bounce_ball),
     );
 
-    let move_ball = |_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
+    game.add_collision_predicate(
+        ColEvent::ByIdx(
+            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
+            game.state
+                .get_col_idx(bottom_wall.idx(), CollisionEnt::Wall),
+        ),
+        Box::new(bounce_ball),
+    );
+
+    game.add_collision_predicate(
+        ColEvent::ByType(CollisionEnt::Ball, CollisionEnt::Paddle),
+        Box::new(bounce_ball),
+    );
+
+    let serve_ball = |_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
         let vel = match event.set {
             0 => Vec2::new(1.0, 1.0),
             1 => Vec2::new(-1.0, -1.0),
@@ -209,10 +252,20 @@ fn init(game: &mut Game) {
     };
 
     game.add_ctrl_predicate(
-        Box::new(move |ctrl: &CtrlEvent| -> bool {
-            (ctrl.action_id == action_w || ctrl.action_id == action_i)
-                && ctrl.event_type == ControlEventType::KeyPressed
-        }),
-        Box::new(move_ball),
+        CtrlEvent {
+            set: 0,
+            action_id: action_w,
+            event_type: ControlEventType::KeyPressed,
+        },
+        Box::new(serve_ball),
+    );
+
+    game.add_ctrl_predicate(
+        CtrlEvent {
+            set: 1,
+            action_id: action_i,
+            event_type: ControlEventType::KeyPressed,
+        },
+        Box::new(serve_ball),
     );
 }

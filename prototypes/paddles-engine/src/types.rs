@@ -2,7 +2,7 @@ use crate::Logics;
 
 use macroquad::{input::KeyCode, math::Vec2};
 
-/// generates identifier structs (i got tired of typing all of them out). ex: `id_impl_new!([derive(PartialOrd, Ord)] ScoreID)` expands out to
+/// generates identifier structs (i got tired of typing all of them out). example: `id_impl_new!([derive(PartialOrd, Ord)] ScoreID)` expands out to
 ///
 /// ```
 /// #[derive(PartialOrd, Ord)]
@@ -210,8 +210,65 @@ impl Logics {
 
 use asterism::collision::CollisionEvent;
 use asterism::control::ControlEvent;
-use asterism::resources::ResourceEvent;
+
+pub trait PaddlesEvent {
+    type AsterEvent;
+}
 
 pub type CtrlEvent = ControlEvent<ActionID>;
-pub type ColEvent = CollisionEvent;
-pub type RsrcEvent = ResourceEvent<RsrcPool>;
+
+impl PaddlesEvent for CtrlEvent {
+    type AsterEvent = ControlEvent<ActionID>;
+}
+
+pub enum ColEvent {
+    ByType(CollisionEnt, CollisionEnt),
+    ByIdx(usize, usize),
+}
+
+impl PaddlesEvent for ColEvent {
+    type AsterEvent = CollisionEvent;
+}
+
+pub type AColEvent = CollisionEvent;
+
+// replace syntheses with condition tables too?
+//
+// pub struct ColSynth;
+
+// impl PaddlesEvent for ColSynth {
+//     type AsterEvent = (usize, asterism::collision::AabbColData);
+// }
+
+pub struct RsrcSynth {
+    pub pool: Option<RsrcPool>,
+    pub threshold: u16,
+    pub op: std::cmp::Ordering,
+}
+
+impl PaddlesEvent for RsrcSynth {
+    type AsterEvent = (RsrcPool, (u16, u16, u16));
+}
+pub type ARsrcSynth = (RsrcPool, (u16, u16, u16));
+
+pub struct RsrcEvent {
+    pub success: bool,
+}
+
+impl PaddlesEvent for RsrcEvent {
+    type AsterEvent = asterism::resources::ResourceEvent<RsrcPool>;
+}
+pub type ARsrcEvent = asterism::resources::ResourceEvent<RsrcPool>;
+
+pub struct PhysEvent {
+    pub vel_threshold: f32,
+    pub vel_op: std::cmp::Ordering,
+    pub acc_threshold: f32,
+    pub acc_op: std::cmp::Ordering,
+}
+
+impl PaddlesEvent for PhysEvent {
+    type AsterEvent = (usize, asterism::physics::PointPhysData);
+}
+
+pub type APhysEvent = (usize, asterism::physics::PointPhysData);

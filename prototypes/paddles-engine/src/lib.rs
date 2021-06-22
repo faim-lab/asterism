@@ -20,10 +20,7 @@ pub use asterism::control::{Action, ControlEventType, ControlReaction, Values};
 pub use asterism::physics::{PhysicsEvent, PhysicsReaction, PointPhysData};
 pub use asterism::resources::{ResourceEventType, ResourceReaction, Transaction};
 pub use asterism::{Logic, QueryTable};
-pub use types::{
-    ActionID, Ball, BallID, CollisionEnt, Paddle, PaddleID, RsrcPool, Score, ScoreID, Wall, WallID,
-};
-pub use types::{ColEvent, CtrlEvent, RsrcEvent};
+pub use types::*;
 
 pub struct Logics {
     pub collision: AabbCollision<CollisionEnt>,
@@ -107,10 +104,10 @@ impl State {
 }
 
 pub struct Events {
-    pub control: Vec<PredicateFn<CtrlEvent>>,
-    pub collision: Vec<PredicateFn<ColEvent>>,
-    pub resources: Vec<PredicateFn<RsrcEvent>>,
-    pub physics: Vec<PredicateFn<PhysicsEvent>>,
+    pub control: Vec<Predicate<CtrlEvent>>,
+    pub collision: Vec<Predicate<ColEvent>>,
+    pub resources: Vec<Predicate<RsrcEvent>>,
+    pub physics: Vec<Predicate<PhysEvent>>,
 
     paddle_synth: PaddleSynth,
     ball_synth: BallSynth,
@@ -355,11 +352,13 @@ fn control(game: &mut Game) {
 
     game.logics.control.update(&());
 
-    for PredicateFn {
+    for Predicate {
         predicate,
         reaction,
     } in game.events.control.iter()
     {
+        let predicate =
+            Box::new(|event: &<CtrlEvent as PaddlesEvent>::AsterEvent| event == predicate);
         for event in game.logics.control.check_predicate(predicate) {
             reaction(&mut game.state, &mut game.logics, &event);
         }
@@ -371,11 +370,30 @@ fn physics(game: &mut Game) {
 
     game.logics.physics.update();
 
-    for PredicateFn {
+    for Predicate {
         predicate,
         reaction,
     } in game.events.physics.iter()
     {
+        let square = |x| x * x;
+
+        let predicate = Box::new(
+            |(_, ident_data): &<PhysEvent as PaddlesEvent>::AsterEvent| {
+                ident_data
+                    .vel
+                    .length_squared()
+                    .partial_cmp(&square(predicate.vel_threshold))
+                    .unwrap()
+                    == predicate.vel_op
+                    && ident_data
+                        .acc
+                        .length_squared()
+                        .partial_cmp(&square(predicate.acc_threshold))
+                        .unwrap()
+                        == predicate.acc_op
+            },
+        );
+
         for event in game.logics.physics.check_predicate(predicate) {
             reaction(&mut game.state, &mut game.logics, &event);
         }
@@ -389,11 +407,21 @@ fn collision(game: &mut Game) {
 
     game.logics.collision.update();
 
-    for PredicateFn {
+    for Predicate {
         predicate,
         reaction,
     } in game.events.collision.iter()
     {
+        let predicate = Box::new(
+            |(i, j): &<ColEvent as PaddlesEvent>::AsterEvent| match predicate {
+                ColEvent::ByType(ty_i, ty_j) => {
+                    game.logics.collision.metadata[*i].id == *ty_i
+                        && game.logics.collision.metadata[*j].id == *ty_j
+                }
+                ColEvent::ByIdx(ev_i, ev_j) => ev_i == i && ev_j == j,
+            },
+        );
+
         for event in game.logics.collision.check_predicate(predicate) {
             reaction(&mut game.state, &mut game.logics, &event);
         }
@@ -405,11 +433,15 @@ fn resources(game: &mut Game) {
 
     game.logics.resources.update();
 
-    for PredicateFn {
+    for Predicate {
         predicate,
         reaction,
     } in game.events.resources.iter()
     {
+        let predicate = Box::new(|event: &<RsrcEvent as PaddlesEvent>::AsterEvent| {
+            predicate.success == (event.event_type == ResourceEventType::PoolUpdated)
+        });
+
         for event in game.logics.resources.check_predicate(predicate) {
             reaction(&mut game.state, &mut game.logics, &event);
         }

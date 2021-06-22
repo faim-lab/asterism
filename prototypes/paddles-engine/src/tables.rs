@@ -1,18 +1,20 @@
 use crate::types::*;
 use crate::{Game, Logics, State};
 
-pub struct PredicateFn<Event: asterism::Event> {
-    pub predicate: Box<dyn Fn(&Event) -> bool>,
-    pub reaction: Box<dyn Fn(&mut State, &mut Logics, &Event)>,
+pub struct Predicate<Ev: PaddlesEvent> {
+    pub predicate: Ev,
+    pub reaction: Box<dyn Fn(&mut State, &mut Logics, &<Ev as PaddlesEvent>::AsterEvent)>,
 }
 
 impl Game {
     pub fn add_ctrl_predicate(
         &mut self,
-        predicate: Box<dyn Fn(&CtrlEvent) -> bool>,
-        on_key_event: Box<dyn Fn(&mut State, &mut Logics, &CtrlEvent)>,
+        predicate: CtrlEvent,
+        on_key_event: Box<
+            dyn Fn(&mut State, &mut Logics, &<CtrlEvent as PaddlesEvent>::AsterEvent),
+        >,
     ) {
-        self.events.control.push(PredicateFn {
+        self.events.control.push(Predicate {
             predicate,
             reaction: on_key_event,
         });
@@ -20,10 +22,10 @@ impl Game {
 
     pub fn add_collision_predicate(
         &mut self,
-        predicate: Box<dyn Fn(&ColEvent) -> bool>,
-        on_collide: Box<dyn Fn(&mut State, &mut Logics, &ColEvent)>,
+        predicate: ColEvent,
+        on_collide: Box<dyn Fn(&mut State, &mut Logics, &<ColEvent as PaddlesEvent>::AsterEvent)>,
     ) {
-        self.events.collision.push(PredicateFn {
+        self.events.collision.push(Predicate {
             predicate,
             reaction: on_collide,
         });
@@ -31,10 +33,12 @@ impl Game {
 
     pub fn add_rsrc_predicate(
         &mut self,
-        predicate: Box<dyn Fn(&RsrcEvent) -> bool>,
-        on_rsrc_event: Box<dyn Fn(&mut State, &mut Logics, &RsrcEvent)>,
+        predicate: RsrcEvent,
+        on_rsrc_event: Box<
+            dyn Fn(&mut State, &mut Logics, &<RsrcEvent as PaddlesEvent>::AsterEvent),
+        >,
     ) {
-        self.events.resources.push(PredicateFn {
+        self.events.resources.push(Predicate {
             predicate,
             reaction: on_rsrc_event,
         });
