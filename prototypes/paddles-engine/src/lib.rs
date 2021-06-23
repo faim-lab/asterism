@@ -104,11 +104,16 @@ impl State {
 }
 
 pub struct Events {
+    // query tables
     pub control: Vec<Predicate<CtrlEvent>>,
+    // pub control_ident: Vec<Predicate<CtrlIdent>>,
     pub collision: Vec<Predicate<ColEvent>>,
+    // pub collision_ident: Vec<Predicate<ColIdent>>,
     pub resources: Vec<Predicate<RsrcEvent>>,
-    pub physics: Vec<Predicate<PhysEvent>>,
+    pub resource_ident: Vec<Predicate<RsrcIdent>>,
+    pub physics: Vec<Predicate<PhysIdent>>,
 
+    // syntheses
     paddle_synth: PaddleSynth,
     ball_synth: BallSynth,
     wall_synth: WallSynth,
@@ -139,6 +144,7 @@ impl Events {
             control: Vec::new(),
             collision: Vec::new(),
             resources: Vec::new(),
+            resource_ident: Vec::new(),
             physics: Vec::new(),
 
             paddle_synth: PaddleSynth {
@@ -178,6 +184,18 @@ impl Game {
                 .get_col_idx(self.state.paddles.len(), CollisionEnt::Paddle),
             paddle,
         );
+
+        for Predicate { predicate, .. } in self.events.collision.iter_mut() {
+            if let ColEvent::ByIdx(i, j) = predicate {
+                if *i <= id.idx() {
+                    *i += 1;
+                }
+                if *j <= id.idx() {
+                    *j += 1;
+                }
+            }
+        }
+
         self.state.paddle_id_max += 1;
         self.state.paddles.push(id);
         id
@@ -193,6 +211,17 @@ impl Game {
         self.state.ball_id_max += 1;
         self.state.balls.push(id);
 
+        for Predicate { predicate, .. } in self.events.collision.iter_mut() {
+            if let ColEvent::ByIdx(i, j) = predicate {
+                if *i <= id.idx() {
+                    *i += 1;
+                }
+                if *j <= id.idx() {
+                    *j += 1;
+                }
+            }
+        }
+
         id
     }
 
@@ -205,6 +234,17 @@ impl Game {
         );
         self.state.wall_id_max += 1;
         self.state.walls.push(id);
+
+        for Predicate { predicate, .. } in self.events.collision.iter_mut() {
+            if let ColEvent::ByIdx(i, j) = predicate {
+                if *i <= id.idx() {
+                    *i += 1;
+                }
+                if *j <= id.idx() {
+                    *j += 1;
+                }
+            }
+        }
 
         id
     }
@@ -231,6 +271,42 @@ impl Game {
                 self.state.get_col_idx(ent_i, CollisionEnt::Paddle),
             ));
 
+        let mut remove = Vec::new();
+
+        // collision events
+        let col_idx = self.state.get_col_idx(ent_i, CollisionEnt::Paddle);
+
+        for (idx, Predicate { predicate, .. }) in self.events.collision.iter_mut().enumerate() {
+            if let ColEvent::ByIdx(i, j) = predicate {
+                if *i == col_idx || *j == col_idx {
+                    remove.push(idx);
+                }
+                if *i > ent_i {
+                    *i -= 1;
+                }
+                if *j > ent_i {
+                    *j -= 1;
+                }
+            }
+        }
+        for i in remove.iter().rev() {
+            self.events.collision.remove(*i);
+        }
+
+        // control events
+        remove.clear();
+        for (idx, Predicate { predicate, .. }) in self.events.control.iter_mut().enumerate() {
+            if predicate.set == ent_i {
+                remove.push(idx);
+            }
+            if predicate.set > ent_i {
+                predicate.set -= 1;
+            }
+        }
+        for i in remove.into_iter().rev() {
+            self.events.control.remove(i);
+        }
+
         self.state.paddles.remove(ent_i);
     }
 
@@ -246,6 +322,28 @@ impl Game {
             .handle_predicate(&CollisionReaction::RemoveBody(
                 self.state.get_col_idx(ent_i, CollisionEnt::Wall),
             ));
+
+        let mut remove = Vec::new();
+
+        // collision events
+        let col_idx = self.state.get_col_idx(ent_i, CollisionEnt::Wall);
+
+        for (idx, Predicate { predicate, .. }) in self.events.collision.iter_mut().enumerate() {
+            if let ColEvent::ByIdx(i, j) = predicate {
+                if *i == col_idx || *j == col_idx {
+                    remove.push(idx);
+                }
+                if *i > ent_i {
+                    *i -= 1;
+                }
+                if *j > ent_i {
+                    *j -= 1;
+                }
+            }
+        }
+        for i in remove.into_iter().rev() {
+            self.events.collision.remove(i);
+        }
 
         self.state.walls.remove(ent_i);
     }
@@ -266,6 +364,30 @@ impl Game {
                 self.state.get_col_idx(ent_i, CollisionEnt::Ball),
             ));
 
+        let mut remove = Vec::new();
+
+        // collision events
+        let col_idx = self.state.get_col_idx(ent_i, CollisionEnt::Wall);
+
+        for (idx, Predicate { predicate, .. }) in self.events.collision.iter_mut().enumerate() {
+            if let ColEvent::ByIdx(i, j) = predicate {
+                if *i == col_idx || *j == col_idx {
+                    remove.push(idx);
+                }
+                if *i > ent_i {
+                    *i -= 1;
+                }
+                if *j > ent_i {
+                    *j -= 1;
+                }
+            }
+        }
+        for i in remove.into_iter().rev() {
+            self.events.collision.remove(i);
+        }
+
+        // remove physics events, n/a
+
         self.state.balls.remove(ent_i);
     }
 
@@ -284,63 +406,51 @@ impl Game {
 }
 
 pub async fn run(mut game: Game) {
-    use std::time::*;
-    let mut available_time = 0.0;
-    let mut since = Instant::now();
-    const DT: f32 = 1.0 / 60.0;
-
     loop {
         if is_key_down(KeyCode::Escape) {
             break;
         }
         draw(&game);
-        available_time += since.elapsed().as_secs_f32();
-        since = Instant::now();
 
-        // framerate
-        while available_time >= DT {
-            available_time -= DT;
+        let add_queue = std::mem::take(&mut game.state.add_queue);
+        for ent in add_queue {
+            match ent {
+                Ent::Wall(wall) => {
+                    game.add_wall(wall);
+                }
+                Ent::Ball(ball) => {
+                    game.add_ball(ball);
+                }
+                Ent::Paddle(paddle) => {
+                    game.add_paddle(paddle);
+                }
+                Ent::Score(score) => {
+                    game.add_score(score);
+                }
+            };
+        }
 
-            let add_queue = std::mem::take(&mut game.state.add_queue);
-            for ent in add_queue {
-                match ent {
-                    Ent::Wall(wall) => {
-                        game.add_wall(wall);
-                    }
-                    Ent::Ball(ball) => {
-                        game.add_ball(ball);
-                    }
-                    Ent::Paddle(paddle) => {
-                        game.add_paddle(paddle);
-                    }
-                    Ent::Score(score) => {
-                        game.add_score(score);
-                    }
-                };
-            }
+        control(&mut game);
+        physics(&mut game);
+        collision(&mut game);
+        resources(&mut game);
 
-            control(&mut game);
-            physics(&mut game);
-            collision(&mut game);
-            resources(&mut game);
-
-            let remove_queue = std::mem::take(&mut game.state.remove_queue);
-            for ent in remove_queue {
-                match ent {
-                    EntID::Wall(wall) => {
-                        game.remove_wall(wall);
-                    }
-                    EntID::Ball(ball) => {
-                        game.remove_ball(ball);
-                    }
-                    EntID::Paddle(paddle) => {
-                        game.remove_paddle(paddle);
-                    }
-                    EntID::Score(score) => {
-                        game.remove_score(score);
-                    }
-                };
-            }
+        let remove_queue = std::mem::take(&mut game.state.remove_queue);
+        for ent in remove_queue {
+            match ent {
+                EntID::Wall(wall) => {
+                    game.remove_wall(wall);
+                }
+                EntID::Ball(ball) => {
+                    game.remove_ball(ball);
+                }
+                EntID::Paddle(paddle) => {
+                    game.remove_paddle(paddle);
+                }
+                EntID::Score(score) => {
+                    game.remove_score(score);
+                }
+            };
         }
 
         next_frame().await;
@@ -378,7 +488,7 @@ fn physics(game: &mut Game) {
         let square = |x| x * x;
 
         let predicate = Box::new(
-            |(_, ident_data): &<PhysEvent as PaddlesEvent>::AsterEvent| {
+            |(_, ident_data): &<PhysIdent as PaddlesEvent>::AsterEvent| {
                 ident_data
                     .vel
                     .length_squared()
@@ -440,6 +550,25 @@ fn resources(game: &mut Game) {
     {
         let predicate = Box::new(|event: &<RsrcEvent as PaddlesEvent>::AsterEvent| {
             predicate.success == (event.event_type == ResourceEventType::PoolUpdated)
+        });
+
+        for event in game.logics.resources.check_predicate(predicate) {
+            reaction(&mut game.state, &mut game.logics, &event);
+        }
+    }
+
+    for Predicate {
+        predicate,
+        reaction,
+    } in game.events.resource_ident.iter()
+    {
+        let predicate = Box::new(|(id, vals): &<RsrcIdent as PaddlesEvent>::AsterEvent| {
+            vals.0.cmp(&predicate.threshold) == predicate.op
+                && if let Some(pool) = predicate.pool {
+                    pool == *id
+                } else {
+                    true
+                }
         });
 
         for event in game.logics.resources.check_predicate(predicate) {

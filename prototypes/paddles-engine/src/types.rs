@@ -234,22 +234,22 @@ pub type AColEvent = CollisionEvent;
 
 // replace syntheses with condition tables too?
 //
-// pub struct ColSynth;
+// pub struct ColIdent;
 
-// impl PaddlesEvent for ColSynth {
+// impl PaddlesEvent for ColIdent {
 //     type AsterEvent = (usize, asterism::collision::AabbColData);
 // }
 
-pub struct RsrcSynth {
+pub struct RsrcIdent {
     pub pool: Option<RsrcPool>,
     pub threshold: u16,
     pub op: std::cmp::Ordering,
 }
 
-impl PaddlesEvent for RsrcSynth {
+impl PaddlesEvent for RsrcIdent {
     type AsterEvent = (RsrcPool, (u16, u16, u16));
 }
-pub type ARsrcSynth = (RsrcPool, (u16, u16, u16));
+pub type ARsrcIdent = (RsrcPool, (u16, u16, u16));
 
 pub struct RsrcEvent {
     pub success: bool,
@@ -260,15 +260,15 @@ impl PaddlesEvent for RsrcEvent {
 }
 pub type ARsrcEvent = asterism::resources::ResourceEvent<RsrcPool>;
 
-pub struct PhysEvent {
+pub struct PhysIdent {
     pub vel_threshold: f32,
     pub vel_op: std::cmp::Ordering,
     pub acc_threshold: f32,
     pub acc_op: std::cmp::Ordering,
 }
 
-impl PaddlesEvent for PhysEvent {
+impl PaddlesEvent for PhysIdent {
     type AsterEvent = (usize, asterism::physics::PointPhysData);
 }
 
-pub type APhysEvent = (usize, asterism::physics::PointPhysData);
+pub type APhysIdent = (usize, asterism::physics::PointPhysData);

@@ -43,4 +43,17 @@ impl Game {
             reaction: on_rsrc_event,
         });
     }
+
+    pub fn add_rsrc_ident_predicate(
+        &mut self,
+        predicate: RsrcIdent,
+        on_rsrc_event: Box<
+            dyn Fn(&mut State, &mut Logics, &<RsrcIdent as PaddlesEvent>::AsterEvent),
+        >,
+    ) {
+        self.events.resource_ident.push(Predicate {
+            predicate,
+            reaction: on_rsrc_event,
+        });
+    }
 }
