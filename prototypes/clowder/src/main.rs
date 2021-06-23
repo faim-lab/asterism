@@ -1,7 +1,7 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
 use asterism::{
-    animation::SimpleAnim,
+    animation::{SimpleAnim,AnimObject},
     collision::AabbCollision,
     control::{KeyboardControl, MacroQuadKeyboardControl},
     physics::PointPhysics,
@@ -17,7 +17,7 @@ const PADDLE_OFF_Y: u32 = 36;
 const PADDLE_HEIGHT: u32 = 36;
 const PADDLE_WIDTH: u32 = 36;
 const BALL_SIZE: u32 = 36;
-const BALL_NUM: u8 = 4;
+const BALL_NUM: u8 = 5;
 const WALL_DEPTH: u32 = 8;
 const GOAL_WIDTH: u32 = 72;
 //number of distinct ball sprites, number of rows in spritesheet - paddle rows
@@ -200,11 +200,7 @@ struct World {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    println!("start");
     let mut animation = SimpleAnim::new("src/clowder_sprite.png", "src/clowder_sprite.json").await;
-    println!("done");
-    animation.set_frames(10); //arbitrary value that resets frames to create cycle
-
     let mut world = World::new();
     let mut logics = Logics::new();
 
@@ -214,9 +210,14 @@ async fn main() {
                 rand::gen_range(BALL_SIZE as f32, (WIDTH - BALL_SIZE) as f32),
                 rand::gen_range((BALL_SIZE * 2) as f32, (HEIGHT - BALL_SIZE) as f32),
             ),
-            (i % BALL_NUM).into(),
+            i.into(),
         ));
+	animation.objects.push(AnimObject::new(animation.sheet
+							   .get_entity((i % (BALL_NUM -1)) as usize),
+							   world.balls[i as usize].pos));
     }
+    animation.objects.push(AnimObject::new(animation.sheet.get_entity(4),
+						       world.paddles.0));
 
     loop {
         if let Ok(cont) = world.update(&mut logics, &mut animation) {
@@ -258,7 +259,7 @@ impl World {
 
         self.project_collision(&mut logics.collision, &mut logics.control);
         logics.collision.update();
-        self.unproject_collision(&logics.collision);
+        self.unproject_collision(&logics.collision, animation);
 
         if logics.control.values[0][4].value != 0.0 {
             return Ok(false);
@@ -272,8 +273,9 @@ impl World {
                 (CollisionID::Goal(_player), CollisionID::Ball(i))
                 | (CollisionID::Ball(i), CollisionID::Goal(_player)) => {
                     if i <= self.balls.len() {
+			animation.objects[self.balls[i].id].visible_false();
                         self.balls.remove(i);
-
+			
                         logics
                             .resources
                             .transactions
@@ -302,7 +304,7 @@ impl World {
                             self.balls[i].vel.y = sides_touched.x * -1.0;
                         } else if sides_touched.y != 0.0 {
                             self.balls[i].vel.y = sides_touched.y * -1.0;
-                            animation.activate_cycle(self.balls[i].id, 0);
+                            animation.activate_seq(self.balls[i].id, 0);
                         }
                     } else {
                         if sides_touched.y != 0.0 {
@@ -323,22 +325,22 @@ impl World {
                     if (self.balls[i].vel.x, self.balls[i].vel.y) == (0.0, 0.0) {
                         if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
                             self.balls[i].vel = Vec2::new(sides_touched.x, sides_touched.y);
-                            animation.activate_cycle(self.balls[i].id, 0);
+                            animation.activate_seq(self.balls[i].id, 0);
                         }
                     } else if (self.balls[j].vel.x, self.balls[j].vel.y) == (0.0, 0.0) {
                         if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
                             self.balls[j].vel = Vec2::new(sides_touched.x, sides_touched.y);
                         }
-                        animation.activate_cycle(self.balls[j].id, 0);
+                        animation.activate_seq(self.balls[j].id, 0);
                     } else {
                         if sides_touched.x != 0.0 {
-                            self.balls[i].vel.x *= -1.01;
-                            self.balls[j].vel.x *= -1.01;
+                            self.balls[i].vel.x *= -1.0;
+                            self.balls[j].vel.x *= -1.0;
                             
                         }
                         if sides_touched.y != 0.0 {
-                            self.balls[i].vel.y *= -1.01;
-                            self.balls[j].vel.y *= -1.01;
+                            self.balls[i].vel.y *= -1.0;
+                            self.balls[j].vel.y *= -1.0;
                         }
                     }
                 }
@@ -352,7 +354,7 @@ impl World {
                     if (self.balls[i].vel.x, self.balls[i].vel.y) == (0.0, 0.0) {
                         if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
                             self.balls[i].vel = Vec2::new(sides_touched.x, sides_touched.y);
-                            animation.activate_cycle(self.balls[i].id, 0);
+                            animation.activate_seq(self.balls[i].id, 0);
                         }
                     } else {
                         if sides_touched.y != 0.0 {
@@ -413,18 +415,18 @@ impl World {
             || control.values[0][2].value > 0.0
             || control.values[0][3].value > 0.0
         {
-            animation.activate_cycle(4, 0);
+            animation.activate_seq(BALL_NUM as usize, 0);
         }
 
 	//if moving left
 	if control.values[0][0].value > 0.0
 	{
-	    animation.entity_rotate_false(4);
+	     animation.objects[BALL_NUM as usize].flip_x_false();
 	}
 	//if moving right
 	else if control.values[0][1].value > 0.0
 	{
-	    animation.entity_rotate_true(4);
+	    animation.objects[BALL_NUM as usize].flip_x_true();
 	}
 
         self.paddles.0.x = ((self.paddles.0.x - control.values[0][0].value as f32
@@ -458,17 +460,17 @@ impl World {
 	    //not moving
 	    if ball.vel.x == 0.0 && ball.vel.y == 0.0
 	    {
-		animation.deactivate_cycle(ball.id, 0);
+		animation.deactivate_seq(ball.id, 0);
 	    }
 	    //if moving left
 	    if ball.vel.x > 0.0
 	    {
-		animation.entity_rotate_true(ball.id);
+		animation.objects[ball.id].flip_x_true();
 	    }
 	    //moving right
 	    else
 	    {
-		animation.entity_rotate_false(ball.id);
+		animation.objects[ball.id].flip_x_false();
 	    }
         }
     }
@@ -511,11 +513,14 @@ impl World {
         }
     }
 
-    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
+    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>, animation: &mut SimpleAnim) {
         for (i, ball) in self.balls.iter_mut().enumerate() {
             ball.pos.x = (collision.centers[i + 7].x - collision.half_sizes[i + 7].x).trunc();
             ball.pos.y = (collision.centers[i + 7].y - collision.half_sizes[i + 7].y).trunc();
+
+	    animation.objects[ball.id].pos = ball.pos;
         }
+	animation.objects[BALL_NUM as usize].pos = self.paddles.0;
     }
 
     fn change_angle(&mut self, player: Player, ball_index: usize) {
@@ -565,11 +570,7 @@ impl World {
     fn draw(&self, animation: &mut SimpleAnim) {
         clear_background(BASE_COLOR);
 
-        animation.draw_entity(self.paddles.0.x, self.paddles.0.y, 4);
-
-        for ball in self.balls.iter() {
-            animation.draw_entity(ball.pos.x, ball.pos.y, ball.id);
-        }
+        animation.draw();
         //top 1 (left)
         draw_rectangle(
             0.0,
