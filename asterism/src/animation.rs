@@ -242,14 +242,37 @@ impl SimpleAnim {
 	}
     }
     
-    //turns a cycle state to true
-    pub fn activate_seq(&mut self, obj_index: usize, seq_index: usize) {
+    //turns a seq state to true
+    pub fn seq_true(&mut self, obj_index: usize, seq_index: usize) {
         self.objects[obj_index].entity.seqs[seq_index].is_active = true;
     }
 
-    //turns cycle state to false
-    pub fn deactivate_seq(&mut self, obj_index: usize, seq_index: usize) {
+    //turns seq state to false
+    pub fn seq_false(&mut self, obj_index: usize, seq_index: usize) {
        self.objects[obj_index].entity.seqs[seq_index].is_active = false;
+    }
+
+    //turns a seq state to true
+    pub fn activate_seq(&mut self, obj_index: usize, seq_name: &str) {
+	for seq in self.objects[obj_index].entity.seqs.iter_mut()
+	    {
+		if seq.seq_name.eq(seq_name)
+		{
+		    seq.is_active = true;
+		}
+	    }
+    }
+    //turns seq state to false
+    pub fn deactivate_seq(&mut self, obj_index: usize, seq_name: &str) {
+       
+	    for seq in self.objects[obj_index].entity.seqs.iter_mut()
+	    {
+		if seq.seq_name.eq(seq_name)
+		{
+		    seq.is_active = false;
+		}
+	    }
+	
     }
 
     pub fn draw(&mut self) -> ()

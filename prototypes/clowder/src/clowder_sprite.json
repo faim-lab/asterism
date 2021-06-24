@@ -5,8 +5,8 @@
     "default_seq": 0,
     "seqs": [
       {
-        "seq_name": "Calico Running",
-        "frame_rate": 10,
+        "seq_name": "Running",
+        "frame_rate": 12,
         "is_cycle": true,
         "is_active": false,
         "priority": 0,
@@ -50,8 +50,8 @@
     "default_seq": 0,
     "seqs": [
       {
-        "seq_name": "Eli Running",
-        "frame_rate": 10,
+        "seq_name": "Running",
+        "frame_rate": 12,
         "is_cycle": true,
         "is_active": false,
         "priority": 0,
@@ -95,8 +95,8 @@
     "default_seq": 0,
     "seqs": [
       {
-        "seq_name": "Felix Running",
-        "frame_rate": 10,
+        "seq_name": "Running",
+        "frame_rate": 12,
         "is_cycle": true,
         "is_active": false,
         "priority": 0,
@@ -140,8 +140,8 @@
     "default_seq": 0,
     "seqs": [
       {
-        "seq_name": "Rhubarb Running",
-        "frame_rate": 10,
+        "seq_name": "Running",
+        "frame_rate": 12,
         "is_cycle": true,
         "is_active": false,
         "priority": 0,
@@ -185,8 +185,8 @@
     "default_seq": 0,
     "seqs": [
       {
-        "seq_name": "Squirt Puppy Running",
-        "frame_rate": 10,
+        "seq_name": "Running",
+        "frame_rate": 12,
         "is_cycle": true,
         "is_active": false,
         "priority": 0,

@@ -304,7 +304,7 @@ impl World {
                             self.balls[i].vel.y = sides_touched.x * -1.0;
                         } else if sides_touched.y != 0.0 {
                             self.balls[i].vel.y = sides_touched.y * -1.0;
-                            animation.activate_seq(self.balls[i].id, 0);
+                            animation.activate_seq(self.balls[i].id, "Running");
                         }
                     } else {
                         if sides_touched.y != 0.0 {
@@ -325,13 +325,13 @@ impl World {
                     if (self.balls[i].vel.x, self.balls[i].vel.y) == (0.0, 0.0) {
                         if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
                             self.balls[i].vel = Vec2::new(sides_touched.x, sides_touched.y);
-                            animation.activate_seq(self.balls[i].id, 0);
+                            animation.activate_seq(self.balls[i].id, "Running");
                         }
                     } else if (self.balls[j].vel.x, self.balls[j].vel.y) == (0.0, 0.0) {
                         if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
                             self.balls[j].vel = Vec2::new(sides_touched.x, sides_touched.y);
                         }
-                        animation.activate_seq(self.balls[j].id, 0);
+                        animation.activate_seq(self.balls[j].id, "Running");
                     } else {
                         if sides_touched.x != 0.0 {
                             self.balls[i].vel.x *= -1.0;
@@ -354,7 +354,7 @@ impl World {
                     if (self.balls[i].vel.x, self.balls[i].vel.y) == (0.0, 0.0) {
                         if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
                             self.balls[i].vel = Vec2::new(sides_touched.x, sides_touched.y);
-                            animation.activate_seq(self.balls[i].id, 0);
+                            animation.activate_seq(self.balls[i].id, "Running");
                         }
                     } else {
                         if sides_touched.y != 0.0 {
@@ -415,7 +415,7 @@ impl World {
             || control.values[0][2].value > 0.0
             || control.values[0][3].value > 0.0
         {
-            animation.activate_seq(BALL_NUM as usize, 0);
+            animation.activate_seq(BALL_NUM as usize, "Running");
         }
 
 	//if moving left
@@ -460,7 +460,7 @@ impl World {
 	    //not moving
 	    if ball.vel.x == 0.0 && ball.vel.y == 0.0
 	    {
-		animation.deactivate_seq(ball.id, 0);
+		animation.deactivate_seq(ball.id, "Running");
 	    }
 	    //if moving left
 	    if ball.vel.x > 0.0
@@ -518,9 +518,19 @@ impl World {
             ball.pos.x = (collision.centers[i + 7].x - collision.half_sizes[i + 7].x).trunc();
             ball.pos.y = (collision.centers[i + 7].y - collision.half_sizes[i + 7].y).trunc();
 
+	    //sets pivot around center and position
+	    animation.objects[ball.id].set_pivot(Some(Vec2::new(ball.pos.x + (BALL_SIZE / 2) as f32,
+	    ball.pos.y + (BALL_SIZE / 2) as f32)));
 	    animation.objects[ball.id].pos = ball.pos;
+
+	    // animation.objects[ball.id].set_rotation( f32::sqrt(ball.vel.x * ball.vel.x + ball.vel.y * ball.vel.y));
+       
         }
+
+	//sets position and pivot around center
+	animation.objects[BALL_NUM as usize].set_pivot(Some(Vec2::new(self.paddles.0.x + (PADDLE_WIDTH / 2) as f32, self.paddles.0.y + (PADDLE_HEIGHT / 2) as f32)));
 	animation.objects[BALL_NUM as usize].pos = self.paddles.0;
+	
     }
 
     fn change_angle(&mut self, player: Player, ball_index: usize) {
