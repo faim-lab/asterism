@@ -4,7 +4,7 @@
 //!
 //! Linking logics are incredibly broad and have a wide range of uses.
 use crate::graph::StateMachine;
-use crate::{Event, EventType, Logic, QueryTable, Reaction};
+use crate::{tables::QueryTable, Event, EventType, Logic, Reaction};
 
 /// A generic linking logic. See [StateMachine][asterism::graph::StateMachine] documentation for more information.
 ///
@@ -135,11 +135,11 @@ type QueryOver<ID> = (
     <GraphedLinking<ID> as Logic>::IdentData,
 );
 impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for GraphedLinking<ID> {
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID>) -> bool) -> Vec<QueryOver<ID>> {
+    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID>) -> bool) -> Vec<bool> {
         (0..self.graphs.len())
-            .filter_map(|i| {
+            .map(|i| {
                 let query_over = (i, self.get_synthesis(i));
-                predicate(&query_over).then(|| query_over)
+                predicate(&query_over)
             })
             .collect()
     }
@@ -148,7 +148,7 @@ impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for GraphedLinking<ID> {
 type QueryEvent<ID> = <GraphedLinking<ID> as Logic>::Event;
 
 impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for GraphedLinking<ID> {
-    fn check_predicate(&self, predicate: impl Fn(&QueryEvent<ID>) -> bool) -> Vec<QueryEvent<ID>> {
+    fn check_predicate(&self, predicate: impl Fn(&QueryEvent<ID>) -> bool) -> Vec<bool> {
         let mut events = Vec::new();
         for (i, (graph, traversed)) in self
             .graphs
@@ -162,9 +162,7 @@ impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for GraphedLinking<ID> {
                     node: graph.current_node,
                     event_type: LinkingEventType::Traversed,
                 };
-                if predicate(&event) {
-                    events.push(event);
-                }
+                events.push(predicate(&event));
             }
             for (node, activated) in graph.conditions.iter().enumerate() {
                 if *activated && node != graph.current_node {
@@ -173,9 +171,7 @@ impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for GraphedLinking<ID> {
                         node,
                         event_type: LinkingEventType::Activated,
                     };
-                    if predicate(&event) {
-                        events.push(event);
-                    }
+                    events.push(predicate(&event));
                 }
             }
         }

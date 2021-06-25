@@ -9,6 +9,7 @@
 //! Requires at least Rust 1.51---if this doesn't compile, update your rustc.
 
 #![allow(clippy::new_without_default)]
+#![allow(clippy::upper_case_acronyms)]
 pub mod collision;
 pub mod control;
 pub mod entity_state;
@@ -16,6 +17,9 @@ pub mod graph;
 pub mod linking;
 pub mod physics;
 pub mod resources;
+pub mod tables;
+
+pub use tables::QueryTable;
 
 pub trait Logic:
     QueryTable<(<Self as Logic>::Ident, <Self as Logic>::IdentData)>
@@ -46,10 +50,3 @@ pub trait Event {
 pub trait EventType {}
 
 pub trait Reaction {}
-
-/// Builds a query table over each "unit" of a logic.
-///
-/// kind of weird! Couldn't figure out how to get an iterator working. I don't like the reallocations but I don't think it's worse than what I'm doing in the engines with building syntheses every frame.
-pub trait QueryTable<QueryOver> {
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver) -> bool) -> Vec<QueryOver>;
-}

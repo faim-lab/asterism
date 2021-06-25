@@ -2,7 +2,7 @@
 //!
 //! Resource logics communicate that generic or specific resources can be created, destroyed, converted, or transferred between abstract or concrete locations. They create, destroy, and exchange (usually) discrete quantities of generic or specific resources in or between abstract or concrete locations on demand or over time, and trigger other actions when these transactions take place.
 
-use crate::{Event, EventType, Logic, QueryTable, Reaction};
+use crate::{tables::QueryTable, Event, EventType, Logic, Reaction};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign};
@@ -180,15 +180,12 @@ type QueryOver<ID, Value> = (
 impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy>
     QueryTable<QueryOver<ID, Value>> for QueuedResources<ID, Value>
 {
-    fn check_predicate(
-        &self,
-        predicate: impl Fn(&QueryOver<ID, Value>) -> bool,
-    ) -> Vec<QueryOver<ID, Value>> {
+    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID, Value>) -> bool) -> Vec<bool> {
         self.items
             .iter()
-            .filter_map(|(id, values)| {
+            .map(|(id, values)| {
                 let query_over = (*id, *values);
-                predicate(&query_over).then(|| query_over)
+                predicate(&query_over)
             })
             .collect()
     }
@@ -197,13 +194,10 @@ impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy
 impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy>
     QueryTable<ResourceEvent<ID>> for QueuedResources<ID, Value>
 {
-    fn check_predicate(
-        &self,
-        predicate: impl Fn(&ResourceEvent<ID>) -> bool,
-    ) -> Vec<ResourceEvent<ID>> {
+    fn check_predicate(&self, predicate: impl Fn(&ResourceEvent<ID>) -> bool) -> Vec<bool> {
         self.completed
             .iter()
-            .filter_map(|completed| {
+            .map(|completed| {
                 let query_over = match completed {
                     Ok(id) => ResourceEvent {
                         pool: *id,
@@ -214,7 +208,7 @@ impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy
                         event_type: ResourceEventType::TransactionUnsuccessful(*err),
                     },
                 };
-                predicate(&query_over).then(|| query_over)
+                predicate(&query_over)
             })
             .collect()
     }

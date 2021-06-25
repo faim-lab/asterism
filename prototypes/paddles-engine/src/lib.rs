@@ -8,10 +8,10 @@ use asterism::{
 };
 use macroquad::prelude::*;
 
-mod syntheses;
+// mod syntheses;
 mod tables;
 mod types;
-use syntheses::*;
+// use syntheses::*;
 use tables::*;
 
 // reexports
@@ -112,31 +112,30 @@ pub struct Events {
     pub resources: Vec<Predicate<RsrcEvent>>,
     pub resource_ident: Vec<Predicate<RsrcIdent>>,
     pub physics: Vec<Predicate<PhysIdent>>,
-
     // syntheses
-    paddle_synth: PaddleSynth,
-    ball_synth: BallSynth,
-    wall_synth: WallSynth,
-    score_synth: ScoreSynth,
+    // paddle_synth: PaddleSynth,
+    // ball_synth: BallSynth,
+    // wall_synth: WallSynth,
+    // score_synth: ScoreSynth,
 }
 
-struct PaddleSynth {
-    ctrl: Option<Synthesis<Paddle>>,
-    col: Option<Synthesis<Paddle>>,
-}
+// struct PaddleSynth {
+//     ctrl: Option<Synthesis<Paddle>>,
+//     col: Option<Synthesis<Paddle>>,
+// }
 
-struct BallSynth {
-    col: Option<Synthesis<Ball>>,
-    phys: Option<Synthesis<Ball>>,
-}
+// struct BallSynth {
+//     col: Option<Synthesis<Ball>>,
+//     phys: Option<Synthesis<Ball>>,
+// }
 
-struct WallSynth {
-    col: Option<Synthesis<Wall>>,
-}
+// struct WallSynth {
+//     col: Option<Synthesis<Wall>>,
+// }
 
-struct ScoreSynth {
-    rsrc: Option<Synthesis<Score>>,
-}
+// struct ScoreSynth {
+//     rsrc: Option<Synthesis<Score>>,
+// }
 
 impl Events {
     fn new() -> Self {
@@ -146,17 +145,16 @@ impl Events {
             resources: Vec::new(),
             resource_ident: Vec::new(),
             physics: Vec::new(),
-
-            paddle_synth: PaddleSynth {
-                col: None,
-                ctrl: None,
-            },
-            ball_synth: BallSynth {
-                col: Some(Box::new(|ball: Ball| ball)),
-                phys: Some(Box::new(|ball: Ball| ball)),
-            },
-            wall_synth: WallSynth { col: None },
-            score_synth: ScoreSynth { rsrc: None },
+            // paddle_synth: PaddleSynth {
+            //     col: None,
+            //     ctrl: None,
+            // },
+            // ball_synth: BallSynth {
+            //     col: Some(Box::new(|ball: Ball| ball)),
+            //     phys: Some(Box::new(|ball: Ball| ball)),
+            // },
+            // wall_synth: WallSynth { col: None },
+            // score_synth: ScoreSynth { rsrc: None },
         }
     }
 }
@@ -405,7 +403,7 @@ impl Game {
     }
 }
 
-pub async fn run(mut game: Game) {
+/* pub async fn run(mut game: Game) {
     loop {
         if is_key_down(KeyCode::Escape) {
             break;
@@ -575,9 +573,9 @@ fn resources(game: &mut Game) {
             reaction(&mut game.state, &mut game.logics, &event);
         }
     }
-}
+} */
 
-fn draw(game: &Game) {
+pub fn draw(game: &Game) {
     // bad default draw fn
     clear_background(BLUE);
 

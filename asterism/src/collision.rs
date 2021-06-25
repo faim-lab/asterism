@@ -4,7 +4,7 @@
 //!
 //! Note: Collision is hard and may be broken.
 
-use crate::{Event, EventType, Logic, QueryTable, Reaction};
+use crate::{tables::QueryTable, Event, EventType, Logic, Reaction};
 use macroquad::math::Vec2;
 
 /// Information for each contact. If the entities at the indices `i` and `j` are both unfixed or both fixed, then `i < j`. If one is unfixed and the other is fixed, `i` will be the index of the unfixed entity.
@@ -332,23 +332,23 @@ type QueryOver<ID> = (
     <AabbCollision<ID> as Logic>::IdentData,
 );
 impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for AabbCollision<ID> {
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID>) -> bool) -> Vec<QueryOver<ID>> {
+    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID>) -> bool) -> Vec<bool> {
         (0..self.centers.len())
-            .filter_map(|i| {
+            .map(|i| {
                 let query_over = (i, self.get_synthesis(i));
-                predicate(&query_over).then(|| query_over)
+                predicate(&query_over)
             })
             .collect()
     }
 }
 
 impl<ID: Copy + Eq> QueryTable<(usize, usize)> for AabbCollision<ID> {
-    fn check_predicate(&self, predicate: impl Fn(&(usize, usize)) -> bool) -> Vec<(usize, usize)> {
+    fn check_predicate(&self, predicate: impl Fn(&(usize, usize)) -> bool) -> Vec<bool> {
         self.contacts
             .iter()
-            .filter_map(|contact| {
+            .map(|contact| {
                 let contact_event = (contact.i, contact.j);
-                predicate(&contact_event).then(|| contact_event)
+                predicate(&contact_event)
             })
             .collect()
     }

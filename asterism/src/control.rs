@@ -4,7 +4,7 @@
 //!
 //! We're currently trying to consider analog as well as digital inputs, but we haven't implemented controller support, so some of these fields don't really make sense yet.
 
-use crate::{Event, EventType, Logic, QueryTable, Reaction};
+use crate::{tables::QueryTable, Event, EventType, Logic, Reaction};
 
 /// Information for a key/button press.
 trait Input {
@@ -272,14 +272,11 @@ type QueryOver<ID, Wrapper> = (
 impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryOver<ID, Wrapper>>
     for KeyboardControl<ID, Wrapper>
 {
-    fn check_predicate(
-        &self,
-        predicate: impl Fn(&QueryOver<ID, Wrapper>) -> bool,
-    ) -> Vec<QueryOver<ID, Wrapper>> {
+    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID, Wrapper>) -> bool) -> Vec<bool> {
         (0..self.mapping.len())
-            .filter_map(|i| {
+            .map(|i| {
                 let query_over = (i, self.get_synthesis(i));
-                predicate(&query_over).then(|| query_over)
+                predicate(&query_over)
             })
             .collect()
     }
@@ -290,13 +287,13 @@ impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryEvent<ID, Wrapp
     for KeyboardControl<ID, Wrapper>
 {
     // I feel like this should get rid of check_predicate
-    fn check_predicate(
-        &self,
-        predicate: impl Fn(&QueryEvent<ID, Wrapper>) -> bool,
-    ) -> Vec<QueryEvent<ID, Wrapper>> {
-        let mut events = Vec::new();
-        for (i, val_set) in self.values.iter().enumerate() {
-            for (action, values) in val_set.iter().enumerate() {
+    fn check_predicate(&self, predicate: impl Fn(&QueryEvent<ID, Wrapper>) -> bool) -> Vec<bool> {
+        self.mapping
+            .iter()
+            .flatten()
+            .zip(self.values.iter().flatten())
+            .enumerate()
+            .map(|(i, (action, values))| {
                 let event_type = if values.changed_by > 0.0 {
                     ControlEventType::KeyPressed
                 } else if values.changed_by < 0.0 {
@@ -308,15 +305,12 @@ impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryEvent<ID, Wrapp
                 };
                 let event = ControlEvent {
                     set: i,
-                    action_id: self.mapping[i][action].id,
+                    action_id: action.id,
                     event_type,
                 };
-                if predicate(&event) {
-                    events.push(event);
-                }
-            }
-        }
-        events
+                predicate(&event)
+            })
+            .collect()
     }
 }
 
