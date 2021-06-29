@@ -50,3 +50,25 @@ pub trait Event {
 pub trait EventType {}
 
 pub trait Reaction {}
+
+// should put this in a util.rs or something
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub enum Compare {
+    Equal,
+    Greater,
+    GreaterEq,
+    Less,
+    LessEq,
+}
+
+impl Compare {
+    pub fn cmp<V: PartialOrd>(&self, a: V, b: V) -> bool {
+        match self {
+            Compare::Equal => a == b,
+            Compare::Greater => a > b,
+            Compare::GreaterEq => a >= b,
+            Compare::Less => a < b,
+            Compare::LessEq => a <= b,
+        }
+    }
+}

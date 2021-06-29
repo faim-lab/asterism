@@ -3,6 +3,8 @@
 //! A query table asks a question of a table. Our tables in asterism are the identities/syntheses, and the events; ex. for a collision logic the identities could be the positions/sizes/metadata of each collision body, while the events would be contacts.
 //!
 //! A condition table composes those individual queries together.
+use crate::Compare;
+use std::collections::BTreeMap;
 
 /// Builds a query table over each "unit" of a logic.
 ///
@@ -11,36 +13,31 @@ pub trait QueryTable<QueryOver> {
     fn check_predicate(&self, predicate: impl Fn(&QueryOver) -> bool) -> Vec<bool>;
 }
 
-pub struct ConditionTables {
-    query_output: Vec<Vec<bool>>, // scary to have all these loose tables without types
-    conditions: Vec<Condition>,
+pub struct ConditionTables<QueryID: Ord> {
+    query_output: BTreeMap<QueryID, Vec<bool>>, // scary to have all these loose tables without types
+    conditions: Vec<Condition<QueryID>>,
 }
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct QueryID(usize);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ConditionID(usize);
 
-impl ConditionTables {
+impl<QueryID: Ord> ConditionTables<QueryID> {
     pub fn new() -> Self {
         Self {
-            query_output: Vec::new(),
+            query_output: BTreeMap::new(),
             conditions: Vec::new(),
         }
     }
 
-    pub fn add_query(&mut self) -> QueryID {
-        let id = QueryID(self.query_output.len());
-        self.query_output.push(Vec::new());
-        id
+    pub fn add_query(&mut self, id: QueryID) {
+        self.query_output.insert(id, Vec::new());
     }
 
     pub fn update_query(&mut self, id: QueryID, output: Vec<bool>) {
-        self.query_output[id.0] = output;
+        *self.query_output.get_mut(&id).unwrap() = output;
     }
 
-    pub fn add_condition(&mut self, compose: Compose) -> ConditionID {
+    pub fn add_condition(&mut self, compose: Compose<QueryID>) -> ConditionID {
         let id = ConditionID(self.conditions.len());
         self.conditions.push(Condition {
             compose,
@@ -62,10 +59,10 @@ impl ConditionTables {
         &self.conditions[condition.0].output
     }
 
-    fn check(&self, compose: &Compose, output: &[bool]) -> Answer {
+    fn check(&self, compose: &Compose<QueryID>, output: &[bool]) -> Answer {
         match compose {
             Compose::Just(q_id, process) => {
-                let output = self.query_output[q_id.0].clone();
+                let output = self.query_output.get(q_id).unwrap().clone();
 
                 match process {
                     ProcessOutput::ForEach => Answer::Many(output),
@@ -75,10 +72,21 @@ impl ConditionTables {
                     ProcessOutput::IfNone => {
                         Answer::Once(!output.iter().any(|unit| *unit), output.len())
                     }
-                    ProcessOutput::IfLength(len, cmp) => Answer::Once(
-                        output.iter().filter(|unit| **unit).count().cmp(len) == *cmp,
-                        output.len(),
-                    ),
+                    ProcessOutput::IfLength(len, cmp) => {
+                        let count = output.iter().filter(|unit| **unit).count();
+                        let ans = cmp.cmp(count, *len);
+                        Answer::Once(ans, output.len())
+                    }
+                }
+            }
+            Compose::Not(comp) => {
+                let out = self.check(&comp, output);
+                match out {
+                    Answer::Once(ans, len) => Answer::Once(!ans, len),
+                    Answer::Many(out) => {
+                        let out = out.iter().map(|ans| !*ans).collect();
+                        Answer::Many(out)
+                    }
                 }
             }
             Compose::And(comp_1, comp_2) => {
@@ -138,10 +146,11 @@ impl ConditionTables {
 /// bad joke about how this crate is called "ASTerism"
 #[non_exhaustive]
 #[derive(Clone)]
-pub enum Compose {
+pub enum Compose<QueryID> {
     Just(QueryID, ProcessOutput),
-    And(Box<Compose>, Box<Compose>),
-    Or(Box<Compose>, Box<Compose>),
+    And(Box<Compose<QueryID>>, Box<Compose<QueryID>>),
+    Or(Box<Compose<QueryID>>, Box<Compose<QueryID>>),
+    Not(Box<Compose<QueryID>>),
 }
 
 enum Answer {
@@ -156,10 +165,10 @@ pub enum ProcessOutput {
     ForEach,
     IfAny,
     IfNone,
-    IfLength(usize, std::cmp::Ordering),
+    IfLength(usize, Compare),
 }
 
-pub struct Condition {
-    compose: Compose,
+pub struct Condition<QueryID> {
+    compose: Compose<QueryID>,
     output: Vec<bool>,
 }

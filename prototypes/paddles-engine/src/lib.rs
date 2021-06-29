@@ -8,10 +8,10 @@ use asterism::{
 };
 use macroquad::prelude::*;
 
-// mod syntheses;
+mod syntheses;
 mod tables;
 mod types;
-// use syntheses::*;
+use syntheses::*;
 use tables::*;
 
 // reexports
@@ -19,6 +19,7 @@ pub use asterism::collision::{AabbColData, AabbCollision, CollisionReaction};
 pub use asterism::control::{Action, ControlEventType, ControlReaction, Values};
 pub use asterism::physics::{PhysicsEvent, PhysicsReaction, PointPhysData};
 pub use asterism::resources::{ResourceEventType, ResourceReaction, Transaction};
+pub use asterism::Compare;
 pub use asterism::{Logic, QueryTable};
 pub use types::*;
 
@@ -112,30 +113,31 @@ pub struct Events {
     pub resources: Vec<Predicate<RsrcEvent>>,
     pub resource_ident: Vec<Predicate<RsrcIdent>>,
     pub physics: Vec<Predicate<PhysIdent>>,
+
     // syntheses
-    // paddle_synth: PaddleSynth,
-    // ball_synth: BallSynth,
-    // wall_synth: WallSynth,
-    // score_synth: ScoreSynth,
+    paddle_synth: PaddleSynth,
+    ball_synth: BallSynth,
+    wall_synth: WallSynth,
+    score_synth: ScoreSynth,
 }
 
-// struct PaddleSynth {
-//     ctrl: Option<Synthesis<Paddle>>,
-//     col: Option<Synthesis<Paddle>>,
-// }
+struct PaddleSynth {
+    ctrl: Option<Synthesis<Paddle>>,
+    col: Option<Synthesis<Paddle>>,
+}
 
-// struct BallSynth {
-//     col: Option<Synthesis<Ball>>,
-//     phys: Option<Synthesis<Ball>>,
-// }
+struct BallSynth {
+    col: Option<Synthesis<Ball>>,
+    phys: Option<Synthesis<Ball>>,
+}
 
-// struct WallSynth {
-//     col: Option<Synthesis<Wall>>,
-// }
+struct WallSynth {
+    col: Option<Synthesis<Wall>>,
+}
 
-// struct ScoreSynth {
-//     rsrc: Option<Synthesis<Score>>,
-// }
+struct ScoreSynth {
+    rsrc: Option<Synthesis<Score>>,
+}
 
 impl Events {
     fn new() -> Self {
@@ -145,16 +147,16 @@ impl Events {
             resources: Vec::new(),
             resource_ident: Vec::new(),
             physics: Vec::new(),
-            // paddle_synth: PaddleSynth {
-            //     col: None,
-            //     ctrl: None,
-            // },
-            // ball_synth: BallSynth {
-            //     col: Some(Box::new(|ball: Ball| ball)),
-            //     phys: Some(Box::new(|ball: Ball| ball)),
-            // },
-            // wall_synth: WallSynth { col: None },
-            // score_synth: ScoreSynth { rsrc: None },
+            paddle_synth: PaddleSynth {
+                col: None,
+                ctrl: None,
+            },
+            ball_synth: BallSynth {
+                col: Some(Box::new(|ball: Ball| ball)),
+                phys: Some(Box::new(|ball: Ball| ball)),
+            },
+            wall_synth: WallSynth { col: None },
+            score_synth: ScoreSynth { rsrc: None },
         }
     }
 }
@@ -403,7 +405,7 @@ impl Game {
     }
 }
 
-/* pub async fn run(mut game: Game) {
+pub async fn run(mut game: Game) {
     loop {
         if is_key_down(KeyCode::Escape) {
             break;
@@ -465,10 +467,11 @@ fn control(game: &mut Game) {
         reaction,
     } in game.events.control.iter()
     {
-        let predicate =
+        let pred_fn =
             Box::new(|event: &<CtrlEvent as PaddlesEvent>::AsterEvent| event == predicate);
-        for event in game.logics.control.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, &event);
+        let answers = game.logics.control.check_predicate(pred_fn);
+        for _ in answers.iter().filter(|ans| **ans) {
+            reaction(&mut game.state, &mut game.logics, &predicate);
         }
     }
 }
@@ -485,25 +488,27 @@ fn physics(game: &mut Game) {
     {
         let square = |x| x * x;
 
-        let predicate = Box::new(
+        let pred_fn = Box::new(
             |(_, ident_data): &<PhysIdent as PaddlesEvent>::AsterEvent| {
-                ident_data
-                    .vel
-                    .length_squared()
-                    .partial_cmp(&square(predicate.vel_threshold))
-                    .unwrap()
-                    == predicate.vel_op
-                    && ident_data
-                        .acc
-                        .length_squared()
-                        .partial_cmp(&square(predicate.acc_threshold))
-                        .unwrap()
-                        == predicate.acc_op
+                predicate.vel_op.cmp(
+                    ident_data.vel.length_squared(),
+                    square(predicate.vel_threshold),
+                ) && predicate.vel_op.cmp(
+                    ident_data.acc.length_squared(),
+                    square(predicate.acc_threshold),
+                )
             },
         );
 
-        for event in game.logics.physics.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, &event);
+        let answers = game.logics.physics.check_predicate(pred_fn);
+
+        for ident in answers
+            .iter()
+            .enumerate()
+            .filter_map(|(i, ans)| if *ans { Some(i) } else { None })
+        {
+            let ident = (ident, game.logics.physics.get_synthesis(ident));
+            reaction(&mut game.state, &mut game.logics, &ident);
         }
     }
 }
@@ -520,7 +525,7 @@ fn collision(game: &mut Game) {
         reaction,
     } in game.events.collision.iter()
     {
-        let predicate = Box::new(
+        let pred_fn = Box::new(
             |(i, j): &<ColEvent as PaddlesEvent>::AsterEvent| match predicate {
                 ColEvent::ByType(ty_i, ty_j) => {
                     game.logics.collision.metadata[*i].id == *ty_i
@@ -529,9 +534,15 @@ fn collision(game: &mut Game) {
                 ColEvent::ByIdx(ev_i, ev_j) => ev_i == i && ev_j == j,
             },
         );
+        let answers = game.logics.collision.check_predicate(pred_fn);
 
-        for event in game.logics.collision.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, &event);
+        for i in answers
+            .iter()
+            .enumerate()
+            .filter_map(|(i, ans)| if *ans { Some(i) } else { None })
+        {
+            let contact = game.logics.collision.contacts[i];
+            reaction(&mut game.state, &mut game.logics, &(contact.i, contact.j));
         }
     }
 }
@@ -550,7 +561,24 @@ fn resources(game: &mut Game) {
             predicate.success == (event.event_type == ResourceEventType::PoolUpdated)
         });
 
-        for event in game.logics.resources.check_predicate(predicate) {
+        let answers = game.logics.resources.check_predicate(predicate);
+
+        for i in answers
+            .iter()
+            .enumerate()
+            .filter_map(|(i, ans)| if *ans { Some(i) } else { None })
+        {
+            let event = game.logics.resources.completed[i];
+            let event = match event {
+                Ok(pool) => ARsrcEvent {
+                    pool,
+                    event_type: ResourceEventType::PoolUpdated,
+                },
+                Err((pool, err)) => ARsrcEvent {
+                    pool,
+                    event_type: ResourceEventType::TransactionUnsuccessful(err),
+                },
+            };
             reaction(&mut game.state, &mut game.logics, &event);
         }
     }
@@ -561,7 +589,7 @@ fn resources(game: &mut Game) {
     } in game.events.resource_ident.iter()
     {
         let predicate = Box::new(|(id, vals): &<RsrcIdent as PaddlesEvent>::AsterEvent| {
-            vals.0.cmp(&predicate.threshold) == predicate.op
+            predicate.op.cmp(vals.0, predicate.threshold)
                 && if let Some(pool) = predicate.pool {
                     pool == *id
                 } else {
@@ -569,11 +597,18 @@ fn resources(game: &mut Game) {
                 }
         });
 
-        for event in game.logics.resources.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, &event);
+        let answers = game.logics.resources.check_predicate(predicate);
+        let mut items = Vec::new();
+        for (event, item) in answers.into_iter().zip(game.logics.resources.items.iter()) {
+            if event {
+                items.push((*item.0, *item.1));
+            }
+        }
+        for item in items {
+            reaction(&mut game.state, &mut game.logics, &item);
         }
     }
-} */
+}
 
 pub fn draw(game: &Game) {
     // bad default draw fn

@@ -34,6 +34,7 @@ fn init(game: &mut Game) {
         HEIGHT as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
     ));
     ball.set_size(Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32));
+    ball.set_vel(Vec2::new(1.0, 0.0));
     let ball = game.add_ball(ball);
 
     // walls

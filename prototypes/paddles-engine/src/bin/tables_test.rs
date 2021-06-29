@@ -15,6 +15,12 @@ fn window_conf() -> Conf {
     }
 }
 
+#[derive(Ord, PartialEq, PartialOrd, Eq, Clone)]
+pub enum Query {
+    BallWallContact,
+    Score,
+}
+
 #[macroquad::main(window_conf)]
 async fn main() {
     test().await;
@@ -24,11 +30,11 @@ async fn test() {
     let mut game = Game::new();
 
     let mut tables = ConditionTables::new();
-    let ball_wall = tables.add_query();
-    let score_check = tables.add_query();
+    tables.add_query(Query::BallWallContact);
+    tables.add_query(Query::Score);
 
-    let ball_wall_condition = Compose::Just(ball_wall, ProcessOutput::ForEach);
-    let score_check_condition = Compose::Just(score_check, ProcessOutput::IfAny);
+    let ball_wall_condition = Compose::Just(Query::BallWallContact, ProcessOutput::ForEach);
+    let score_check_condition = Compose::Just(Query::Score, ProcessOutput::IfAny);
     let both = Compose::And(
         Box::new(ball_wall_condition.clone()),
         Box::new(score_check_condition.clone()),
@@ -69,7 +75,7 @@ async fn test() {
         game.logics.physics.update_synthesis(0, phys);
 
         tables.update_query(
-            ball_wall,
+            Query::BallWallContact,
             game.logics
                 .collision
                 .check_predicate(|(i, j): &(usize, usize)| {
@@ -97,7 +103,7 @@ async fn test() {
         game.logics.resources.update();
 
         tables.update_query(
-            score_check,
+            Query::Score,
             game.logics
                 .resources
                 .check_predicate(|(_, (val, ..)): &(RsrcPool, (u16, u16, u16))| *val > 5),

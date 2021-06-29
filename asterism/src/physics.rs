@@ -108,17 +108,23 @@ pub enum PhysicsReaction {
 impl Reaction for PhysicsReaction {}
 
 #[derive(PartialEq, Eq, Debug)]
-pub enum PhysicsEvent {}
+pub struct PhysicsEvent {
+    ent: usize,
+    event_type: PhysicsEventType,
+}
 
 impl Event for PhysicsEvent {
     type EventType = PhysicsEventType;
     fn get_type(&self) -> &Self::EventType {
-        // no idea what this should be
-        unimplemented!()
+        &self.event_type
     }
 }
 
-pub enum PhysicsEventType {}
+#[derive(Debug, PartialEq, Eq)]
+pub enum PhysicsEventType {
+    VelChange,
+    PosChange,
+}
 impl EventType for PhysicsEventType {}
 
 type QueryOver = (
@@ -139,8 +145,28 @@ impl QueryTable<QueryOver> for PointPhysics {
 type QueryEvent = <PointPhysics as Logic>::Event;
 
 impl QueryTable<QueryEvent> for PointPhysics {
-    fn check_predicate(&self, _predicate: impl Fn(&QueryEvent) -> bool) -> Vec<bool> {
-        // what's a physics event... couldn't tell you
-        Vec::new()
+    fn check_predicate(&self, predicate: impl Fn(&QueryEvent) -> bool) -> Vec<bool> {
+        let mut events = Vec::new();
+        self.accelerations.iter().enumerate().for_each(|(i, acc)| {
+            // velocity changes if acceleration != 0.0
+            if *acc != Vec2::ZERO {
+                let event = PhysicsEvent {
+                    ent: i,
+                    event_type: PhysicsEventType::VelChange,
+                };
+                events.push(predicate(&event));
+            }
+        });
+        self.velocities.iter().enumerate().for_each(|(i, vel)| {
+            // position changes if velocity != 0.0
+            if *vel != Vec2::ZERO {
+                let event = PhysicsEvent {
+                    ent: i,
+                    event_type: PhysicsEventType::PosChange,
+                };
+                events.push(predicate(&event));
+            }
+        });
+        events
     }
 }

@@ -37,7 +37,7 @@ macro_rules! id_impl_new {
     };
 }
 
-id_impl_new!([] PaddleID, [] WallID, [] BallID, [derive(PartialOrd, Ord, Debug)] ScoreID, [derive(PartialOrd, Ord)] ActionID);
+id_impl_new!([] PaddleID, [] WallID, [] BallID, [derive(PartialOrd, Ord, Debug)] ScoreID, [derive(PartialOrd, Ord, Debug)] ActionID);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CollisionEnt {
@@ -240,10 +240,11 @@ pub type AColEvent = CollisionEvent;
 //     type AsterEvent = (usize, asterism::collision::AabbColData);
 // }
 
+use asterism::Compare;
 pub struct RsrcIdent {
     pub pool: Option<RsrcPool>,
     pub threshold: u16,
-    pub op: std::cmp::Ordering,
+    pub op: Compare,
 }
 
 impl PaddlesEvent for RsrcIdent {
@@ -262,9 +263,9 @@ pub type ARsrcEvent = asterism::resources::ResourceEvent<RsrcPool>;
 
 pub struct PhysIdent {
     pub vel_threshold: f32,
-    pub vel_op: std::cmp::Ordering,
+    pub vel_op: Compare,
     pub acc_threshold: f32,
-    pub acc_op: std::cmp::Ordering,
+    pub acc_op: Compare,
 }
 
 impl PaddlesEvent for PhysIdent {

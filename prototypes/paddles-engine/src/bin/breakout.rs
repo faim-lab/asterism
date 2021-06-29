@@ -184,7 +184,7 @@ fn init(game: &mut Game) {
         RsrcIdent {
             pool: Some(RsrcPool::Score(score)),
             threshold: 40,
-            op: std::cmp::Ordering::Greater,
+            op: Compare::GreaterEq,
         },
         Box::new(move |state, logics, _| reset_game(state, logics)),
     );

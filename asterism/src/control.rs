@@ -286,31 +286,46 @@ type QueryEvent<ID, Wrapper> = <KeyboardControl<ID, Wrapper> as Logic>::Event;
 impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryEvent<ID, Wrapper>>
     for KeyboardControl<ID, Wrapper>
 {
-    // I feel like this should get rid of check_predicate
     fn check_predicate(&self, predicate: impl Fn(&QueryEvent<ID, Wrapper>) -> bool) -> Vec<bool> {
-        self.mapping
-            .iter()
-            .flatten()
-            .zip(self.values.iter().flatten())
-            .enumerate()
-            .map(|(i, (action, values))| {
-                let event_type = if values.changed_by > 0.0 {
-                    ControlEventType::KeyPressed
-                } else if values.changed_by < 0.0 {
-                    ControlEventType::KeyReleased
-                } else if values.value != 0.0 {
-                    ControlEventType::KeyHeld
+        let mut events = Vec::new();
+
+        for (i, (mapping, values)) in self.mapping.iter().zip(self.values.iter()).enumerate() {
+            for (action, value) in mapping.iter().zip(values.iter()) {
+                if value.changed_by > 0.0 {
+                    let event = ControlEvent {
+                        set: i,
+                        action_id: action.id,
+                        event_type: ControlEventType::KeyPressed,
+                    };
+                    events.push(predicate(&event));
+                } else if value.changed_by < 0.0 {
+                    let event = ControlEvent {
+                        set: i,
+                        action_id: action.id,
+                        event_type: ControlEventType::KeyReleased,
+                    };
+                    events.push(predicate(&event));
+                }
+
+                if value.value != 0.0 {
+                    let event = ControlEvent {
+                        set: i,
+                        action_id: action.id,
+                        event_type: ControlEventType::KeyHeld,
+                    };
+                    events.push(predicate(&event));
                 } else {
-                    ControlEventType::KeyUnheld
+                    let event = ControlEvent {
+                        set: i,
+                        action_id: action.id,
+                        event_type: ControlEventType::KeyUnheld,
+                    };
+                    events.push(predicate(&event));
                 };
-                let event = ControlEvent {
-                    set: i,
-                    action_id: action.id,
-                    event_type,
-                };
-                predicate(&event)
-            })
-            .collect()
+            }
+        }
+
+        events
     }
 }
 
