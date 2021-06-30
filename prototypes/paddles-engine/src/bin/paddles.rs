@@ -87,63 +87,52 @@ fn init(game: &mut Game) {
     game.add_score(Score::new());
     game.add_score(Score::new());
 
-    game.add_ctrl_predicate(
-        CtrlEvent {
-            set: 1,
-            action_id: action_o,
-            event_type: ControlEventType::KeyHeld,
-        },
-        Box::new(|_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
-            let mut paddle_col = logics.collision.get_synthesis(event.set);
-            paddle_col.center.y -= 1.0;
-            paddle_col.vel.y = (paddle_col.vel.y.abs() - 1.0).max(-1.0);
-            logics.collision.update_synthesis(event.set, paddle_col);
-        }),
+    let action_q = game.add_ctrl_query(CtrlEvent {
+        set: 0,
+        action_id: action_q,
+        event_type: ControlEventType::KeyHeld,
+    });
+    let action_l = game.add_ctrl_query(CtrlEvent {
+        set: 0,
+        action_id: action_l,
+        event_type: ControlEventType::KeyHeld,
+    });
+
+    let action_o = game.add_ctrl_query(CtrlEvent {
+        set: 1,
+        action_id: action_o,
+        event_type: ControlEventType::KeyHeld,
+    });
+    let action_a = game.add_ctrl_query(CtrlEvent {
+        set: 1,
+        action_id: action_a,
+        event_type: ControlEventType::KeyHeld,
+    });
+
+    let paddle_up = Compose::Or(
+        Box::new(Compose::Just(action_q, ProcessOutput::IfAny)),
+        Box::new(Compose::Just(action_o, ProcessOutput::IfAny)),
     );
 
-    game.add_ctrl_predicate(
-        CtrlEvent {
-            set: 0,
-            action_id: action_q,
-            event_type: ControlEventType::KeyHeld,
-        },
-        Box::new(|_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
-            let mut paddle_col = logics.collision.get_synthesis(event.set);
-            paddle_col.center.y -= 1.0;
-            paddle_col.vel.y = (paddle_col.vel.y.abs() - 1.0).max(-1.0);
-            logics.collision.update_synthesis(event.set, paddle_col);
-        }),
-    );
+    let paddle_up_condition =
+        game.add_compose(paddle_up, Box::new(move |state, logics, compose| {}));
 
-    game.add_ctrl_predicate(
-        CtrlEvent {
-            set: 1,
-            action_id: action_a,
-            event_type: ControlEventType::KeyHeld,
-        },
-        Box::new(|_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
-            let mut paddle_col = logics.collision.get_synthesis(event.set);
-            paddle_col.center.y += 1.0;
-            paddle_col.vel.y = (paddle_col.vel.y.abs() + 1.0).min(1.0);
-            logics.collision.update_synthesis(event.set, paddle_col);
-        }),
-    );
+    // paddle movement
+    // Box::new(|_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
+    //     let mut paddle_col = logics.collision.get_synthesis(event.set);
+    //     paddle_col.center.y -= 1.0;
+    //     paddle_col.vel.y = (paddle_col.vel.y.abs() - 1.0).max(-1.0);
+    //     logics.collision.update_synthesis(event.set, paddle_col);
+    // }),
+    //
+    // Box::new(|_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
+    //     let mut paddle_col = logics.collision.get_synthesis(event.set);
+    //     paddle_col.center.y += 1.0;
+    //     paddle_col.vel.y = (paddle_col.vel.y.abs() + 1.0).min(1.0);
+    //     logics.collision.update_synthesis(event.set, paddle_col);
+    // }),
 
-    game.add_ctrl_predicate(
-        CtrlEvent {
-            set: 0,
-            action_id: action_l,
-            event_type: ControlEventType::KeyHeld,
-        },
-        Box::new(|_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
-            let mut paddle_col = logics.collision.get_synthesis(event.set);
-            paddle_col.center.y += 1.0;
-            paddle_col.vel.y = (paddle_col.vel.y.abs() + 1.0).min(1.0);
-            logics.collision.update_synthesis(event.set, paddle_col);
-        }),
-    );
-
-    let inc_score = move |state: &mut State, logics: &mut Logics, event: &AColEvent| {
+    let _inc_score = move |state: &mut State, logics: &mut Logics, event: &AColEvent| {
         let change_score = if event.1 == state.get_col_idx(left_wall.idx(), CollisionEnt::Wall) {
             1
         } else if event.1 == state.get_col_idx(right_wall.idx(), CollisionEnt::Wall) {
@@ -157,23 +146,17 @@ fn init(game: &mut Game) {
         ));
     };
 
-    game.add_collision_predicate(
-        ColEvent::ByIdx(
-            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
-            game.state.get_col_idx(left_wall.idx(), CollisionEnt::Wall),
-        ),
-        Box::new(inc_score),
-    );
+    game.add_collision_query(ColEvent::ByIdx(
+        game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
+        game.state.get_col_idx(left_wall.idx(), CollisionEnt::Wall),
+    ));
 
-    game.add_collision_predicate(
-        ColEvent::ByIdx(
-            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
-            game.state.get_col_idx(right_wall.idx(), CollisionEnt::Wall),
-        ),
-        Box::new(inc_score),
-    );
+    game.add_collision_query(ColEvent::ByIdx(
+        game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
+        game.state.get_col_idx(right_wall.idx(), CollisionEnt::Wall),
+    ));
 
-    let reset_ball = |state: &mut State, logics: &mut Logics, event: &ARsrcEvent| {
+    let _reset_ball = |state: &mut State, logics: &mut Logics, event: &ARsrcEvent| {
         let RsrcPool::Score(score_id) = event.pool;
         logics
             .physics
@@ -199,9 +182,9 @@ fn init(game: &mut Game) {
             ));
     };
 
-    game.add_rsrc_predicate(RsrcEvent { success: true }, Box::new(reset_ball));
+    game.add_rsrc_query(RsrcEvent { success: true });
 
-    let bounce_ball = |state: &mut State, logics: &mut Logics, (i, j): &AColEvent| {
+    let _bounce_ball = |state: &mut State, logics: &mut Logics, (i, j): &AColEvent| {
         let id = state.get_id(*i);
         if let EntID::Ball(ball_id) = id {
             let sides_touched = logics.collision.sides_touched(*i, *j);
@@ -216,29 +199,20 @@ fn init(game: &mut Game) {
         }
     };
 
-    game.add_collision_predicate(
-        ColEvent::ByIdx(
-            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
-            game.state.get_col_idx(top_wall.idx(), CollisionEnt::Wall),
-        ),
-        Box::new(bounce_ball),
-    );
+    game.add_collision_query(ColEvent::ByIdx(
+        game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
+        game.state.get_col_idx(top_wall.idx(), CollisionEnt::Wall),
+    ));
 
-    game.add_collision_predicate(
-        ColEvent::ByIdx(
-            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
-            game.state
-                .get_col_idx(bottom_wall.idx(), CollisionEnt::Wall),
-        ),
-        Box::new(bounce_ball),
-    );
+    game.add_collision_query(ColEvent::ByIdx(
+        game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
+        game.state
+            .get_col_idx(bottom_wall.idx(), CollisionEnt::Wall),
+    ));
 
-    game.add_collision_predicate(
-        ColEvent::ByType(CollisionEnt::Ball, CollisionEnt::Paddle),
-        Box::new(bounce_ball),
-    );
+    game.add_collision_query(ColEvent::ByType(CollisionEnt::Ball, CollisionEnt::Paddle));
 
-    let serve_ball = |_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
+    let _serve_ball = |_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
         let vel = match event.set {
             0 => Vec2::new(1.0, 1.0),
             1 => Vec2::new(-1.0, -1.0),
@@ -252,21 +226,15 @@ fn init(game: &mut Game) {
             .handle_predicate(&ControlReaction::SetKeyInvalid(event.set, event.action_id));
     };
 
-    game.add_ctrl_predicate(
-        CtrlEvent {
-            set: 0,
-            action_id: action_w,
-            event_type: ControlEventType::KeyPressed,
-        },
-        Box::new(serve_ball),
-    );
+    game.add_ctrl_query(CtrlEvent {
+        set: 0,
+        action_id: action_w,
+        event_type: ControlEventType::KeyPressed,
+    });
 
-    game.add_ctrl_predicate(
-        CtrlEvent {
-            set: 1,
-            action_id: action_i,
-            event_type: ControlEventType::KeyPressed,
-        },
-        Box::new(serve_ball),
-    );
+    game.add_ctrl_query(CtrlEvent {
+        set: 1,
+        action_id: action_i,
+        event_type: ControlEventType::KeyPressed,
+    });
 }

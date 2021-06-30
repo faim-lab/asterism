@@ -15,7 +15,7 @@ fn window_conf() -> Conf {
     }
 }
 
-#[derive(Ord, PartialEq, PartialOrd, Eq, Clone)]
+#[derive(Ord, PartialEq, PartialOrd, Eq, Clone, Copy)]
 pub enum Query {
     BallWallContact,
     Score,

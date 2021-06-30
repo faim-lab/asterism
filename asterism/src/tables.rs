@@ -13,15 +13,15 @@ pub trait QueryTable<QueryOver> {
     fn check_predicate(&self, predicate: impl Fn(&QueryOver) -> bool) -> Vec<bool>;
 }
 
-pub struct ConditionTables<QueryID: Ord> {
+pub struct ConditionTables<QueryID: Ord + Copy> {
     query_output: BTreeMap<QueryID, Vec<bool>>, // scary to have all these loose tables without types
     conditions: Vec<Condition<QueryID>>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ConditionID(usize);
 
-impl<QueryID: Ord> ConditionTables<QueryID> {
+impl<QueryID: Ord + Copy> ConditionTables<QueryID> {
     pub fn new() -> Self {
         Self {
             query_output: BTreeMap::new(),
@@ -47,7 +47,11 @@ impl<QueryID: Ord> ConditionTables<QueryID> {
         id
     }
 
-    pub fn check_condition(&mut self, condition: ConditionID) -> &[bool] {
+    pub fn get_condition(&self, condition: ConditionID) -> &Condition<QueryID> {
+        &self.conditions[condition.0]
+    }
+
+    pub fn check_condition(&mut self, condition: ConditionID) {
         let compose = &self.conditions[condition.0].compose;
         let output = self.conditions[condition.0].output.clone();
         match self.check(compose, &output) {
@@ -56,7 +60,6 @@ impl<QueryID: Ord> ConditionTables<QueryID> {
                 .resize_with(len, || answer),
             Answer::Many(answers) => self.conditions[condition.0].output = answers,
         };
-        &self.conditions[condition.0].output
     }
 
     fn check(&self, compose: &Compose<QueryID>, output: &[bool]) -> Answer {
@@ -146,11 +149,30 @@ impl<QueryID: Ord> ConditionTables<QueryID> {
 /// bad joke about how this crate is called "ASTerism"
 #[non_exhaustive]
 #[derive(Clone)]
-pub enum Compose<QueryID> {
+pub enum Compose<QueryID: Copy> {
     Just(QueryID, ProcessOutput),
     And(Box<Compose<QueryID>>, Box<Compose<QueryID>>),
     Or(Box<Compose<QueryID>>, Box<Compose<QueryID>>),
     Not(Box<Compose<QueryID>>),
+}
+
+impl<QueryID: Copy> Compose<QueryID> {
+    pub fn extract_queries(&self, queries: &mut Vec<QueryID>) {
+        match self {
+            Compose::Just(id, _) => queries.push(*id),
+            Compose::And(comp_1, comp_2) => {
+                comp_1.extract_queries(queries);
+                comp_2.extract_queries(queries);
+            }
+            Compose::Or(comp_1, comp_2) => {
+                comp_1.extract_queries(queries);
+                comp_2.extract_queries(queries);
+            }
+            Compose::Not(comp) => {
+                comp.extract_queries(queries);
+            }
+        }
+    }
 }
 
 enum Answer {
@@ -168,7 +190,7 @@ pub enum ProcessOutput {
     IfLength(usize, Compare),
 }
 
-pub struct Condition<QueryID> {
-    compose: Compose<QueryID>,
-    output: Vec<bool>,
+pub struct Condition<QueryID: Copy> {
+    pub compose: Compose<QueryID>,
+    pub output: Vec<bool>,
 }
