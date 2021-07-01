@@ -60,6 +60,7 @@ impl Game {
         let id = QueryID::new(self.events.queries_max_id);
         self.events.queries_max_id += 1;
         self.events.control.push(Predicate { predicate, id });
+        self.table.add_query(id);
         id
     }
 
@@ -67,6 +68,7 @@ impl Game {
         let id = QueryID::new(self.events.queries_max_id);
         self.events.queries_max_id += 1;
         self.events.collision.push(Predicate { predicate, id });
+        self.table.add_query(id);
         id
     }
 
@@ -74,6 +76,7 @@ impl Game {
         let id = QueryID::new(self.events.queries_max_id);
         self.events.queries_max_id += 1;
         self.events.resources.push(Predicate { predicate, id });
+        self.table.add_query(id);
         id
     }
 
@@ -81,6 +84,7 @@ impl Game {
         let id = QueryID::new(self.events.queries_max_id);
         self.events.queries_max_id += 1;
         self.events.resource_ident.push(Predicate { predicate, id });
+        self.table.add_query(id);
         id
     }
 }

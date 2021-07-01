@@ -18,7 +18,7 @@ pub struct ConditionTables<QueryID: Ord + Copy> {
     conditions: Vec<Condition<QueryID>>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct ConditionID(usize);
 
 impl<QueryID: Ord + Copy> ConditionTables<QueryID> {
@@ -55,9 +55,7 @@ impl<QueryID: Ord + Copy> ConditionTables<QueryID> {
         let compose = &self.conditions[condition.0].compose;
         let output = self.conditions[condition.0].output.clone();
         match self.check(compose, &output) {
-            Answer::Once(answer, len) => self.conditions[condition.0]
-                .output
-                .resize_with(len, || answer),
+            Answer::Once(_, answers) => self.conditions[condition.0].output = answers,
             Answer::Many(answers) => self.conditions[condition.0].output = answers,
         };
     }
@@ -70,15 +68,14 @@ impl<QueryID: Ord + Copy> ConditionTables<QueryID> {
                 match process {
                     ProcessOutput::ForEach => Answer::Many(output),
                     ProcessOutput::IfAny => {
-                        Answer::Once(output.iter().any(|unit| *unit), output.len())
+                        let answer = output.iter().any(|unit| *unit);
+                        Answer::Once(answer, output)
                     }
-                    ProcessOutput::IfNone => {
-                        Answer::Once(!output.iter().any(|unit| *unit), output.len())
-                    }
+                    ProcessOutput::IfNone => Answer::Once(!output.iter().any(|unit| *unit), output),
                     ProcessOutput::IfLength(len, cmp) => {
                         let count = output.iter().filter(|unit| **unit).count();
                         let ans = cmp.cmp(count, *len);
-                        Answer::Once(ans, output.len())
+                        Answer::Once(ans, output)
                     }
                 }
             }
@@ -96,9 +93,10 @@ impl<QueryID: Ord + Copy> ConditionTables<QueryID> {
                 let out_1 = self.check(&comp_1, output);
                 let out_2 = self.check(&comp_2, output);
                 match (out_1, out_2) {
-                    (Answer::Once(a1, len1), Answer::Once(a2, len2)) => {
+                    (Answer::Once(a1, answers_1), Answer::Once(a2, answers_2)) => {
+                        // not sure if this is right
                         let mut compose = Vec::new();
-                        compose.resize_with(len1.max(len2), || a1 && a2);
+                        compose.resize_with(answers_1.len().max(answers_2.len()), || a1 && a2);
                         Answer::Many(compose)
                     }
                     (Answer::Once(a1, _), Answer::Many(mut a2))
@@ -112,6 +110,9 @@ impl<QueryID: Ord + Copy> ConditionTables<QueryID> {
                         for (a1, a2) in a1.iter_mut().zip(a2.iter_mut()) {
                             *a1 = *a1 && *a2;
                         }
+                        if a1.len() < a2.len() {
+                            a1.resize_with(a2.len(), || false);
+                        }
                         Answer::Many(a1)
                     }
                 }
@@ -120,9 +121,9 @@ impl<QueryID: Ord + Copy> ConditionTables<QueryID> {
                 let out_1 = self.check(&comp_1, output);
                 let out_2 = self.check(&comp_2, output);
                 match (out_1, out_2) {
-                    (Answer::Once(a1, len1), Answer::Once(a2, len2)) => {
+                    (Answer::Once(a1, answers_1), Answer::Once(a2, answers_2)) => {
                         let mut compose = Vec::new();
-                        compose.resize_with(len1.max(len2), || a1 || a2);
+                        compose.resize_with(answers_1.len().max(answers_2.len()), || a1 || a2);
                         Answer::Many(compose)
                     }
                     (Answer::Once(a1, _), Answer::Many(mut a2))
@@ -135,6 +136,9 @@ impl<QueryID: Ord + Copy> ConditionTables<QueryID> {
                     (Answer::Many(mut a1), Answer::Many(mut a2)) => {
                         for (a1, a2) in a1.iter_mut().zip(a2.iter_mut()) {
                             *a1 = *a1 || *a2;
+                        }
+                        if a1.len() < a2.len() {
+                            a1.extend_from_slice(&a2[a1.len()..]);
                         }
                         Answer::Many(a1)
                     }
@@ -176,7 +180,7 @@ impl<QueryID: Copy> Compose<QueryID> {
 }
 
 enum Answer {
-    Once(bool, usize), // longest length
+    Once(bool, Vec<bool>),
     Many(Vec<bool>),
 }
 

@@ -295,7 +295,7 @@ fn resources(game: &mut Game) {
         game.table.update_query(*id, answers);
     }
 
-    for condition in game.events.stages.collision.iter() {
+    for condition in game.events.stages.resources.iter() {
         let reaction = game.events.reactions.get(condition).unwrap();
         game.table.check_condition(*condition);
         let Condition { compose, output } = game.table.get_condition(*condition);
