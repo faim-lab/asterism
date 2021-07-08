@@ -40,6 +40,10 @@ pub trait Logic:
 
     /// updates the data of a unit of the logic
     fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData);
+
+    fn map(&self, idents: &[Self::Ident]) -> Vec<Self::IdentData> {
+        idents.iter().map(|i| self.get_synthesis(*i)).collect()
+    }
 }
 
 pub trait Event {

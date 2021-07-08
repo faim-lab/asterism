@@ -135,10 +135,12 @@ type QueryOver<ID> = (
     <GraphedLinking<ID> as Logic>::IdentData,
 );
 impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for GraphedLinking<ID> {
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID>) -> bool) -> Vec<bool> {
+    type ProcessOutput = usize;
+
+    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID>) -> bool) -> Vec<usize> {
         (0..self.graphs.len())
-            .map(|i| {
-                let query_over = (i, self.get_synthesis(i));
+            .filter(|i| {
+                let query_over = (*i, self.get_synthesis(*i));
                 predicate(&query_over)
             })
             .collect()
@@ -148,7 +150,12 @@ impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for GraphedLinking<ID> {
 type QueryEvent<ID> = <GraphedLinking<ID> as Logic>::Event;
 
 impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for GraphedLinking<ID> {
-    fn check_predicate(&self, predicate: impl Fn(&QueryEvent<ID>) -> bool) -> Vec<bool> {
+    type ProcessOutput = LinkingEvent;
+
+    fn check_predicate(
+        &self,
+        predicate: impl Fn(&QueryEvent<ID>) -> bool,
+    ) -> Vec<Self::ProcessOutput> {
         let mut events = Vec::new();
         for (i, (graph, traversed)) in self
             .graphs
@@ -162,7 +169,9 @@ impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for GraphedLinking<ID> {
                     node: graph.current_node,
                     event_type: LinkingEventType::Traversed,
                 };
-                events.push(predicate(&event));
+                if predicate(&event) {
+                    events.push(event);
+                }
             }
             for (node, activated) in graph.conditions.iter().enumerate() {
                 if *activated && node != graph.current_node {
@@ -171,7 +180,9 @@ impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for GraphedLinking<ID> {
                         node,
                         event_type: LinkingEventType::Activated,
                     };
-                    events.push(predicate(&event));
+                    if predicate(&event) {
+                        events.push(event);
+                    }
                 }
             }
         }

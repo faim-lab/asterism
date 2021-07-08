@@ -132,10 +132,12 @@ type QueryOver = (
     <PointPhysics as Logic>::IdentData,
 );
 impl QueryTable<QueryOver> for PointPhysics {
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver) -> bool) -> Vec<bool> {
+    type ProcessOutput = usize;
+
+    fn check_predicate(&self, predicate: impl Fn(&QueryOver) -> bool) -> Vec<Self::ProcessOutput> {
         (0..self.positions.len())
-            .map(|i| {
-                let query_over = (i, self.get_synthesis(i));
+            .filter(|i| {
+                let query_over = (*i, self.get_synthesis(*i));
                 predicate(&query_over)
             })
             .collect()
@@ -145,7 +147,9 @@ impl QueryTable<QueryOver> for PointPhysics {
 type QueryEvent = <PointPhysics as Logic>::Event;
 
 impl QueryTable<QueryEvent> for PointPhysics {
-    fn check_predicate(&self, predicate: impl Fn(&QueryEvent) -> bool) -> Vec<bool> {
+    type ProcessOutput = PhysicsEvent;
+
+    fn check_predicate(&self, predicate: impl Fn(&QueryEvent) -> bool) -> Vec<Self::ProcessOutput> {
         let mut events = Vec::new();
         self.accelerations.iter().enumerate().for_each(|(i, acc)| {
             // velocity changes if acceleration != 0.0
@@ -154,9 +158,12 @@ impl QueryTable<QueryEvent> for PointPhysics {
                     ent: i,
                     event_type: PhysicsEventType::VelChange,
                 };
-                events.push(predicate(&event));
+                if predicate(&event) {
+                    events.push(event);
+                }
             }
         });
+
         self.velocities.iter().enumerate().for_each(|(i, vel)| {
             // position changes if velocity != 0.0
             if *vel != Vec2::ZERO {
@@ -164,7 +171,9 @@ impl QueryTable<QueryEvent> for PointPhysics {
                     ent: i,
                     event_type: PhysicsEventType::PosChange,
                 };
-                events.push(predicate(&event));
+                if predicate(&event) {
+                    events.push(event);
+                }
             }
         });
         events

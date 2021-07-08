@@ -1,9 +1,9 @@
 use crate::types::*;
 use crate::{Logics, Predicate, State, Synthesis};
-use asterism::tables::{Compose, ConditionID};
-use std::collections::BTreeMap;
+use std::any::Any;
+use std::collections::HashMap;
 
-pub type ReactionFn = Box<dyn Fn(&mut State, &mut Logics, &Compose<QueryID>)>;
+pub type ReactionFn = Box<dyn Fn(&mut State, &mut Logics, &dyn Any)>; // use Any for now. unsure how to make it more types-y
 
 pub struct Events {
     pub queries_max_id: usize,
@@ -17,7 +17,7 @@ pub struct Events {
     pub resource_ident: Vec<Predicate<RsrcIdent>>,
     pub physics: Vec<Predicate<PhysIdent>>,
 
-    pub reactions: BTreeMap<ConditionID, ReactionFn>,
+    pub reactions: HashMap<QueryID, ReactionFn>,
     pub stages: Stages,
 
     // syntheses
@@ -28,10 +28,10 @@ pub struct Events {
 }
 
 pub struct Stages {
-    pub control: Vec<ConditionID>,
-    pub collision: Vec<ConditionID>,
-    pub physics: Vec<ConditionID>,
-    pub resources: Vec<ConditionID>,
+    pub control: Vec<QueryID>,
+    pub collision: Vec<QueryID>,
+    pub physics: Vec<QueryID>,
+    pub resources: Vec<QueryID>,
 }
 
 pub struct PaddleSynth {
@@ -61,7 +61,7 @@ impl Events {
             resources: Vec::new(),
             resource_ident: Vec::new(),
             physics: Vec::new(),
-            reactions: BTreeMap::new(),
+            reactions: HashMap::new(),
 
             stages: Stages {
                 control: Vec::new(),

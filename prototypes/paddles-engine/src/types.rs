@@ -37,7 +37,7 @@ macro_rules! id_impl_new {
     };
 }
 
-id_impl_new!([] PaddleID, [] WallID, [] BallID, [derive(PartialOrd, Ord, Debug)] ScoreID, [derive(PartialOrd, Ord, Debug)] ActionID, [derive(PartialOrd, Ord)] QueryID);
+id_impl_new!([] PaddleID, [] WallID, [] BallID, [derive(PartialOrd, Ord, Debug)] ScoreID, [derive(PartialOrd, Ord, Debug)] ActionID, [derive(Hash)] QueryID);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CollisionEnt {

@@ -332,10 +332,15 @@ type QueryOver<ID> = (
     <AabbCollision<ID> as Logic>::IdentData,
 );
 impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for AabbCollision<ID> {
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID>) -> bool) -> Vec<bool> {
+    type ProcessOutput = usize;
+
+    fn check_predicate(
+        &self,
+        predicate: impl Fn(&QueryOver<ID>) -> bool,
+    ) -> Vec<Self::ProcessOutput> {
         (0..self.centers.len())
-            .map(|i| {
-                let query_over = (i, self.get_synthesis(i));
+            .filter(|i| {
+                let query_over = (*i, self.get_synthesis(*i));
                 predicate(&query_over)
             })
             .collect()
@@ -343,12 +348,21 @@ impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for AabbCollision<ID> {
 }
 
 impl<ID: Copy + Eq> QueryTable<(usize, usize)> for AabbCollision<ID> {
-    fn check_predicate(&self, predicate: impl Fn(&(usize, usize)) -> bool) -> Vec<bool> {
+    type ProcessOutput = (usize, usize);
+
+    fn check_predicate(
+        &self,
+        predicate: impl Fn(&(usize, usize)) -> bool,
+    ) -> Vec<Self::ProcessOutput> {
         self.contacts
             .iter()
-            .map(|contact| {
+            .filter_map(|contact| {
                 let contact_event = (contact.i, contact.j);
-                predicate(&contact_event)
+                if predicate(&contact_event) {
+                    Some(contact_event)
+                } else {
+                    None
+                }
             })
             .collect()
     }

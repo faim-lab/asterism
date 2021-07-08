@@ -3,7 +3,6 @@
 //! Control logics communicate that different entities are controlled by different inputs at different times. They map button inputs, AI intentions, network socket messages, etc onto high-level game actions.
 //!
 //! We're currently trying to consider analog as well as digital inputs, but we haven't implemented controller support, so some of these fields don't really make sense yet.
-
 use crate::{tables::QueryTable, Event, EventType, Logic, Reaction};
 
 /// Information for a key/button press.
@@ -272,10 +271,12 @@ type QueryOver<ID, Wrapper> = (
 impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryOver<ID, Wrapper>>
     for KeyboardControl<ID, Wrapper>
 {
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID, Wrapper>) -> bool) -> Vec<bool> {
+    type ProcessOutput = usize;
+
+    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID, Wrapper>) -> bool) -> Vec<usize> {
         (0..self.mapping.len())
-            .map(|i| {
-                let query_over = (i, self.get_synthesis(i));
+            .filter(|i| {
+                let query_over = (*i, self.get_synthesis(*i));
                 predicate(&query_over)
             })
             .collect()
@@ -286,7 +287,11 @@ type QueryEvent<ID, Wrapper> = <KeyboardControl<ID, Wrapper> as Logic>::Event;
 impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryEvent<ID, Wrapper>>
     for KeyboardControl<ID, Wrapper>
 {
-    fn check_predicate(&self, predicate: impl Fn(&QueryEvent<ID, Wrapper>) -> bool) -> Vec<bool> {
+    type ProcessOutput = ControlEvent<ID>;
+    fn check_predicate(
+        &self,
+        predicate: impl Fn(&QueryEvent<ID, Wrapper>) -> bool,
+    ) -> Vec<Self::ProcessOutput> {
         let mut events = Vec::new();
 
         for (i, (mapping, values)) in self.mapping.iter().zip(self.values.iter()).enumerate() {
@@ -297,14 +302,18 @@ impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryEvent<ID, Wrapp
                         action_id: action.id,
                         event_type: ControlEventType::KeyPressed,
                     };
-                    events.push(predicate(&event));
+                    if predicate(&event) {
+                        events.push(event);
+                    }
                 } else if value.changed_by < 0.0 {
                     let event = ControlEvent {
                         set: i,
                         action_id: action.id,
                         event_type: ControlEventType::KeyReleased,
                     };
-                    events.push(predicate(&event));
+                    if predicate(&event) {
+                        events.push(event);
+                    }
                 }
 
                 if value.value != 0.0 {
@@ -313,14 +322,18 @@ impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryEvent<ID, Wrapp
                         action_id: action.id,
                         event_type: ControlEventType::KeyHeld,
                     };
-                    events.push(predicate(&event));
+                    if predicate(&event) {
+                        events.push(event);
+                    }
                 } else {
                     let event = ControlEvent {
                         set: i,
                         action_id: action.id,
                         event_type: ControlEventType::KeyUnheld,
                     };
-                    events.push(predicate(&event));
+                    if predicate(&event) {
+                        events.push(event);
+                    }
                 };
             }
         }

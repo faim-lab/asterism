@@ -138,10 +138,15 @@ type QueryOver<ID> = (
     <FlatEntityState<ID> as Logic>::IdentData,
 );
 impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for FlatEntityState<ID> {
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID>) -> bool) -> Vec<bool> {
+    type ProcessOutput = usize;
+
+    fn check_predicate(
+        &self,
+        predicate: impl Fn(&QueryOver<ID>) -> bool,
+    ) -> Vec<Self::ProcessOutput> {
         (0..self.graphs.len())
-            .map(|i| {
-                let query_over = (i, self.get_synthesis(i));
+            .filter(|i| {
+                let query_over = (*i, self.get_synthesis(*i));
                 predicate(&query_over)
             })
             .collect()
@@ -151,7 +156,12 @@ impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for FlatEntityState<ID> {
 type QueryEvent<ID> = <FlatEntityState<ID> as Logic>::Event;
 
 impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for FlatEntityState<ID> {
-    fn check_predicate(&self, _predicate: impl Fn(&QueryEvent<ID>) -> bool) -> Vec<bool> {
+    type ProcessOutput = usize;
+
+    fn check_predicate(
+        &self,
+        _predicate: impl Fn(&QueryEvent<ID>) -> bool,
+    ) -> Vec<Self::ProcessOutput> {
         todo!()
     }
 }

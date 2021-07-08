@@ -180,12 +180,20 @@ type QueryOver<ID, Value> = (
 impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy>
     QueryTable<QueryOver<ID, Value>> for QueuedResources<ID, Value>
 {
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID, Value>) -> bool) -> Vec<bool> {
+    type ProcessOutput = ID;
+    fn check_predicate(
+        &self,
+        predicate: impl Fn(&QueryOver<ID, Value>) -> bool,
+    ) -> Vec<Self::ProcessOutput> {
         self.items
             .iter()
-            .map(|(id, values)| {
+            .filter_map(|(id, values)| {
                 let query_over = (*id, *values);
-                predicate(&query_over)
+                if predicate(&query_over) {
+                    Some(*id)
+                } else {
+                    None
+                }
             })
             .collect()
     }
@@ -194,10 +202,15 @@ impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy
 impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy>
     QueryTable<ResourceEvent<ID>> for QueuedResources<ID, Value>
 {
-    fn check_predicate(&self, predicate: impl Fn(&ResourceEvent<ID>) -> bool) -> Vec<bool> {
+    type ProcessOutput = ResourceEvent<ID>;
+
+    fn check_predicate(
+        &self,
+        predicate: impl Fn(&ResourceEvent<ID>) -> bool,
+    ) -> Vec<Self::ProcessOutput> {
         self.completed
             .iter()
-            .map(|completed| {
+            .filter_map(|completed| {
                 let query_over = match completed {
                     Ok(id) => ResourceEvent {
                         pool: *id,
@@ -208,7 +221,11 @@ impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy
                         event_type: ResourceEventType::TransactionUnsuccessful(*err),
                     },
                 };
-                predicate(&query_over)
+                if predicate(&query_over) {
+                    Some(query_over)
+                } else {
+                    None
+                }
             })
             .collect()
     }

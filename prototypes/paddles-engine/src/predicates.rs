@@ -10,13 +10,21 @@ pub struct Predicate<Ev: PaddlesEvent> {
 
 impl Game {
     // need to process compose at some point to know where to execute it
-    pub fn add_compose(
+    pub fn add_compose<T: 'static>(
         &mut self,
         compose: Compose<QueryID>,
-        reaction: Box<dyn Fn(&mut State, &mut Logics, &Compose<QueryID>)>,
-    ) -> ConditionID {
-        let mut queries = Vec::new();
-        compose.extract_queries(&mut queries);
+        reaction: Box<dyn Fn(&mut State, &mut Logics, &dyn std::any::Any)>,
+    ) -> QueryID {
+        let id = QueryID::new(self.events.queries_max_id);
+        self.events.queries_max_id += 1;
+        let queries = Vec::with_capacity(2);
+        match compose {
+            Compose::Filter(filter_id) => queries.push(filter_id),
+            Compose::Zip(zip_1, zip_2) => {
+                queries.push(zip_1);
+                queries.push(zip_2);
+            }
+        }
 
         // update logics in this order
         let mut control = false;
@@ -37,30 +45,30 @@ impl Game {
                 .any(|rsrc| rsrc.id == *query);
         }
 
-        let condition = self.table.add_condition(compose);
-
         if rsrc_ident || resources {
-            self.events.stages.resources.push(condition);
+            self.events.stages.resources.push(id);
         } else if collision {
-            self.events.stages.collision.push(condition);
+            self.events.stages.collision.push(id);
         } else if physics {
-            self.events.stages.physics.push(condition);
+            self.events.stages.physics.push(id);
         } else if control {
-            self.events.stages.control.push(condition);
+            self.events.stages.control.push(id);
         } else {
             // the reaction should go into one of the above stages but if not, resources serves as a catch-all at the end of the update loop
-            self.events.stages.resources.push(condition);
+            self.events.stages.resources.push(id);
         }
 
-        self.events.reactions.insert(condition, reaction);
-        condition
+        self.events.reactions.insert(id, reaction);
+        self.table.add_query::<T>(id, Some(compose));
+
+        id
     }
 
     pub fn add_ctrl_query(&mut self, predicate: CtrlEvent) -> QueryID {
         let id = QueryID::new(self.events.queries_max_id);
         self.events.queries_max_id += 1;
         self.events.control.push(Predicate { predicate, id });
-        self.table.add_query(id);
+        self.table.add_query::<CtrlEvent>(id, None);
         id
     }
 
@@ -68,7 +76,7 @@ impl Game {
         let id = QueryID::new(self.events.queries_max_id);
         self.events.queries_max_id += 1;
         self.events.collision.push(Predicate { predicate, id });
-        self.table.add_query(id);
+        self.table.add_query::<(usize, usize)>(id, None);
         id
     }
 
@@ -76,7 +84,7 @@ impl Game {
         let id = QueryID::new(self.events.queries_max_id);
         self.events.queries_max_id += 1;
         self.events.resources.push(Predicate { predicate, id });
-        self.table.add_query(id);
+        self.table.add_query::<ARsrcEvent>(id, None);
         id
     }
 
@@ -84,7 +92,7 @@ impl Game {
         let id = QueryID::new(self.events.queries_max_id);
         self.events.queries_max_id += 1;
         self.events.resource_ident.push(Predicate { predicate, id });
-        self.table.add_query(id);
+        self.table.add_query::<RsrcPool>(id, None);
         id
     }
 }

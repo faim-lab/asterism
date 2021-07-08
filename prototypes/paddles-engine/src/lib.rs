@@ -189,7 +189,7 @@ fn control(game: &mut Game) {
         let pred_fn =
             Box::new(|event: &<CtrlEvent as PaddlesEvent>::AsterEvent| event == predicate);
         game.table
-            .update_query(*id, game.logics.control.check_predicate(pred_fn));
+            .update_single(*id, game.logics.control.check_predicate(pred_fn));
     }
 
     for condition in game.events.stages.control.iter() {
@@ -223,7 +223,7 @@ fn physics(game: &mut Game) {
         );
 
         let answers = game.logics.physics.check_predicate(pred_fn);
-        game.table.update_query(*id, answers);
+        game.table.update_single(*id, answers);
     }
 
     for condition in game.events.stages.physics.iter() {
@@ -254,7 +254,7 @@ fn collision(game: &mut Game) {
             },
         );
         let answers = game.logics.collision.check_predicate(pred_fn);
-        game.table.update_query(*id, answers);
+        game.table.update_single(*id, answers);
     }
 
     for condition in game.events.stages.collision.iter() {
@@ -278,7 +278,7 @@ fn resources(game: &mut Game) {
         });
 
         let answers = game.logics.resources.check_predicate(predicate);
-        game.table.update_query(*id, answers);
+        game.table.update_single(*id, answers);
     }
 
     for Predicate { predicate, id } in game.events.resource_ident.iter() {
@@ -292,15 +292,14 @@ fn resources(game: &mut Game) {
         });
 
         let answers = game.logics.resources.check_predicate(predicate);
-        game.table.update_query(*id, answers);
+        game.table.update_single(*id, answers);
     }
 
-    for condition in game.events.stages.resources.iter() {
+    for id in game.events.stages.resources.iter() {
         let reaction = game.events.reactions.get(condition).unwrap();
-        game.table.check_condition(*condition);
-        let Condition { compose, output } = game.table.get_condition(*condition);
-        for _ in output.iter().filter(|ans| **ans) {
-            reaction(&mut game.state, &mut game.logics, compose);
+        let output = game.table.check_condition(*id);
+        for out in output.iter() {
+            reaction(&mut game.state, &mut game.logics, out as &dyn std::any::Any);
         }
     }
 }
