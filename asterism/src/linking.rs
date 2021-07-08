@@ -13,7 +13,7 @@ pub struct GraphedLinking<NodeID: Copy + Eq> {
     /// A vec of state machines
     pub graphs: Vec<StateMachine<NodeID>>,
     /// If the state machine has just traversed an edge or not
-    pub just_traversed: Vec<bool>,
+    pub just_traversed: Vec<Option<usize>>,
 }
 
 impl<NodeID: Copy + Eq> GraphedLinking<NodeID> {
@@ -28,12 +28,12 @@ impl<NodeID: Copy + Eq> GraphedLinking<NodeID> {
     ///
     /// Check the status of all the links from the current node in the condition table. If any of those links are `true`, i.e. that node can be moved to, move the current position.
     pub fn update(&mut self) {
-        self.just_traversed.fill(false);
+        self.just_traversed.fill(None);
         for (graph, traversed) in self.graphs.iter_mut().zip(self.just_traversed.iter_mut()) {
             for i in graph.get_edges(graph.current_node) {
                 if graph.conditions[i] {
+                    *traversed = Some(graph.current_node);
                     graph.current_node = i;
-                    *traversed = true;
                     break;
                 }
             }
@@ -60,7 +60,7 @@ impl<NodeID: Copy + Eq> GraphedLinking<NodeID> {
             }
         }
         self.graphs.push(graph);
-        self.just_traversed.push(false);
+        self.just_traversed.push(None);
     }
 }
 
@@ -72,7 +72,7 @@ pub struct LinkingEvent {
 
 pub enum LinkingEventType {
     Activated,
-    Traversed,
+    Traversed(usize), // last node (which edge)
 }
 impl EventType for LinkingEventType {}
 
@@ -107,8 +107,8 @@ impl<NodeID: Copy + Eq> Logic for GraphedLinking<NodeID> {
         match reaction {
             LinkingReaction::Activate(graph, node) => self.graphs[*graph].conditions[*node] = true,
             LinkingReaction::Traverse(graph, node) => {
+                self.just_traversed[*graph] = Some(self.graphs[*graph].current_node);
                 self.graphs[*graph].set_current_node(*node);
-                self.just_traversed[*graph] = true;
             }
         }
     }
@@ -130,32 +130,17 @@ impl<NodeID: Copy + Eq> Logic for GraphedLinking<NodeID> {
     }
 }
 
-type QueryOver<ID> = (
-    <GraphedLinking<ID> as Logic>::Ident,
-    <GraphedLinking<ID> as Logic>::IdentData,
-);
-impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for GraphedLinking<ID> {
-    type ProcessOutput = usize;
-
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID>) -> bool) -> Vec<usize> {
-        (0..self.graphs.len())
-            .filter(|i| {
-                let query_over = (*i, self.get_synthesis(*i));
-                predicate(&query_over)
-            })
-            .collect()
+type QueryIdent<ID> = <GraphedLinking<ID> as Logic>::Ident;
+impl<ID: Copy + Eq> QueryTable<QueryIdent<ID>> for GraphedLinking<ID> {
+    fn get_table(&self) -> Vec<usize> {
+        (0..self.graphs.len()).collect()
     }
 }
 
 type QueryEvent<ID> = <GraphedLinking<ID> as Logic>::Event;
 
 impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for GraphedLinking<ID> {
-    type ProcessOutput = LinkingEvent;
-
-    fn check_predicate(
-        &self,
-        predicate: impl Fn(&QueryEvent<ID>) -> bool,
-    ) -> Vec<Self::ProcessOutput> {
+    fn get_table(&self) -> Vec<QueryEvent<ID>> {
         let mut events = Vec::new();
         for (i, (graph, traversed)) in self
             .graphs
@@ -163,15 +148,13 @@ impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for GraphedLinking<ID> {
             .zip(self.just_traversed.iter())
             .enumerate()
         {
-            if *traversed {
+            if let Some(last_node) = traversed {
                 let event = LinkingEvent {
                     graph: i,
                     node: graph.current_node,
-                    event_type: LinkingEventType::Traversed,
+                    event_type: LinkingEventType::Traversed(*last_node),
                 };
-                if predicate(&event) {
-                    events.push(event);
-                }
+                events.push(event);
             }
             for (node, activated) in graph.conditions.iter().enumerate() {
                 if *activated && node != graph.current_node {
@@ -180,9 +163,7 @@ impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for GraphedLinking<ID> {
                         node,
                         event_type: LinkingEventType::Activated,
                     };
-                    if predicate(&event) {
-                        events.push(event);
-                    }
+                    events.push(event);
                 }
             }
         }

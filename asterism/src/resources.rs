@@ -149,7 +149,7 @@ pub enum ResourceError {
 
 pub type ResourceReaction<ID, Value> = (ID, Transaction<Value>);
 
-/// this type should just be a result <__<
+// this type should just be a result <__<
 #[derive(PartialEq, Eq)]
 pub struct ResourceEvent<ID> {
     pub pool: ID,
@@ -173,59 +173,32 @@ impl<ID: Ord> Event for ResourceEvent<ID> {
     }
 }
 
-type QueryOver<ID, Value> = (
-    <QueuedResources<ID, Value> as Logic>::Ident,
-    <QueuedResources<ID, Value> as Logic>::IdentData,
-);
+type QueryIdent<ID, Value> = <QueuedResources<ID, Value> as Logic>::Ident;
 impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy>
-    QueryTable<QueryOver<ID, Value>> for QueuedResources<ID, Value>
+    QueryTable<QueryIdent<ID, Value>> for QueuedResources<ID, Value>
 {
-    type ProcessOutput = ID;
-    fn check_predicate(
-        &self,
-        predicate: impl Fn(&QueryOver<ID, Value>) -> bool,
-    ) -> Vec<Self::ProcessOutput> {
-        self.items
-            .iter()
-            .filter_map(|(id, values)| {
-                let query_over = (*id, *values);
-                if predicate(&query_over) {
-                    Some(*id)
-                } else {
-                    None
-                }
-            })
-            .collect()
+    fn get_table(&self) -> Vec<QueryIdent<ID, Value>> {
+        self.items.keys().cloned().collect()
     }
 }
 
-impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy>
-    QueryTable<ResourceEvent<ID>> for QueuedResources<ID, Value>
+impl<ID, Value> QueryTable<ResourceEvent<ID>> for QueuedResources<ID, Value>
+where
+    ID: Copy + Ord + Debug,
+    Value: Add<Output = Value> + AddAssign + Ord + Copy,
 {
-    type ProcessOutput = ResourceEvent<ID>;
-
-    fn check_predicate(
-        &self,
-        predicate: impl Fn(&ResourceEvent<ID>) -> bool,
-    ) -> Vec<Self::ProcessOutput> {
+    fn get_table(&self) -> Vec<ResourceEvent<ID>> {
         self.completed
             .iter()
-            .filter_map(|completed| {
-                let query_over = match completed {
-                    Ok(id) => ResourceEvent {
-                        pool: *id,
-                        event_type: ResourceEventType::PoolUpdated,
-                    },
-                    Err((id, err)) => ResourceEvent {
-                        pool: *id,
-                        event_type: ResourceEventType::TransactionUnsuccessful(*err),
-                    },
-                };
-                if predicate(&query_over) {
-                    Some(query_over)
-                } else {
-                    None
-                }
+            .map(|completed| match completed {
+                Ok(id) => ResourceEvent {
+                    pool: *id,
+                    event_type: ResourceEventType::PoolUpdated,
+                },
+                Err((id, err)) => ResourceEvent {
+                    pool: *id,
+                    event_type: ResourceEventType::TransactionUnsuccessful(*err),
+                },
             })
             .collect()
     }

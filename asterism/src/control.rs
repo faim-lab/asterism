@@ -264,22 +264,13 @@ pub enum ControlEventType {
 
 impl EventType for ControlEventType {}
 
-type QueryOver<ID, Wrapper> = (
-    <KeyboardControl<ID, Wrapper> as Logic>::Ident,
-    <KeyboardControl<ID, Wrapper> as Logic>::IdentData,
-);
-impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryOver<ID, Wrapper>>
+type QueryIdent<ID, Wrapper> = <KeyboardControl<ID, Wrapper> as Logic>::Ident;
+
+impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryIdent<ID, Wrapper>>
     for KeyboardControl<ID, Wrapper>
 {
-    type ProcessOutput = usize;
-
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver<ID, Wrapper>) -> bool) -> Vec<usize> {
-        (0..self.mapping.len())
-            .filter(|i| {
-                let query_over = (*i, self.get_synthesis(*i));
-                predicate(&query_over)
-            })
-            .collect()
+    fn get_table(&self) -> Vec<usize> {
+        (0..self.mapping.len()).collect()
     }
 }
 
@@ -287,11 +278,7 @@ type QueryEvent<ID, Wrapper> = <KeyboardControl<ID, Wrapper> as Logic>::Event;
 impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryEvent<ID, Wrapper>>
     for KeyboardControl<ID, Wrapper>
 {
-    type ProcessOutput = ControlEvent<ID>;
-    fn check_predicate(
-        &self,
-        predicate: impl Fn(&QueryEvent<ID, Wrapper>) -> bool,
-    ) -> Vec<Self::ProcessOutput> {
+    fn get_table(&self) -> Vec<QueryEvent<ID, Wrapper>> {
         let mut events = Vec::new();
 
         for (i, (mapping, values)) in self.mapping.iter().zip(self.values.iter()).enumerate() {
@@ -302,18 +289,14 @@ impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryEvent<ID, Wrapp
                         action_id: action.id,
                         event_type: ControlEventType::KeyPressed,
                     };
-                    if predicate(&event) {
-                        events.push(event);
-                    }
+                    events.push(event);
                 } else if value.changed_by < 0.0 {
                     let event = ControlEvent {
                         set: i,
                         action_id: action.id,
                         event_type: ControlEventType::KeyReleased,
                     };
-                    if predicate(&event) {
-                        events.push(event);
-                    }
+                    events.push(event);
                 }
 
                 if value.value != 0.0 {
@@ -322,18 +305,14 @@ impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryEvent<ID, Wrapp
                         action_id: action.id,
                         event_type: ControlEventType::KeyHeld,
                     };
-                    if predicate(&event) {
-                        events.push(event);
-                    }
+                    events.push(event);
                 } else {
                     let event = ControlEvent {
                         set: i,
                         action_id: action.id,
                         event_type: ControlEventType::KeyUnheld,
                     };
-                    if predicate(&event) {
-                        events.push(event);
-                    }
+                    events.push(event);
                 };
             }
         }

@@ -127,29 +127,18 @@ pub enum PhysicsEventType {
 }
 impl EventType for PhysicsEventType {}
 
-type QueryOver = (
-    <PointPhysics as Logic>::Ident,
-    <PointPhysics as Logic>::IdentData,
-);
-impl QueryTable<QueryOver> for PointPhysics {
-    type ProcessOutput = usize;
+type QueryIdent = <PointPhysics as Logic>::Ident;
 
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver) -> bool) -> Vec<Self::ProcessOutput> {
-        (0..self.positions.len())
-            .filter(|i| {
-                let query_over = (*i, self.get_synthesis(*i));
-                predicate(&query_over)
-            })
-            .collect()
+impl QueryTable<QueryIdent> for PointPhysics {
+    fn get_table(&self) -> Vec<QueryIdent> {
+        (0..self.positions.len()).collect()
     }
 }
 
 type QueryEvent = <PointPhysics as Logic>::Event;
 
 impl QueryTable<QueryEvent> for PointPhysics {
-    type ProcessOutput = PhysicsEvent;
-
-    fn check_predicate(&self, predicate: impl Fn(&QueryEvent) -> bool) -> Vec<Self::ProcessOutput> {
+    fn get_table(&self) -> Vec<QueryEvent> {
         let mut events = Vec::new();
         self.accelerations.iter().enumerate().for_each(|(i, acc)| {
             // velocity changes if acceleration != 0.0
@@ -158,9 +147,7 @@ impl QueryTable<QueryEvent> for PointPhysics {
                     ent: i,
                     event_type: PhysicsEventType::VelChange,
                 };
-                if predicate(&event) {
-                    events.push(event);
-                }
+                events.push(event);
             }
         });
 
@@ -171,9 +158,7 @@ impl QueryTable<QueryEvent> for PointPhysics {
                     ent: i,
                     event_type: PhysicsEventType::PosChange,
                 };
-                if predicate(&event) {
-                    events.push(event);
-                }
+                events.push(event);
             }
         });
         events

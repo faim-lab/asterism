@@ -327,43 +327,18 @@ pub enum CollisionEventType {
 
 impl EventType for CollisionEventType {}
 
-type QueryOver<ID> = (
-    <AabbCollision<ID> as Logic>::Ident,
-    <AabbCollision<ID> as Logic>::IdentData,
-);
-impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for AabbCollision<ID> {
-    type ProcessOutput = usize;
-
-    fn check_predicate(
-        &self,
-        predicate: impl Fn(&QueryOver<ID>) -> bool,
-    ) -> Vec<Self::ProcessOutput> {
-        (0..self.centers.len())
-            .filter(|i| {
-                let query_over = (*i, self.get_synthesis(*i));
-                predicate(&query_over)
-            })
-            .collect()
+type QueryIdent<ID> = <AabbCollision<ID> as Logic>::Ident;
+impl<ID: Copy + Eq> QueryTable<QueryIdent<ID>> for AabbCollision<ID> {
+    fn get_table(&self) -> Vec<QueryIdent<ID>> {
+        (0..self.centers.len()).collect()
     }
 }
 
 impl<ID: Copy + Eq> QueryTable<(usize, usize)> for AabbCollision<ID> {
-    type ProcessOutput = (usize, usize);
-
-    fn check_predicate(
-        &self,
-        predicate: impl Fn(&(usize, usize)) -> bool,
-    ) -> Vec<Self::ProcessOutput> {
+    fn get_table(&self) -> Vec<(usize, usize)> {
         self.contacts
             .iter()
-            .filter_map(|contact| {
-                let contact_event = (contact.i, contact.j);
-                if predicate(&contact_event) {
-                    Some(contact_event)
-                } else {
-                    None
-                }
-            })
+            .map(|contact| (contact.i, contact.j))
             .collect()
     }
 }
@@ -381,19 +356,18 @@ fn find_displacement(center_i: Vec2, half_size_i: Vec2, center_j: Vec2, half_siz
         half_size_i.x + half_size_j.x - (center_i.x - center_j.x).abs(),
         half_size_i.y + half_size_j.y - (center_i.y - center_j.y).abs(),
     );
+    let side_x = if center_i.x - center_j.x < 0.0 {
+        -1.0
+    } else {
+        1.0
+    };
+    let side_y = if center_i.y - center_j.y < 0.0 {
+        -1.0
+    } else {
+        1.0
+    };
 
-    Vec2::new(
-        if center_i.x - center_j.x < 0.0 {
-            -1.0
-        } else {
-            1.0
-        } * displ_abs.x,
-        if center_i.y - center_j.y < 0.0 {
-            -1.0
-        } else {
-            1.0
-        } * displ_abs.y,
-    )
+    Vec2::new(side_x * displ_abs.x, side_y * displ_abs.y)
 }
 
 /// Calculates the speed ratio of the two entities, i.e. the amount of restitution an entity should be responsible for.

@@ -21,10 +21,7 @@ pub mod tables;
 
 pub use tables::QueryTable;
 
-pub trait Logic:
-    QueryTable<(<Self as Logic>::Ident, <Self as Logic>::IdentData)>
-    + QueryTable<<Self as Logic>::Event>
-{
+pub trait Logic: QueryTable<<Self as Logic>::Ident> + QueryTable<<Self as Logic>::Event> {
     type Event: Event;
     type Reaction: Reaction;
 
@@ -56,7 +53,7 @@ pub trait EventType {}
 pub trait Reaction {}
 
 // should put this in a util.rs or something
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub enum Compare {
     Equal,
     Greater,

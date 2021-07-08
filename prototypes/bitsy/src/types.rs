@@ -1,4 +1,3 @@
-use asterism::control::Values;
 use macroquad::{color::*, input::KeyCode, math::IVec2};
 
 /// generates identifier structs (i got tired of typing all of them out)
@@ -6,7 +5,7 @@ macro_rules! id_impl_new {
     ($([$($derive:meta)*] $id_type:ident),*) => {
         $(
             $(#[$derive])*
-            #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+            #[derive(Clone, Copy, PartialEq, Eq)]
             pub struct $id_type(usize);
 
             impl $id_type {
@@ -22,7 +21,29 @@ macro_rules! id_impl_new {
     };
 }
 
-id_impl_new!([derive(Debug)] TileID, [] CharacterID, [derive(Debug)] RsrcID, [] LinkID);
+id_impl_new!([derive(Debug, Hash, Ord, PartialOrd)] TileID, [derive(Hash, Debug, Ord, PartialOrd)] CharacterID, [derive(Debug, Hash, Ord, PartialOrd)] RsrcID, [derive(Ord, PartialOrd)] LinkID);
+
+#[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
+pub(crate) enum QueryType {
+    ContactOnly,
+    ContactRoom,
+    LinkingEvent,
+    LinkingIdent,
+    TraverseRoom,
+    ControlEvent,
+    ResourceEvent,
+    ResourceIdent,
+    User(UserQueryType),
+}
+
+#[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
+pub enum UserQueryType {
+    ContactCharRoom(EntID, EntID, usize),
+    ContactTileRoom(EntID, TileID, usize),
+    ResourceEvent(RsrcID, bool), // pool, success or not
+    ResourceIdent(RsrcID, u16, asterism::Compare),
+    TraverseRoom(usize, usize), // from, to
+}
 
 pub enum Ent {
     Player(Player),
@@ -30,7 +51,8 @@ pub enum Ent {
     Character(Character),
 }
 
-#[derive(PartialOrd, Ord, PartialEq, Eq)]
+// the stonks meme but it says derive
+#[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum EntID {
     Player,
     Tile(TileID),
@@ -51,7 +73,7 @@ pub struct Player {
     pub amt_moved: IVec2,
     pub color: Color,
     pub inventory: Vec<(RsrcID, Resource)>,
-    pub controls: Vec<(ActionID, KeyCode, bool, Values)>,
+    pub controls: Vec<(ActionID, KeyCode, bool)>,
 }
 
 impl Player {
@@ -62,16 +84,16 @@ impl Player {
             color: WHITE,
             inventory: Vec::new(),
             controls: vec![
-                (ActionID::Up, KeyCode::Up, true, Values::new()),
-                (ActionID::Down, KeyCode::Down, true, Values::new()),
-                (ActionID::Left, KeyCode::Left, true, Values::new()),
-                (ActionID::Right, KeyCode::Right, true, Values::new()),
+                (ActionID::Up, KeyCode::Up, true),
+                (ActionID::Down, KeyCode::Down, true),
+                (ActionID::Left, KeyCode::Left, true),
+                (ActionID::Right, KeyCode::Right, true),
             ],
         }
     }
 
     pub fn set_control_map(&mut self, action: ActionID, keycode: KeyCode, valid: bool) {
-        let (_, keycode_old, valid_old, _) = self
+        let (_, keycode_old, valid_old) = self
             .controls
             .iter_mut()
             .find(|(act_id, ..)| *act_id == action)

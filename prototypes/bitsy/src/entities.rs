@@ -53,25 +53,27 @@ impl Game {
         self.add_collision_predicate(
             Contact::Tile(0, from.1),
             from.0,
-            Box::new(move |_: &mut State, logics: &mut Logics, _: &ColEvent| {
-                let idx = logics.linking.graphs[0]
-                    .nodes
-                    .iter()
-                    .position(|id| *id == link_from)
-                    .unwrap();
-                logics
-                    .linking
-                    .handle_predicate(&LinkingReaction::Traverse(0, idx));
+            Box::new(
+                move |_: &mut State, logics: &mut Logics, (_, room): &(ColEvent, usize)| {
+                    let idx = logics.linking.graphs[0]
+                        .nodes
+                        .iter()
+                        .position(|id| *id == link_from)
+                        .unwrap();
+                    logics
+                        .linking
+                        .handle_predicate(&LinkingReaction::Traverse(0, idx));
 
-                let idx = logics.linking.graphs[0]
-                    .nodes
-                    .iter()
-                    .position(|id| *id == link_to)
-                    .unwrap();
-                logics
-                    .linking
-                    .handle_predicate(&LinkingReaction::Activate(0, idx));
-            }),
+                    let idx = logics.linking.graphs[0]
+                        .nodes
+                        .iter()
+                        .position(|id| id.idx() == *room)
+                        .unwrap();
+                    logics
+                        .linking
+                        .handle_predicate(&LinkingReaction::Activate(0, idx));
+                },
+            ),
         );
 
         self.add_link_predicate(
@@ -108,28 +110,20 @@ impl Game {
                 .iter()
                 .position(|id| *id == to)
                 .unwrap(),
-            event_type: LinkingEventType::Traversed,
+            event_type: LinkingEventType::Traversed(from.idx()),
         };
 
-        self.events.predicates[self
-            .state
-            .links
-            .get(&from)
-            .unwrap_or_else(|| panic!("link {} not found", from.idx()))
-            .0]
-            .linking
-            .push((event, when_traversed));
+        self.events.linking.push((event, when_traversed));
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn add_collision_predicate(
         &mut self,
         col_event: ColEvent,
         room: usize,
-        on_collide: Box<dyn Fn(&mut State, &mut Logics, &ColEvent)>,
+        on_collide: Box<dyn Fn(&mut State, &mut Logics, &(ColEvent, usize))>,
     ) {
-        self.events.predicates[room]
-            .collision
-            .push((col_event, on_collide));
+        self.events.collision.push(((col_event, room), on_collide));
     }
 
     pub fn add_rsrc_predicate(
@@ -142,7 +136,7 @@ impl Game {
             pool,
             event_type: rsrc_event,
         };
-        self.events.resources.push((rsrc_event, on_rsrc_event));
+        self.events.resource_event.push((rsrc_event, on_rsrc_event));
     }
 
     pub fn set_background(&mut self, color: Color) {
@@ -154,16 +148,14 @@ impl Game {
         self.logics.consume_player(player, !self.state.player);
 
         if !self.state.player {
-            for room in self.events.predicates.iter_mut() {
-                for (col_event, _) in room.collision.iter_mut() {
-                    match col_event {
-                        ColEvent::Ent(i, j) => {
-                            *i += 1;
-                            *j += 1;
-                        }
-                        ColEvent::Tile(i, _) => {
-                            *i += 1;
-                        }
+            for ((col_event, _), _) in self.events.collision.iter_mut() {
+                match col_event {
+                    ColEvent::Ent(i, j) => {
+                        *i += 1;
+                        *j += 1;
+                    }
+                    ColEvent::Tile(i, _) => {
+                        *i += 1;
                     }
                 }
             }
@@ -180,21 +172,19 @@ impl Game {
 
         self.logics.consume_character(character);
 
-        for room in self.events.predicates.iter_mut() {
-            for (col_event, _) in room.collision.iter_mut() {
-                match col_event {
-                    ColEvent::Ent(i, j) => {
-                        if *i <= id.idx() {
-                            *i += 1;
-                        }
-                        if *j <= id.idx() {
-                            *j += 1;
-                        }
+        for ((col_event, _), _) in self.events.collision.iter_mut() {
+            match col_event {
+                ColEvent::Ent(i, j) => {
+                    if *i <= id.idx() {
+                        *i += 1;
                     }
-                    ColEvent::Tile(i, _) => {
-                        if *i <= id.idx() {
-                            *i += 1;
-                        }
+                    if *j <= id.idx() {
+                        *j += 1;
+                    }
+                }
+                ColEvent::Tile(i, _) => {
+                    if *i <= id.idx() {
+                        *i += 1;
                     }
                 }
             }
@@ -214,7 +204,6 @@ impl Game {
 
     pub fn set_num_rooms(&mut self, rooms: usize) {
         self.state.rooms.resize_with(rooms, Room::default);
-        self.events.predicates.resize_with(rooms, Predicates::new);
     }
 
     /// Loads a tilemap with maximum 10 different kinds of tiles (numbers 0-9). A space (' ') marks a place on the map without any tiles. The tile types are read from in the parameter `tiles`.
@@ -238,7 +227,6 @@ impl Game {
     pub fn add_room_from_str(&mut self, map: &str) -> Result<usize, String> {
         let room = self.state.rooms.len();
         self.state.rooms.push(Room::default());
-        self.events.predicates.push(Predicates::new());
 
         let map = map.trim();
 
@@ -294,37 +282,35 @@ impl Game {
             .handle_predicate(&CollisionReaction::RemoveEnt(0));
 
         let mut remove = Vec::new();
-        for room in self.events.predicates.iter_mut() {
-            remove.clear();
-            for (idx, (col_event, _)) in room.collision.iter_mut().enumerate() {
-                match col_event {
-                    ColEvent::Ent(i, j) => {
-                        if *i == 0 {
-                            remove.push(idx);
-                        }
-                        if *j == 0 {
-                            remove.push(idx);
-                        }
-                        if *i > 0 {
-                            *i -= 1;
-                        }
-                        if *j > 0 {
-                            *j -= 1;
-                        }
+        for (idx, ((col_event, _), _)) in self.events.collision.iter_mut().enumerate() {
+            match col_event {
+                ColEvent::Ent(i, j) => {
+                    if *i == 0 {
+                        remove.push(idx);
                     }
-                    ColEvent::Tile(i, _) => {
-                        if *i == 0 {
-                            remove.push(idx);
-                        }
-                        if *i > 0 {
-                            *i -= 1;
-                        }
+                    if *j == 0 {
+                        remove.push(idx);
+                    }
+                    if *i > 0 {
+                        *i -= 1;
+                    }
+                    if *j > 0 {
+                        *j -= 1;
+                    }
+                }
+                ColEvent::Tile(i, _) => {
+                    if *i == 0 {
+                        remove.push(idx);
+                    }
+                    if *i > 0 {
+                        *i -= 1;
                     }
                 }
             }
-            for i in remove.iter().rev() {
-                let _ = room.collision.remove(*i);
-            }
+        }
+
+        for i in remove.iter().rev() {
+            let _ = self.events.collision.remove(*i);
         }
         self.state.player = false;
     }
@@ -336,16 +322,20 @@ impl Game {
             .iter()
             .position(|cid| *cid == character)
             .unwrap();
+        // this assumes
         self.logics
             .collision
             .handle_predicate(&CollisionReaction::RemoveEnt(
                 self.state.get_col_idx(ent_i, CollisionEnt::Character),
             ));
 
+        let current_node = self.logics.linking.graphs[0].current_node;
+        let node = self.logics.linking.graphs[0].nodes[current_node];
+        let current_room = self.state.links.get(&node).unwrap().0;
+
         let mut remove = Vec::new();
-        for room in self.events.predicates.iter_mut() {
-            remove.clear();
-            for (idx, (col_event, _)) in room.collision.iter_mut().enumerate() {
+        for (idx, ((col_event, room), _)) in self.events.collision.iter_mut().enumerate() {
+            if *room == current_room {
                 match col_event {
                     ColEvent::Ent(i, j) => {
                         if *i != 0 && *i - 1 == ent_i {
@@ -371,9 +361,9 @@ impl Game {
                     }
                 }
             }
-            for i in remove.iter().rev() {
-                let _ = room.collision.remove(*i);
-            }
+        }
+        for i in remove.iter().rev() {
+            let _ = self.events.collision.remove(*i);
         }
         self.state.characters.remove(ent_i);
     }
@@ -381,7 +371,6 @@ impl Game {
     // unsure if this is needed atm
     pub fn remove_tile_at_pos(&mut self, room: usize, pos: IVec2) {
         self.state.rooms[room].map[pos.y as usize][pos.x as usize] = None;
-        // is current_room supposed to be represented through a linking logic?
         let current_node = self.logics.linking.graphs[0].current_node;
         let node = self.logics.linking.graphs[0].nodes[current_node];
         let current_room = self.state.links.get(&node).unwrap().0;
@@ -393,18 +382,17 @@ impl Game {
         }
 
         let mut remove = Vec::new();
-        for room in self.events.predicates.iter_mut() {
-            remove.clear();
-            for (idx, (col_event, _)) in room.collision.iter_mut().enumerate() {
+        for (idx, ((col_event, event_room), _)) in self.events.collision.iter_mut().enumerate() {
+            if *event_room == room {
                 if let ColEvent::Tile(_, ev_pos) = col_event {
                     if pos == *ev_pos {
                         remove.push(idx);
                     }
                 }
             }
-            for i in remove.iter() {
-                let _ = room.collision.remove(*i);
-            }
+        }
+        for i in remove.iter() {
+            let _ = self.events.collision.remove(*i);
         }
     }
 
@@ -418,13 +406,13 @@ impl Game {
         self.logics.resources.items.remove(&rsrc);
 
         let mut remove = Vec::new();
-        for (idx, (rsrc_event, _)) in self.events.resources.iter().enumerate() {
+        for (idx, (rsrc_event, _)) in self.events.resource_event.iter().enumerate() {
             if rsrc == rsrc_event.pool {
                 remove.push(idx);
             }
         }
         for i in remove.into_iter() {
-            let _ = self.events.resources.remove(i);
+            let _ = self.events.resource_event.remove(i);
         }
         self.state.resources.remove(ent_i);
     }
@@ -449,7 +437,7 @@ impl Logics {
             self.control.values[0].clear();
         }
 
-        for (act_id, keycode, valid, _) in player.controls {
+        for (act_id, keycode, valid) in player.controls {
             self.control.add_key_map(0, keycode, act_id, valid);
         }
 

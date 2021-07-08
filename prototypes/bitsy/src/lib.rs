@@ -26,6 +26,7 @@
 
 use std::collections::BTreeMap;
 
+use asterism::tables::*;
 use asterism::{
     control::{KeyboardControl, MacroquadInputWrapper},
     linking::GraphedLinking,
@@ -47,11 +48,12 @@ pub const WORLD_SIZE: usize = 8;
 pub const GAME_SIZE: usize = TILE_SIZE * WORLD_SIZE;
 
 mod collision;
-mod syntheses;
-mod types;
-use syntheses::*;
 mod entities;
+mod events;
+mod syntheses;
 mod tables;
+mod types;
+use events::*;
 
 pub fn window_conf() -> Conf {
     Conf {
@@ -66,12 +68,43 @@ pub fn window_conf() -> Conf {
 pub struct Game {
     pub state: State,
     pub logics: Logics,
-    pub events: Events,
+    events: Events,
     pub colors: Colors,
+    tables: ConditionTables<QueryType>,
 }
 
 impl Game {
     pub fn new() -> Self {
+        let mut tables = ConditionTables::new();
+
+        // contacts
+        tables.add_query::<(usize, usize)>(QueryType::ContactOnly, None);
+
+        // rsrcs
+        tables.add_query::<RsrcEvent>(QueryType::ResourceEvent, None);
+        tables.add_query::<RsrcID>(QueryType::ResourceIdent, None);
+
+        // ctrl
+        tables.add_query::<CtrlEvent>(QueryType::ControlEvent, None);
+
+        // linking
+        tables.add_query::<LinkingEvent>(QueryType::LinkingEvent, None);
+        tables.add_query::<LinkingEvent>(
+            QueryType::TraverseRoom,
+            Some(Compose::Filter(QueryType::LinkingEvent)),
+        );
+
+        tables.add_query::<usize>(QueryType::LinkingIdent, None);
+
+        // col + link
+        tables.add_query::<(ColEvent, usize)>(
+            QueryType::ContactRoom,
+            Some(Compose::Zip(
+                QueryType::ContactOnly,
+                QueryType::LinkingIdent,
+            )),
+        );
+
         Self {
             state: State::new(),
             logics: Logics::new(),
@@ -80,6 +113,7 @@ impl Game {
                 background_color: DARKBLUE,
                 colors: BTreeMap::new(),
             },
+            tables,
         }
     }
 }
@@ -162,94 +196,6 @@ impl Logics {
     }
 }
 
-type PredicateFn<Event> = Vec<(Event, Box<dyn Fn(&mut State, &mut Logics, &Event)>)>;
-
-pub struct Events {
-    // honestly this is more like a game mode logic than a linking logic, but
-    pub predicates: Vec<Predicates>,
-    pub resources: PredicateFn<RsrcEvent>,
-    pub control: PredicateFn<CtrlEvent>,
-
-    player_synth: PlayerSynth,
-    tile_synth: TileSynth,
-    character_synth: CharacterSynth,
-}
-
-pub struct Predicates {
-    pub collision: PredicateFn<ColEvent>,
-    pub linking: PredicateFn<LinkingEvent>,
-}
-
-impl Predicates {
-    fn new() -> Self {
-        Self {
-            collision: Vec::new(),
-            linking: Vec::new(),
-        }
-    }
-}
-
-struct PlayerSynth {
-    ctrl: Option<Synthesis<Player>>,
-    col: Option<Synthesis<Player>>,
-    rsrc: Option<Synthesis<Player>>,
-}
-
-struct TileSynth {
-    col: Option<Synthesis<Tile>>,
-}
-
-struct CharacterSynth {
-    col: Option<Synthesis<Character>>,
-}
-
-impl Events {
-    fn new() -> Self {
-        Self {
-            predicates: Vec::new(),
-            control: Vec::new(),
-            resources: Vec::new(),
-            player_synth: PlayerSynth {
-                ctrl: None,
-                col: Some(Box::new(|mut player: Player| {
-                    let mut vert_moved = false;
-                    if player.controls[0].3.changed_by > 0.0 {
-                        player.pos.y = (player.pos.y - 1).max(0);
-                        player.amt_moved.y = -1;
-                        vert_moved = true;
-                    }
-                    if player.controls[1].3.changed_by > 0.0 {
-                        player.pos.y = (player.pos.y + 1).min(WORLD_SIZE as i32 - 1);
-                        player.amt_moved.y = 1;
-                        vert_moved = true;
-                    }
-                    if !vert_moved {
-                        player.amt_moved.y = 0;
-                    }
-                    let mut horiz_moved = false;
-                    if player.controls[2].3.changed_by > 0.0 {
-                        player.pos.x = (player.pos.x - 1).max(0);
-                        player.amt_moved.x = -1;
-                        horiz_moved = true;
-                    }
-                    if player.controls[3].3.changed_by > 0.0 {
-                        player.pos.x = (player.pos.x + 1).min(WORLD_SIZE as i32 - 1);
-                        player.amt_moved.x = 1;
-                        horiz_moved = true;
-                    }
-                    if !horiz_moved {
-                        player.amt_moved.x = 0;
-                    }
-                    player
-                })),
-                rsrc: None,
-            },
-            tile_synth: TileSynth { col: None },
-            character_synth: CharacterSynth { col: None },
-        }
-    }
-}
-
 pub async fn run(mut game: Game) {
     game.logics
         .collision
@@ -270,19 +216,15 @@ pub async fn run(mut game: Game) {
     }
 
     loop {
-        if is_key_down(KeyCode::Escape) {
-            break;
-        }
         draw(&game);
 
         let add_queue = std::mem::take(&mut game.state.add_queue);
         for _ent in add_queue {}
 
         control(&mut game);
-        collision(&mut game, current_room);
-        tables::test(&mut game.logics);
+        collision(&mut game);
         resources(&mut game);
-        linking(&mut game, current_room);
+        linking(&mut game);
 
         let remove_queue = std::mem::take(&mut game.state.remove_queue);
         for ent in remove_queue {
@@ -313,58 +255,57 @@ pub async fn run(mut game: Game) {
             }
         }
 
+        if is_key_down(KeyCode::Escape) {
+            return;
+        }
         next_frame().await;
     }
 }
 
 fn control(game: &mut Game) {
     game.player_ctrl_synthesis();
-
     game.logics.control.update(&());
-    for (predicate, reaction) in game.events.control.iter() {
-        if game.logics.control.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, predicate);
-        }
-    }
+    game.tables
+        .update_single::<CtrlEvent>(QueryType::ControlEvent, game.logics.control.get_table())
+        .unwrap();
 }
 
-fn collision(game: &mut Game, current_room: usize) {
+fn collision(game: &mut Game) {
     game.player_col_synthesis();
     game.tile_synthesis();
     game.character_synthesis();
 
     game.logics.collision.update();
-    let predicates = &game.events.predicates[current_room];
-
-    for (predicate, reaction) in predicates.collision.iter() {
-        if game.logics.collision.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, predicate);
-        }
-    }
+    game.tables
+        .update_single::<ColEvent>(QueryType::ContactOnly, game.logics.collision.get_table())
+        .unwrap();
 }
 
 fn resources(game: &mut Game) {
     game.player_rsrc_synthesis();
-
     game.logics.resources.update();
 
-    for (predicate, reaction) in game.events.resources.iter() {
-        if game.logics.resources.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, predicate);
-        }
-    }
+    game.tables
+        .update_single::<RsrcID>(QueryType::ResourceIdent, game.logics.resources.get_table())
+        .unwrap();
+    game.tables
+        .update_single::<RsrcEvent>(QueryType::ResourceEvent, game.logics.resources.get_table())
+        .unwrap();
 }
 
-fn linking(game: &mut Game, current_room: usize) {
+fn linking(game: &mut Game) {
     game.logics.linking.update();
 
-    let predicates = &game.events.predicates[current_room];
+    game.tables
+        .update_single::<usize>(QueryType::LinkingIdent, game.logics.linking.get_table())
+        .unwrap();
+    game.tables
+        .update_single::<LinkingEvent>(QueryType::LinkingEvent, game.logics.linking.get_table())
+        .unwrap();
 
-    for (predicate, reaction) in predicates.linking.iter() {
-        if game.logics.linking.check_predicate(predicate) {
-            reaction(&mut game.state, &mut game.logics, predicate);
-        }
-    }
+    game.tables
+        .update_zip::<ColEvent, usize>(QueryType::ContactRoom)
+        .unwrap();
 }
 
 fn draw(game: &Game) {

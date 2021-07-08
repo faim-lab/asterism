@@ -71,11 +71,13 @@ r#"
     game.add_collision_predicate(
         Contact::Ent(0, char_id.idx() + 1),
         0,
-        Box::new(|state: &mut State, logics: &mut Logics, _: &ColEvent| {
-            logics
-                .resources
-                .handle_predicate(&(state.resources[0], Transaction::Change(1)));
-        }),
+        Box::new(
+            |state: &mut State, logics: &mut Logics, _: &(ColEvent, usize)| {
+                logics
+                    .resources
+                    .handle_predicate(&(state.resources[0], Transaction::Change(1)));
+            },
+        ),
     );
 
     game.add_link((0, IVec2::new(3, 5)), (1, IVec2::new(1, 1)));

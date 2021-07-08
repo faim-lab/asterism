@@ -133,35 +133,43 @@ impl<ID: Copy + Eq> Logic for FlatEntityState<ID> {
     }
 }
 
-type QueryOver<ID> = (
-    <FlatEntityState<ID> as Logic>::Ident,
-    <FlatEntityState<ID> as Logic>::IdentData,
-);
-impl<ID: Copy + Eq> QueryTable<QueryOver<ID>> for FlatEntityState<ID> {
-    type ProcessOutput = usize;
-
-    fn check_predicate(
-        &self,
-        predicate: impl Fn(&QueryOver<ID>) -> bool,
-    ) -> Vec<Self::ProcessOutput> {
-        (0..self.graphs.len())
-            .filter(|i| {
-                let query_over = (*i, self.get_synthesis(*i));
-                predicate(&query_over)
-            })
-            .collect()
+type QueryIdent<ID> = <FlatEntityState<ID> as Logic>::Ident;
+impl<ID: Copy + Eq> QueryTable<QueryIdent<ID>> for FlatEntityState<ID> {
+    fn get_table(&self) -> Vec<QueryIdent<ID>> {
+        (0..self.graphs.len()).collect()
     }
 }
 
 type QueryEvent<ID> = <FlatEntityState<ID> as Logic>::Event;
 
 impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for FlatEntityState<ID> {
-    type ProcessOutput = usize;
-
-    fn check_predicate(
-        &self,
-        _predicate: impl Fn(&QueryEvent<ID>) -> bool,
-    ) -> Vec<Self::ProcessOutput> {
-        todo!()
+    fn get_table(&self) -> Vec<QueryEvent<ID>> {
+        let mut events = Vec::new();
+        for (i, (graph, traversed)) in self
+            .graphs
+            .iter()
+            .zip(self.just_traversed.iter())
+            .enumerate()
+        {
+            if *traversed {
+                let event = EntityEvent {
+                    graph: i,
+                    node: graph.current_node,
+                    event_type: EntityEventType::Traversed,
+                };
+                events.push(event);
+            }
+            for (node, activated) in graph.conditions.iter().enumerate() {
+                if *activated && node != graph.current_node {
+                    let event = EntityEvent {
+                        graph: i,
+                        node,
+                        event_type: EntityEventType::Activated,
+                    };
+                    events.push(event);
+                }
+            }
+        }
+        events
     }
 }

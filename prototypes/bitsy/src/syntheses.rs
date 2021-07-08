@@ -1,4 +1,4 @@
-use asterism::control::{Action, Values};
+use asterism::control::Action;
 use asterism::Logic;
 use macroquad::math::IVec2;
 
@@ -78,14 +78,8 @@ impl Game {
 
                 let player = synthesis(player);
 
-                for (((_, _, valid, vals), actions), values) in player
-                    .controls
-                    .iter()
-                    .zip(ctrl.0.iter_mut())
-                    .zip(ctrl.1.iter_mut())
-                {
+                for ((_, _, valid), actions) in player.controls.iter().zip(ctrl.iter_mut()) {
                     actions.is_valid = *valid;
-                    *values = *vals;
                 }
                 self.logics.control.update_synthesis(0, ctrl);
             }
@@ -199,10 +193,7 @@ impl Game {
     fn build_player(
         &self,
         col: &TileMapColData<TileID, CollisionEnt>,
-        ctrl: &(
-            Vec<Action<ActionID, macroquad::input::KeyCode>>,
-            Vec<Values>,
-        ),
+        ctrl: &[Action<ActionID, macroquad::input::KeyCode>],
         rsrc: impl Iterator<Item = (RsrcID, (u16, u16, u16))>,
     ) -> Player {
         let mut player = Player::new();
@@ -211,17 +202,8 @@ impl Game {
             player.amt_moved = *amt_moved;
         }
 
-        for (player, (actions, values)) in player
-            .controls
-            .iter_mut()
-            .zip(ctrl.0.iter().zip(ctrl.1.iter()))
-        {
-            *player = (
-                actions.id,
-                *actions.get_keycode(),
-                actions.is_valid,
-                *values,
-            );
+        for (player, actions) in player.controls.iter_mut().zip(ctrl.iter()) {
+            *player = (actions.id, *actions.get_keycode(), actions.is_valid);
         }
 
         for (id, vals) in rsrc {

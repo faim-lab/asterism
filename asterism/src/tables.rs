@@ -10,9 +10,8 @@ use std::hash::Hash;
 /// Builds a query table over each "unit" of a logic.
 ///
 /// kind of weird, I don't like the reallocations but I don't think it's worse than what I'm doing in the engines with building syntheses every frame.
-pub trait QueryTable<QueryOver> {
-    type ProcessOutput;
-    fn check_predicate(&self, predicate: impl Fn(&QueryOver) -> bool) -> Vec<Self::ProcessOutput>;
+pub trait QueryTable<ProcessOutput> {
+    fn get_table(&self) -> Vec<ProcessOutput>;
 }
 
 pub struct ConditionTables<QueryID: Hash + Eq + Copy> {
@@ -20,7 +19,7 @@ pub struct ConditionTables<QueryID: Hash + Eq + Copy> {
     composes: HashMap<QueryID, Option<Compose<QueryID>>>,
 }
 
-impl<QueryID: Hash + Eq + Copy> ConditionTables<QueryID> {
+impl<QueryID: Hash + Eq + Copy + std::fmt::Debug> ConditionTables<QueryID> {
     pub fn new() -> Self {
         Self {
             query_output: AnyHashMap::new(),
@@ -34,14 +33,18 @@ impl<QueryID: Hash + Eq + Copy> ConditionTables<QueryID> {
         self.composes.insert(id, compose);
     }
 
-    pub fn update_single<T: 'static>(&mut self, id: QueryID, output: Vec<T>) -> Result<&[T], ()> {
-        let query = self.composes.get(&id).ok_or(())?;
+    pub fn update_single<T: 'static>(
+        &mut self,
+        id: QueryID,
+        output: Vec<T>,
+    ) -> Result<&[T], TableError<QueryID>> {
+        let query = self.composes.get(&id).ok_or(TableError::ComposeNotFound)?;
         if query.is_none() {
             let query_output = self.query_output.get_mut(&id).unwrap();
             *query_output = output;
             Ok(query_output.as_slice())
         } else {
-            Err(())
+            Err(TableError::MismatchedQueryAction)
         }
     }
 
@@ -49,34 +52,48 @@ impl<QueryID: Hash + Eq + Copy> ConditionTables<QueryID> {
         &mut self,
         id: QueryID,
         predicate: impl Fn(&T) -> bool,
-    ) -> Result<&[T], ()> {
+    ) -> Result<&[T], TableError<QueryID>> {
         // please don't ask questions about this line of code
-        let query = self.composes.get(&id).ok_or(())?.as_ref().ok_or(())?;
+        let query = self.composes.get(&id).ok_or(TableError::ComposeNotFound)?;
+        let query = query.as_ref().ok_or(TableError::MismatchedQueryAction)?;
         match query {
             Compose::Filter(other_id) => {
-                let prev_output = self.query_output.get::<Vec<T>>(&other_id).ok_or(())?;
+                let prev_output = self
+                    .query_output
+                    .get::<Vec<T>>(other_id)
+                    .ok_or(TableError::QueryNotFound(*other_id))?;
                 let output = prev_output
                     .iter()
                     .cloned()
                     .filter(predicate)
                     .collect::<Vec<T>>();
-                let query_output = self.query_output.get_mut(&id).ok_or(())?;
+                let query_output = self
+                    .query_output
+                    .get_mut(&id)
+                    .ok_or(TableError::QueryNotFound(id))?;
                 *query_output = output;
                 Ok(query_output.as_slice())
             }
-            _ => Err(()),
+            _ => Err(TableError::MismatchedQueryAction),
         }
     }
 
     pub fn update_zip<A: Clone + 'static, B: Clone + 'static>(
         &mut self,
         id: QueryID,
-    ) -> Result<&[(A, B)], ()> {
-        let query = self.composes.get(&id).ok_or(())?.as_ref().ok_or(())?;
+    ) -> Result<&[(A, B)], TableError<QueryID>> {
+        let query = self.composes.get(&id).ok_or(TableError::ComposeNotFound)?;
+        let query = query.as_ref().ok_or(TableError::MismatchedQueryAction)?;
         match query {
             Compose::Zip(id_1, id_2) => {
-                let zip_1 = self.query_output.get::<Vec<A>>(&id_1).ok_or(())?;
-                let zip_2 = self.query_output.get::<Vec<B>>(&id_2).ok_or(())?;
+                let zip_1 = self
+                    .query_output
+                    .get::<Vec<A>>(id_1)
+                    .ok_or(TableError::QueryNotFound(*id_1))?;
+                let zip_2 = self
+                    .query_output
+                    .get::<Vec<B>>(id_2)
+                    .ok_or(TableError::QueryNotFound(*id_2))?;
 
                 let output = zip_1
                     .iter()
@@ -84,11 +101,14 @@ impl<QueryID: Hash + Eq + Copy> ConditionTables<QueryID> {
                     .zip(zip_2.iter().cloned())
                     .collect::<Vec<(A, B)>>();
 
-                let query_output = self.query_output.get_mut(&id).ok_or(())?;
+                let query_output = self
+                    .query_output
+                    .get_mut(&id)
+                    .ok_or(TableError::QueryNotFound(id))?;
                 *query_output = output;
                 Ok(query_output.as_slice())
             }
-            _ => Err(()),
+            _ => Err(TableError::MismatchedQueryAction),
         }
     }
 }
@@ -101,18 +121,14 @@ pub enum Compose<QueryID: Copy> {
     Zip(QueryID, QueryID),
 }
 
-/*
-/// Possible ways to deal with the output of queries
-#[non_exhaustive]
-#[derive(Clone, Copy)]
-pub enum Process {
-    IfAny,
-    IfNone,
-    IfLength(usize, Compare),
-}
-*/
-
 pub struct Condition<QueryID: Copy> {
     pub compose: Compose<QueryID>,
     pub output: Vec<bool>,
+}
+
+#[derive(Debug)]
+pub enum TableError<QueryID: std::fmt::Debug> {
+    ComposeNotFound,
+    QueryNotFound(QueryID),
+    MismatchedQueryAction,
 }
