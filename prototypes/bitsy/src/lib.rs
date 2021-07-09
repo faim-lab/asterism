@@ -78,7 +78,7 @@ impl Game {
         let mut tables = ConditionTables::new();
 
         // contacts
-        tables.add_query::<(usize, usize)>(QueryType::ContactOnly, None);
+        tables.add_query::<ColEvent>(QueryType::ContactOnly, None);
 
         // rsrcs
         tables.add_query::<RsrcEvent>(QueryType::ResourceEvent, None);

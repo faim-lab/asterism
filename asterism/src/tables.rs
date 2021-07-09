@@ -29,7 +29,7 @@ impl<QueryID: Hash + Eq + Copy + std::fmt::Debug> ConditionTables<QueryID> {
 
     pub fn add_query<T: 'static>(&mut self, id: QueryID, compose: Option<Compose<QueryID>>) {
         let output: Vec<T> = Vec::new();
-        self.query_output.insert(id, Box::new(output));
+        self.query_output.insert(id, output);
         self.composes.insert(id, compose);
     }
 
@@ -40,7 +40,10 @@ impl<QueryID: Hash + Eq + Copy + std::fmt::Debug> ConditionTables<QueryID> {
     ) -> Result<&[T], TableError<QueryID>> {
         let query = self.composes.get(&id).ok_or(TableError::ComposeNotFound)?;
         if query.is_none() {
-            let query_output = self.query_output.get_mut(&id).unwrap();
+            let query_output = self
+                .query_output
+                .get_mut(&id)
+                .ok_or(TableError::QueryNotFound(id))?;
             *query_output = output;
             Ok(query_output.as_slice())
         } else {
@@ -131,4 +134,46 @@ pub enum TableError<QueryID: std::fmt::Debug> {
     ComposeNotFound,
     QueryNotFound(QueryID),
     MismatchedQueryAction,
+}
+
+use std::any::TypeId;
+
+/// Wrapper around `anycollections::AnyHashMap` that also does typechecking at runtime so you don't have to worry about accidentally transmuting something you shouldn't have and causing undefined behavior.
+///
+/// `types_map.get(id)` *must* always be the `TypeId` of the type of map.get(id)'s output, otherwise very unsafe things will happen.
+///
+/// The double lookup isn't ideal here but works for now. Something like `HashMap/BTreeMap<ID, (TypeId, Box<something something UnsafeAny>)>` (????) would be better performance-wise but I can't be bothered to write that.
+struct AnyHashMap<ID: Hash + Eq> {
+    map: anycollections::AnyHashMap<ID>,
+    types_map: HashMap<ID, TypeId>,
+}
+
+impl<ID: Hash + Eq + Copy> AnyHashMap<ID> {
+    fn new() -> Self {
+        Self {
+            map: anycollections::AnyHashMap::new(),
+            types_map: HashMap::new(),
+        }
+    }
+
+    fn get<T: 'static>(&self, key: &ID) -> Option<&T> {
+        if TypeId::of::<T>() == *self.types_map.get(key)? {
+            self.map.get::<T>(key)
+        } else {
+            None
+        }
+    }
+
+    fn get_mut<T: 'static>(&mut self, key: &ID) -> Option<&mut T> {
+        if TypeId::of::<T>() == *self.types_map.get(key)? {
+            self.map.get_mut::<T>(key)
+        } else {
+            None
+        }
+    }
+
+    fn insert<T: 'static>(&mut self, key: ID, value: T) {
+        self.types_map.insert(key, TypeId::of::<T>());
+        self.map.insert(key, value);
+    }
 }
