@@ -4,7 +4,7 @@
 //!
 //! Note: Collision is hard and may be broken.
 
-use crate::{tables::QueryTable, Event, EventType, Logic, Reaction};
+use crate::{tables::OutputTable, Event, EventType, Logic, Reaction};
 use macroquad::math::Vec2;
 
 /// Information for each contact. If the entities at the indices `i` and `j` are both unfixed or both fixed, then `i < j`. If one is unfixed and the other is fixed, `i` will be the index of the unfixed entity.
@@ -327,14 +327,20 @@ pub enum CollisionEventType {
 
 impl EventType for CollisionEventType {}
 
-type QueryIdent<ID> = <AabbCollision<ID> as Logic>::Ident;
-impl<ID: Copy + Eq> QueryTable<QueryIdent<ID>> for AabbCollision<ID> {
+type QueryIdent<ID> = (
+    <AabbCollision<ID> as Logic>::Ident,
+    <AabbCollision<ID> as Logic>::IdentData,
+);
+
+impl<ID: Copy + Eq> OutputTable<QueryIdent<ID>> for AabbCollision<ID> {
     fn get_table(&self) -> Vec<QueryIdent<ID>> {
-        (0..self.centers.len()).collect()
+        (0..self.centers.len())
+            .map(|idx| (idx, self.get_synthesis(idx)))
+            .collect()
     }
 }
 
-impl<ID: Copy + Eq> QueryTable<(usize, usize)> for AabbCollision<ID> {
+impl<ID: Copy + Eq> OutputTable<(usize, usize)> for AabbCollision<ID> {
     fn get_table(&self) -> Vec<(usize, usize)> {
         self.contacts
             .iter()

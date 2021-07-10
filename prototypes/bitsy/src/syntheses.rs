@@ -1,3 +1,4 @@
+// probably going to turn these into condition table filters eventually
 use asterism::control::Action;
 use asterism::Logic;
 use macroquad::math::IVec2;
@@ -125,8 +126,7 @@ impl Game {
 
     pub(crate) fn tile_synthesis(&mut self) {
         if let Some(synthesis) = self.events.tile_synth.col.as_ref() {
-            let current_node = self.logics.linking.graphs[0].current_node;
-            let node = self.logics.linking.graphs[0].nodes[current_node];
+            let node = self.logics.linking.graphs[0].get_current_node();
             let current_room = self.state.links.get(&node).unwrap().0;
 
             for (y, row) in self.state.rooms[current_room].map.iter().enumerate() {

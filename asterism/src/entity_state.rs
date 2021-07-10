@@ -3,7 +3,7 @@
 //! Entity-state logics communicate that game entities act in different ways or have different capabilities at different times, in ways that are intrinsic to each such entity. They govern the finite, discrete states of a set of game characters or other entities, update states when necessary, and condition the operators of other logics on entities' discrete states.
 
 use crate::graph::StateMachine;
-use crate::{tables::QueryTable, Event, EventType, Logic, Reaction};
+use crate::{tables::OutputTable, Event, EventType, Logic, Reaction};
 
 /// An entity-state logic for flat entity state machines.
 pub struct FlatEntityState<ID: Copy + Eq> {
@@ -26,7 +26,7 @@ impl<ID: Copy + Eq> FlatEntityState<ID> {
     pub fn update(&mut self) {
         self.just_traversed.fill(false);
         for (graph, traversed) in self.graphs.iter_mut().zip(self.just_traversed.iter_mut()) {
-            for i in graph.get_edges(graph.current_node) {
+            for i in graph.graph.get_edges(graph.current_node) {
                 if graph.conditions[i] {
                     graph.current_node = i;
                     *traversed = true;
@@ -55,7 +55,9 @@ impl<ID: Copy + Eq> FlatEntityState<ID> {
         graph.current_node = starting_pos;
         for (from, node_edges) in edges.iter().enumerate() {
             for to in node_edges.iter() {
-                graph.add_edge(from, ids.iter().position(|id| to == id).unwrap());
+                graph
+                    .graph
+                    .add_edge(from, ids.iter().position(|id| to == id).unwrap());
             }
         }
         self.graphs.push(graph);
@@ -107,8 +109,8 @@ impl<ID: Copy + Eq> Logic for FlatEntityState<ID> {
 
     /// index of graph
     type Ident = usize;
-    /// current position in logic + condition table?
-    type IdentData = (usize, Vec<bool>);
+    /// current position in logic
+    type IdentData = ID;
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         match reaction {
@@ -121,28 +123,33 @@ impl<ID: Copy + Eq> Logic for FlatEntityState<ID> {
     }
 
     fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
-        let graph = &self.graphs[ident];
-        (graph.current_node, graph.conditions.clone())
+        self.graphs[ident].get_current_node()
     }
 
     fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
         let graph = &mut self.graphs[ident];
-        graph.current_node = data.0;
-        assert_eq!(data.1.len(), graph.conditions.len());
-        graph.conditions = data.1;
+        let node = graph.graph.nodes.iter().position(|id| *id == data);
+        if let Some(idx) = node {
+            graph.current_node = idx;
+        }
     }
 }
 
-type QueryIdent<ID> = <FlatEntityState<ID> as Logic>::Ident;
-impl<ID: Copy + Eq> QueryTable<QueryIdent<ID>> for FlatEntityState<ID> {
+type QueryIdent<ID> = (
+    <FlatEntityState<ID> as Logic>::Ident,
+    <FlatEntityState<ID> as Logic>::IdentData,
+);
+impl<ID: Copy + Eq> OutputTable<QueryIdent<ID>> for FlatEntityState<ID> {
     fn get_table(&self) -> Vec<QueryIdent<ID>> {
-        (0..self.graphs.len()).collect()
+        (0..self.graphs.len())
+            .map(|idx| (idx, self.get_synthesis(idx)))
+            .collect()
     }
 }
 
 type QueryEvent<ID> = <FlatEntityState<ID> as Logic>::Event;
 
-impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for FlatEntityState<ID> {
+impl<ID: Copy + Eq> OutputTable<QueryEvent<ID>> for FlatEntityState<ID> {
     fn get_table(&self) -> Vec<QueryEvent<ID>> {
         let mut events = Vec::new();
         for (i, (graph, traversed)) in self

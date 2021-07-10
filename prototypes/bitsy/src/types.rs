@@ -21,7 +21,7 @@ macro_rules! id_impl_new {
     };
 }
 
-id_impl_new!([derive(Debug, Hash, Ord, PartialOrd)] TileID, [derive(Hash, Debug, Ord, PartialOrd)] CharacterID, [derive(Debug, Hash, Ord, PartialOrd)] RsrcID, [derive(Ord, PartialOrd)] LinkID);
+id_impl_new!([derive(Debug, Hash, Ord, PartialOrd)] TileID, [derive(Hash, Debug, Ord, PartialOrd)] CharacterID, [derive(Debug, Hash, Ord, PartialOrd)] RsrcID, [derive(Ord, PartialOrd)] LinkID, [derive(Hash, Debug)] UserQueryID);
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) enum QueryType {
@@ -33,16 +33,7 @@ pub(crate) enum QueryType {
     ControlEvent,
     ResourceEvent,
     ResourceIdent,
-    User(UserQueryType),
-}
-
-#[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
-pub enum UserQueryType {
-    ContactCharRoom(EntID, EntID, usize),
-    ContactTileRoom(EntID, TileID, usize),
-    ResourceEvent(RsrcID, bool), // pool, success or not
-    ResourceIdent(RsrcID, u16, asterism::Compare),
-    TraverseRoom(usize, usize), // from, to
+    User(UserQueryID),
 }
 
 pub enum Ent {

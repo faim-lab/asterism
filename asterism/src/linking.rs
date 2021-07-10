@@ -4,7 +4,7 @@
 //!
 //! Linking logics are incredibly broad and have a wide range of uses.
 use crate::graph::StateMachine;
-use crate::{tables::QueryTable, Event, EventType, Logic, Reaction};
+use crate::{tables::OutputTable, Event, EventType, Logic, Reaction};
 
 /// A generic linking logic. See [StateMachine][asterism::graph::StateMachine] documentation for more information.
 ///
@@ -30,7 +30,7 @@ impl<NodeID: Copy + Eq> GraphedLinking<NodeID> {
     pub fn update(&mut self) {
         self.just_traversed.fill(None);
         for (graph, traversed) in self.graphs.iter_mut().zip(self.just_traversed.iter_mut()) {
-            for i in graph.get_edges(graph.current_node) {
+            for i in graph.graph.get_edges(graph.current_node) {
                 if graph.conditions[i] {
                     *traversed = Some(graph.current_node);
                     graph.current_node = i;
@@ -56,7 +56,9 @@ impl<NodeID: Copy + Eq> GraphedLinking<NodeID> {
         graph.current_node = starting_pos;
         for (from, node_edges) in edges.iter().enumerate() {
             for to in node_edges.iter() {
-                graph.add_edge(from, ids.iter().position(|id| to == id).unwrap());
+                graph
+                    .graph
+                    .add_edge(from, ids.iter().position(|id| to == id).unwrap());
             }
         }
         self.graphs.push(graph);
@@ -101,7 +103,7 @@ impl<NodeID: Copy + Eq> Logic for GraphedLinking<NodeID> {
     /// index of graph
     type Ident = usize;
     /// list of graph nodes and edges
-    type IdentData = (Vec<NodeID>, Vec<Vec<bool>>);
+    type IdentData = NodeID;
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         match reaction {
@@ -114,32 +116,34 @@ impl<NodeID: Copy + Eq> Logic for GraphedLinking<NodeID> {
     }
 
     fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
-        let graph = &self.graphs[ident];
-        (graph.nodes.clone(), graph.edges.clone())
+        self.graphs[ident].get_current_node()
     }
 
     fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
         let graph = &mut self.graphs[ident];
-        assert_eq!(data.0.len(), graph.nodes.len());
-        assert_eq!(data.1.len(), graph.nodes.len());
-        if !data.1.is_empty() {
-            assert_eq!(data.1[0].len(), graph.nodes.len());
+        let node = graph.graph.nodes.iter().position(|id| *id == data);
+        if let Some(idx) = node {
+            graph.current_node = idx;
         }
-        graph.nodes = data.0;
-        graph.edges = data.1;
     }
 }
 
-type QueryIdent<ID> = <GraphedLinking<ID> as Logic>::Ident;
-impl<ID: Copy + Eq> QueryTable<QueryIdent<ID>> for GraphedLinking<ID> {
-    fn get_table(&self) -> Vec<usize> {
-        (0..self.graphs.len()).collect()
+type QueryIdent<ID> = (
+    <GraphedLinking<ID> as Logic>::Ident,
+    <GraphedLinking<ID> as Logic>::IdentData,
+);
+
+impl<ID: Copy + Eq> OutputTable<QueryIdent<ID>> for GraphedLinking<ID> {
+    fn get_table(&self) -> Vec<QueryIdent<ID>> {
+        (0..self.graphs.len())
+            .map(|idx| (idx, self.get_synthesis(idx)))
+            .collect()
     }
 }
 
 type QueryEvent<ID> = <GraphedLinking<ID> as Logic>::Event;
 
-impl<ID: Copy + Eq> QueryTable<QueryEvent<ID>> for GraphedLinking<ID> {
+impl<ID: Copy + Eq> OutputTable<QueryEvent<ID>> for GraphedLinking<ID> {
     fn get_table(&self) -> Vec<QueryEvent<ID>> {
         let mut events = Vec::new();
         for (i, (graph, traversed)) in self

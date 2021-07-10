@@ -3,7 +3,7 @@
 //! Control logics communicate that different entities are controlled by different inputs at different times. They map button inputs, AI intentions, network socket messages, etc onto high-level game actions.
 //!
 //! We're currently trying to consider analog as well as digital inputs, but we haven't implemented controller support, so some of these fields don't really make sense yet.
-use crate::{tables::QueryTable, Event, EventType, Logic, Reaction};
+use crate::{tables::OutputTable, Event, EventType, Logic, Reaction};
 
 /// Information for a key/button press.
 trait Input {
@@ -240,7 +240,7 @@ pub enum ControlReaction<ID: Copy + Eq, KeyCode: Copy + Eq> {
 
 impl<ID: Copy + Eq, KeyCode: Copy + Eq> Reaction for ControlReaction<ID, KeyCode> {}
 
-#[derive(PartialEq, Eq, Ord, PartialOrd, Debug)]
+#[derive(PartialEq, Eq, Ord, PartialOrd, Debug, Clone)]
 pub struct ControlEvent<ID> {
     pub event_type: ControlEventType,
     pub set: usize,
@@ -254,7 +254,7 @@ impl<ID> Event for ControlEvent<ID> {
     }
 }
 
-#[derive(PartialEq, Eq, Ord, PartialOrd, Debug)]
+#[derive(PartialEq, Eq, Ord, PartialOrd, Debug, Clone)]
 pub enum ControlEventType {
     KeyPressed,
     KeyReleased,
@@ -264,18 +264,23 @@ pub enum ControlEventType {
 
 impl EventType for ControlEventType {}
 
-type QueryIdent<ID, Wrapper> = <KeyboardControl<ID, Wrapper> as Logic>::Ident;
+type QueryIdent<ID, Wrapper> = (
+    <KeyboardControl<ID, Wrapper> as Logic>::Ident,
+    <KeyboardControl<ID, Wrapper> as Logic>::IdentData,
+);
 
-impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryIdent<ID, Wrapper>>
+impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> OutputTable<QueryIdent<ID, Wrapper>>
     for KeyboardControl<ID, Wrapper>
 {
-    fn get_table(&self) -> Vec<usize> {
-        (0..self.mapping.len()).collect()
+    fn get_table(&self) -> Vec<QueryIdent<ID, Wrapper>> {
+        (0..self.mapping.len())
+            .map(|idx| (idx, self.get_synthesis(idx)))
+            .collect()
     }
 }
 
 type QueryEvent<ID, Wrapper> = <KeyboardControl<ID, Wrapper> as Logic>::Event;
-impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> QueryTable<QueryEvent<ID, Wrapper>>
+impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> OutputTable<QueryEvent<ID, Wrapper>>
     for KeyboardControl<ID, Wrapper>
 {
     fn get_table(&self) -> Vec<QueryEvent<ID, Wrapper>> {

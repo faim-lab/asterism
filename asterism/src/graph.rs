@@ -2,23 +2,20 @@
 ///
 /// Uses a condition table to check if an edge is traversable. If `graph.conditions[node_idx] == true`, then the edge from `graph.nodes[current_node]` to `graph.nodes[node_idx]` is traversable.
 ///
-/// I think I'll eventually separate the condition table part from the actual graph representation
-pub struct StateMachine<NodeID: Copy> {
-    /// list of nodes in the graph. Possibly unnecessary, I can't decide if I want to remove this or not
-    pub nodes: Vec<NodeID>,
-    /// adjacency matrix
-    pub edges: Vec<Vec<bool>>,
+/// should definitely eventually separate the condition table part from the actual graph representation
+pub struct StateMachine<NodeID: Copy + Eq> {
+    /// graph
+    pub graph: Graph<NodeID>,
     /// index of the current node we're on
     pub current_node: usize,
     /// condition tables for the status of links in the current node in the graph
     pub conditions: Vec<bool>,
 }
 
-impl<NodeID: Copy> StateMachine<NodeID> {
+impl<NodeID: Copy + Eq> StateMachine<NodeID> {
     pub fn new() -> Self {
         Self {
-            nodes: Vec::new(),
-            edges: Vec::new(),
+            graph: Graph::new(),
             current_node: 0,
             conditions: Vec::new(),
         }
@@ -30,32 +27,48 @@ impl<NodeID: Copy> StateMachine<NodeID> {
         self.conditions.fill(false);
     }
 
-    /// set current node, reset condition table
     pub fn get_current_node(&self) -> NodeID {
-        self.nodes[self.current_node]
+        self.graph.nodes[self.current_node]
     }
 
     pub fn add_node(&mut self, node: NodeID) {
-        self.nodes.push(node);
+        self.graph.nodes.push(node);
         self.resize_matrix();
     }
 
     /// add multiple nodes at once to avoid resizing the adjacency matrix multiple times
     pub fn add_nodes(&mut self, nodes: &[NodeID]) {
         for node in nodes.iter() {
-            self.nodes.push(*node);
+            self.graph.nodes.push(*node);
         }
         self.resize_matrix();
     }
 
     /// resize adjacency matrix to the current number of nodes in the graph
     fn resize_matrix(&mut self) {
-        let nodes = self.nodes.len();
-        for row in self.edges.iter_mut() {
+        let nodes = self.graph.nodes.len();
+        for row in self.graph.edges.iter_mut() {
             row.resize_with(nodes, || false);
         }
-        self.edges.resize_with(nodes, || vec![false; nodes]);
+        self.graph.edges.resize_with(nodes, || vec![false; nodes]);
         self.conditions.resize_with(nodes, || false);
+    }
+}
+
+#[derive(Clone)]
+pub struct Graph<NodeID: Clone + Eq> {
+    /// list of nodes in the graph. Possibly unnecessary, I can't decide if I want to remove this or not
+    pub nodes: Vec<NodeID>,
+    /// adjacency matrix
+    pub edges: Vec<Vec<bool>>,
+}
+
+impl<NodeID: Eq + Clone> Graph<NodeID> {
+    pub fn new() -> Self {
+        Self {
+            nodes: Vec::new(),
+            edges: Vec::new(),
+        }
     }
 
     pub fn add_edge(&mut self, from: usize, to: usize) {
@@ -66,12 +79,16 @@ impl<NodeID: Copy> StateMachine<NodeID> {
         self.edges[from][to]
     }
 
-    // "but heap allocation costs---" shhhhh
+    // "but allocation---" eh
     pub fn get_edges(&mut self, node: usize) -> Vec<usize> {
         self.edges[node]
             .iter()
             .enumerate()
             .filter_map(|(i, linked)| if *linked { Some(i) } else { None })
             .collect::<Vec<_>>()
+    }
+
+    pub fn node_idx(&self, node: &NodeID) -> Option<usize> {
+        self.nodes.iter().position(|id| id == node)
     }
 }

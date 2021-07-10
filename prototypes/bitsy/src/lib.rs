@@ -38,7 +38,7 @@ use macroquad::prelude::*;
 pub use asterism::control::{Action, ControlEventType, ControlReaction, Values};
 pub use asterism::linking::{LinkingEvent, LinkingEventType, LinkingReaction};
 pub use asterism::resources::{ResourceEventType, ResourceReaction, Transaction};
-pub use asterism::{Logic, QueryTable};
+pub use asterism::{Logic, OutputTable};
 pub use collision::*;
 pub use entities::set_current_room;
 pub use types::*;
@@ -82,7 +82,7 @@ impl Game {
 
         // rsrcs
         tables.add_query::<RsrcEvent>(QueryType::ResourceEvent, None);
-        tables.add_query::<RsrcID>(QueryType::ResourceIdent, None);
+        tables.add_query::<(RsrcID, (u16, u16, u16))>(QueryType::ResourceIdent, None);
 
         // ctrl
         tables.add_query::<CtrlEvent>(QueryType::ControlEvent, None);
@@ -94,10 +94,10 @@ impl Game {
             Some(Compose::Filter(QueryType::LinkingEvent)),
         );
 
-        tables.add_query::<usize>(QueryType::LinkingIdent, None);
+        tables.add_query::<(usize, LinkID)>(QueryType::LinkingIdent, None);
 
         // col + link
-        tables.add_query::<(ColEvent, usize)>(
+        tables.add_query::<(ColEvent, (usize, LinkID))>(
             QueryType::ContactRoom,
             Some(Compose::Zip(
                 QueryType::ContactOnly,
@@ -201,8 +201,7 @@ pub async fn run(mut game: Game) {
         .collision
         .clear_and_resize_map(WORLD_SIZE, WORLD_SIZE);
 
-    let current_node = game.logics.linking.graphs[0].current_node;
-    let node = game.logics.linking.graphs[0].nodes[current_node];
+    let node = game.logics.linking.graphs[0].get_current_node();
     let current_room = game.state.links.get(&node).unwrap().0;
 
     for (row, col_row) in game.state.rooms[current_room]
@@ -213,6 +212,69 @@ pub async fn run(mut game: Game) {
         for (tile, col_tile) in row.iter().zip(col_row.iter_mut()) {
             *col_tile = *tile;
         }
+    }
+
+    // control events default
+    if game.events.control.is_empty() {
+        game.add_ctrl_predicate(
+            ActionID::Up,
+            ControlEventType::KeyPressed,
+            Box::new(|_, logics, _| {
+                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
+                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
+                    pos.y = (pos.y - 1).max(0);
+                    amt_moved.y = (amt_moved.y.abs() - 1).max(-1);
+                }
+                logics
+                    .collision
+                    .update_synthesis(ColIdent::EntIdx(0), player_col);
+            }),
+        );
+
+        game.add_ctrl_predicate(
+            ActionID::Down,
+            ControlEventType::KeyPressed,
+            Box::new(|_, logics, _| {
+                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
+                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
+                    pos.y = (pos.y + 1).min(WORLD_SIZE as i32 - 1);
+                    amt_moved.y = (amt_moved.y.abs() + 1).min(1);
+                }
+                logics
+                    .collision
+                    .update_synthesis(ColIdent::EntIdx(0), player_col);
+            }),
+        );
+
+        game.add_ctrl_predicate(
+            ActionID::Left,
+            ControlEventType::KeyPressed,
+            Box::new(|_, logics, _| {
+                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
+                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
+                    pos.x = (pos.x - 1).max(0);
+                    amt_moved.x = (amt_moved.x.abs() - 1).max(-1);
+                }
+                logics
+                    .collision
+                    .update_synthesis(ColIdent::EntIdx(0), player_col);
+            }),
+        );
+
+        game.add_ctrl_predicate(
+            ActionID::Right,
+            ControlEventType::KeyPressed,
+            Box::new(|_, logics, _| {
+                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
+                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
+                    pos.x = (pos.x + 1).min(WORLD_SIZE as i32 - 1);
+                    amt_moved.x = (amt_moved.x.abs() + 1).min(1);
+                }
+                logics
+                    .collision
+                    .update_synthesis(ColIdent::EntIdx(0), player_col);
+            }),
+        );
     }
 
     loop {
@@ -268,6 +330,17 @@ fn control(game: &mut Game) {
     game.tables
         .update_single::<CtrlEvent>(QueryType::ControlEvent, game.logics.control.get_table())
         .unwrap();
+
+    for (id, ctrl_event, reaction) in game.events.control.iter() {
+        let predicate = Box::new(|event: &CtrlEvent| event == ctrl_event);
+        let ans = game
+            .tables
+            .update_filter(QueryType::User(*id), predicate)
+            .unwrap();
+        for event in ans.iter() {
+            reaction(&mut game.state, &mut game.logics, event);
+        }
+    }
 }
 
 fn collision(game: &mut Game) {
@@ -286,7 +359,10 @@ fn resources(game: &mut Game) {
     game.logics.resources.update();
 
     game.tables
-        .update_single::<RsrcID>(QueryType::ResourceIdent, game.logics.resources.get_table())
+        .update_single::<(RsrcID, (u16, u16, u16))>(
+            QueryType::ResourceIdent,
+            game.logics.resources.get_table(),
+        )
         .unwrap();
     game.tables
         .update_single::<RsrcEvent>(QueryType::ResourceEvent, game.logics.resources.get_table())
@@ -297,14 +373,14 @@ fn linking(game: &mut Game) {
     game.logics.linking.update();
 
     game.tables
-        .update_single::<usize>(QueryType::LinkingIdent, game.logics.linking.get_table())
+        .update_single::<(usize, LinkID)>(QueryType::LinkingIdent, game.logics.linking.get_table())
         .unwrap();
     game.tables
         .update_single::<LinkingEvent>(QueryType::LinkingEvent, game.logics.linking.get_table())
         .unwrap();
 
     game.tables
-        .update_zip::<ColEvent, usize>(QueryType::ContactRoom)
+        .update_zip::<ColEvent, (usize, LinkID)>(QueryType::ContactRoom)
         .unwrap();
 }
 

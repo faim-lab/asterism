@@ -2,7 +2,7 @@
 //!
 //! Resource logics communicate that generic or specific resources can be created, destroyed, converted, or transferred between abstract or concrete locations. They create, destroy, and exchange (usually) discrete quantities of generic or specific resources in or between abstract or concrete locations on demand or over time, and trigger other actions when these transactions take place.
 
-use crate::{tables::QueryTable, Event, EventType, Logic, Reaction};
+use crate::{tables::OutputTable, Event, EventType, Logic, Reaction};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign};
@@ -173,16 +173,25 @@ impl<ID: Ord> Event for ResourceEvent<ID> {
     }
 }
 
-type QueryIdent<ID, Value> = <QueuedResources<ID, Value> as Logic>::Ident;
-impl<ID: Copy + Ord + Debug, Value: Add<Output = Value> + AddAssign + Ord + Copy>
-    QueryTable<QueryIdent<ID, Value>> for QueuedResources<ID, Value>
+type QueryIdent<ID, Value> = (
+    <QueuedResources<ID, Value> as Logic>::Ident,
+    <QueuedResources<ID, Value> as Logic>::IdentData,
+);
+
+impl<ID, Value> OutputTable<QueryIdent<ID, Value>> for QueuedResources<ID, Value>
+where
+    ID: Copy + Ord + Debug,
+    Value: Add<Output = Value> + AddAssign + Ord + Copy,
 {
     fn get_table(&self) -> Vec<QueryIdent<ID, Value>> {
-        self.items.keys().cloned().collect()
+        self.items
+            .keys()
+            .map(|id| (*id, self.get_synthesis(*id)))
+            .collect()
     }
 }
 
-impl<ID, Value> QueryTable<ResourceEvent<ID>> for QueuedResources<ID, Value>
+impl<ID, Value> OutputTable<ResourceEvent<ID>> for QueuedResources<ID, Value>
 where
     ID: Copy + Ord + Debug,
     Value: Add<Output = Value> + AddAssign + Ord + Copy,

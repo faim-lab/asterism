@@ -2,7 +2,7 @@
 //!
 //! Physics logics communicate that physical laws govern the movement of some in-game entities. They update and honor objects' physical properties like position, velocity, density, etc., according to physical laws integrated over time.
 
-use crate::{tables::QueryTable, Event, EventType, Logic, Reaction};
+use crate::{tables::OutputTable, Event, EventType, Logic, Reaction};
 use macroquad::math::Vec2;
 
 /// A physics logic using 2d points.
@@ -127,17 +127,22 @@ pub enum PhysicsEventType {
 }
 impl EventType for PhysicsEventType {}
 
-type QueryIdent = <PointPhysics as Logic>::Ident;
+type QueryIdent = (
+    <PointPhysics as Logic>::Ident,
+    <PointPhysics as Logic>::IdentData,
+);
 
-impl QueryTable<QueryIdent> for PointPhysics {
+impl OutputTable<QueryIdent> for PointPhysics {
     fn get_table(&self) -> Vec<QueryIdent> {
-        (0..self.positions.len()).collect()
+        (0..self.positions.len())
+            .map(|idx| (idx, self.get_synthesis(idx)))
+            .collect()
     }
 }
 
 type QueryEvent = <PointPhysics as Logic>::Event;
 
-impl QueryTable<QueryEvent> for PointPhysics {
+impl OutputTable<QueryEvent> for PointPhysics {
     fn get_table(&self) -> Vec<QueryEvent> {
         let mut events = Vec::new();
         self.accelerations.iter().enumerate().for_each(|(i, acc)| {

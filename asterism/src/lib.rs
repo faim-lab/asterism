@@ -19,9 +19,12 @@ pub mod physics;
 pub mod resources;
 pub mod tables;
 
-pub use tables::QueryTable;
+pub use tables::OutputTable;
 
-pub trait Logic: QueryTable<<Self as Logic>::Ident> + QueryTable<<Self as Logic>::Event> {
+pub trait Logic:
+    OutputTable<(<Self as Logic>::Ident, <Self as Logic>::IdentData)>
+    + OutputTable<<Self as Logic>::Event>
+{
     type Event: Event;
     type Reaction: Reaction;
 

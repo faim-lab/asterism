@@ -3,14 +3,21 @@ use crate::types::*;
 use crate::{Logics, State};
 use asterism::linking::LinkingEvent;
 
-type PredicateFn<Event> = Vec<(Event, Box<dyn Fn(&mut State, &mut Logics, &Event)>)>;
+type PredicateFn<Event> = (
+    UserQueryID,
+    Event,
+    Box<dyn Fn(&mut State, &mut Logics, &Event)>,
+);
 
 pub(crate) struct Events {
-    pub control: PredicateFn<CtrlEvent>,
-    pub collision: PredicateFn<(ColEvent, usize)>, // usize is the current room number
-    pub linking: PredicateFn<LinkingEvent>,
-    pub resource_event: PredicateFn<RsrcEvent>,
-    pub resource_ident: PredicateFn<(RsrcID, (u16, u16, u16))>,
+    max_query_count: usize,
+
+    pub control: Vec<PredicateFn<CtrlEvent>>,
+    pub collision: Vec<PredicateFn<(ColEvent, usize)>>, // usize is the current room number
+    pub linking: Vec<PredicateFn<LinkingEvent>>,
+    pub resource_event: Vec<PredicateFn<RsrcEvent>>,
+    #[allow(clippy::type_complexity)]
+    pub resource_ident: Vec<PredicateFn<(RsrcID, (u16, u16, u16))>>,
 
     pub player_synth: PlayerSynth,
     pub tile_synth: TileSynth,
@@ -47,6 +54,14 @@ impl Events {
             },
             tile_synth: TileSynth { col: None },
             character_synth: CharacterSynth { col: None },
+
+            max_query_count: 0,
         }
+    }
+
+    pub fn add_query(&mut self) -> UserQueryID {
+        let id = UserQueryID::new(self.max_query_count);
+        self.max_query_count += 1;
+        id
     }
 }
