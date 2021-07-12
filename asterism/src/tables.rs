@@ -55,7 +55,6 @@ impl<QueryID: Hash + Eq + Copy + std::fmt::Debug> ConditionTables<QueryID> {
         id: QueryID,
         predicate: impl Fn(&T) -> bool,
     ) -> Result<&[T], TableError<QueryID>> {
-        // please don't ask questions about this line of code
         let query = self.composes.get(&id).ok_or(TableError::ComposeNotFound)?;
         let query = query.as_ref().ok_or(TableError::MismatchedQueryAction)?;
         match query {

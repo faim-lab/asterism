@@ -24,7 +24,7 @@ pub struct TileMapCollision<TileID: std::fmt::Debug, EntID> {
     pub contacts: Vec<Contact>,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Contact {
     Ent(usize, usize),
     Tile(usize, IVec2),
@@ -282,12 +282,25 @@ impl<TileID: Eq + Ord + Copy + std::fmt::Debug, EntID> TileMapCollision<TileID, 
     }
 
     fn restitute_ent(&self, pos: &mut IVec2, moved: IVec2) {
+        if moved == IVec2::ZERO {
+            // this is miserable
+            if !self.in_bounds(*pos - IVec2::new(0, 1)) {
+                *pos -= IVec2::new(0, 1);
+            } else if !self.in_bounds(*pos + IVec2::new(0, 1)) {
+                *pos += IVec2::new(0, 1);
+            } else if !self.in_bounds(*pos - IVec2::new(1, 0)) {
+                *pos -= IVec2::new(1, 0);
+            } else if !self.in_bounds(*pos + IVec2::new(1, 0)) {
+                *pos += IVec2::new(1, 0);
+            }
+        }
         let mut new_pos = *pos;
         // check collision against map
-        while let Some(tile_id) = self.map[pos.y as usize][pos.x as usize] {
+        while let Some(tile_id) = self.map[new_pos.y as usize][new_pos.x as usize] {
             if self.tile_solid(&tile_id) {
-                if self.in_bounds(new_pos, moved) {
-                    new_pos -= moved;
+                new_pos -= moved;
+                if !self.in_bounds(new_pos) {
+                    break;
                 }
             } else {
                 *pos = new_pos;
@@ -311,8 +324,7 @@ impl<TileID: Eq + Ord + Copy + std::fmt::Debug, EntID> TileMapCollision<TileID, 
             .unwrap_or_else(|| panic!("not specified if tile {:?} is solid or not", tile_id))
     }
 
-    fn in_bounds(&self, pos: IVec2, moved: IVec2) -> bool {
-        let pos = pos + moved;
+    fn in_bounds(&self, pos: IVec2) -> bool {
         pos.x < self.map[0].len() as i32
             && pos.y < self.map.len() as i32
             && pos.x >= 0

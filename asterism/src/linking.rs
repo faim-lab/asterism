@@ -66,12 +66,14 @@ impl<NodeID: Copy + Eq> GraphedLinking<NodeID> {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct LinkingEvent {
     pub graph: usize,
     pub node: usize,
     pub event_type: LinkingEventType,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum LinkingEventType {
     Activated,
     Traversed(usize), // last node (which edge)

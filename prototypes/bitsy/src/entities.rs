@@ -33,10 +33,12 @@ impl Game {
             QueryType::User(query_id),
             Some(Compose::Filter(QueryType::LinkingEvent)),
         );
+        let to = self.logics.linking.graphs[0].graph.node_idx(&to).unwrap();
+        let from = self.logics.linking.graphs[0].graph.node_idx(&from).unwrap();
         let event = LinkingEvent {
             graph: 0,
-            node: self.logics.linking.graphs[0].graph.node_idx(&to).unwrap(),
-            event_type: LinkingEventType::Traversed(from.idx()),
+            node: to,
+            event_type: LinkingEventType::Traversed(from),
         };
 
         self.events.linking.push((query_id, event, when_traversed));
@@ -50,7 +52,7 @@ impl Game {
         on_collide: Box<dyn Fn(&mut State, &mut Logics, &(ColEvent, usize))>,
     ) {
         let query_id = self.events.add_query();
-        self.tables.add_query::<ColEvent>(
+        self.tables.add_query::<(ColEvent, (usize, LinkID))>(
             QueryType::User(query_id),
             Some(Compose::Filter(QueryType::ContactRoom)),
         );
@@ -104,13 +106,12 @@ impl Game {
         self.state.player = true;
     }
 
-    pub fn add_character(&mut self, character: Character) -> CharacterID {
+    pub fn add_character(&mut self, character: Character, room: usize) -> CharacterID {
         let id = CharacterID::new(self.state.char_id_max);
         self.colors
             .colors
             .insert(EntID::Character(id), character.color);
-
-        self.logics.consume_character(character);
+        self.state.rooms[room].chars.push((id, character.pos));
 
         for (_, (col_event, _), _) in self.events.collision.iter_mut() {
             match col_event {
@@ -131,7 +132,6 @@ impl Game {
         }
 
         self.state.char_id_max += 1;
-        self.state.characters.push(id);
         id
     }
 
@@ -143,18 +143,18 @@ impl Game {
     }
 
     pub fn add_link(&mut self, from: (usize, IVec2), to: (usize, IVec2)) -> LinkID {
-        let mut find = |id| match self
+        let mut find = |pos| match self
             .state
             .links
             .iter()
-            .find(|(_, location)| **location == id)
+            .find(|(_, location)| **location == pos)
         {
             Some((id, _)) => *id,
             None => {
                 let id = LinkID::new(self.state.link_id_max);
                 self.logics.linking.graphs[0].add_node(id);
                 self.state.link_id_max += 1;
-                self.state.links.insert(id, to);
+                self.state.links.insert(id, pos);
                 id
             }
         };
@@ -169,16 +169,13 @@ impl Game {
             Contact::Tile(0, from.1),
             from.0,
             Box::new(
-                move |_: &mut State, logics: &mut Logics, (_, room): &(ColEvent, usize)| {
+                move |_: &mut State, logics: &mut Logics, _: &(ColEvent, usize)| {
                     let idx = logics.linking.graphs[0].graph.node_idx(&link_from).unwrap();
                     logics
                         .linking
                         .handle_predicate(&LinkingReaction::Traverse(0, idx));
 
-                    let idx = logics.linking.graphs[0]
-                        .graph
-                        .node_idx(&LinkID::new(*room))
-                        .unwrap();
+                    let idx = logics.linking.graphs[0].graph.node_idx(&link_to).unwrap();
                     logics
                         .linking
                         .handle_predicate(&LinkingReaction::Activate(0, idx));
@@ -192,15 +189,13 @@ impl Game {
             Box::new(
                 move |state: &mut State, logics: &mut Logics, _: &LinkingEvent| {
                     set_current_room(state, logics, from.0, to.0);
-                    logics.collision.clear_entities();
-                    // player position
-                    logics.collision.positions.push(to.1);
-                    logics.collision.amt_moved.push(IVec2::ZERO);
-                    logics.collision.metadata.push(CollisionData::new(
-                        true,
-                        false,
-                        CollisionEnt::Player,
-                    ));
+                    // add player
+                    logics.collision.positions.insert(0, to.1);
+                    logics.collision.amt_moved.insert(0, IVec2::ZERO);
+                    logics
+                        .collision
+                        .metadata
+                        .insert(0, CollisionData::new(true, false, CollisionEnt::Player));
                 },
             ),
         );
@@ -321,45 +316,47 @@ impl Game {
     }
 
     pub fn remove_character(&mut self, character: CharacterID) {
-        let ent_i = self
-            .state
-            .characters
-            .iter()
-            .position(|cid| *cid == character)
-            .unwrap();
-        // this assumes
-        self.logics
-            .collision
-            .handle_predicate(&CollisionReaction::RemoveEnt(
-                self.state.get_col_idx(ent_i, CollisionEnt::Character),
-            ));
-
-        let node = self.logics.linking.graphs[0].get_current_node();
-        let current_room = self.state.links.get(&node).unwrap().0;
+        let current_room = self.get_current_room();
+        let mut ent_idx = None;
+        for (i, room) in self.state.rooms.iter().enumerate() {
+            if let Some(idx) = room.chars.iter().position(|cid| cid.0 == character) {
+                ent_idx = Some((idx, i));
+                if i == current_room {
+                    self.logics
+                        .collision
+                        .handle_predicate(&CollisionReaction::RemoveEnt(
+                            self.state.get_col_idx(idx, CollisionEnt::Character),
+                        ));
+                }
+                break;
+            }
+        }
+        let (ent_idx, room) =
+            ent_idx.unwrap_or_else(|| panic!("character with id {:?} not found", character));
 
         let mut remove = Vec::new();
         for (idx, (_, (col_event, room), _)) in self.events.collision.iter_mut().enumerate() {
             if *room == current_room {
                 match col_event {
                     ColEvent::Ent(i, j) => {
-                        if *i != 0 && *i - 1 == ent_i {
+                        if *i != 0 && *i - 1 == ent_idx {
                             remove.push(idx);
                         }
-                        if *j != 0 && *j - 1 == ent_i {
+                        if *j != 0 && *j - 1 == ent_idx {
                             remove.push(idx);
                         }
-                        if *i > ent_i {
+                        if *i > ent_idx {
                             *i -= 1;
                         }
-                        if *j > ent_i {
+                        if *j > ent_idx {
                             *j -= 1;
                         }
                     }
                     ColEvent::Tile(i, _) => {
-                        if *i != 0 && *i - 1 == ent_i {
+                        if *i != 0 && *i - 1 == ent_idx {
                             remove.push(idx);
                         }
-                        if *i > ent_i {
+                        if *i > ent_idx {
                             *i -= 1;
                         }
                     }
@@ -369,14 +366,13 @@ impl Game {
         for i in remove.iter().rev() {
             let _ = self.events.collision.remove(*i);
         }
-        self.state.characters.remove(ent_i);
+        self.state.rooms[room].chars.remove(ent_idx);
     }
 
     // unsure if this is needed atm
     pub fn remove_tile_at_pos(&mut self, room: usize, pos: IVec2) {
         self.state.rooms[room].map[pos.y as usize][pos.x as usize] = None;
-        let node = self.logics.linking.graphs[0].get_current_node();
-        let current_room = self.state.links.get(&node).unwrap().0;
+        let current_room = self.get_current_room();
 
         if room == current_room {
             self.logics
@@ -450,8 +446,8 @@ impl Logics {
         }
     }
 
-    pub fn consume_character(&mut self, character: Character) {
-        self.collision.positions.push(character.pos);
+    pub fn consume_character(&mut self, pos: IVec2) {
+        self.collision.positions.push(pos);
         self.collision.amt_moved.push(IVec2::ZERO);
         self.collision
             .metadata
@@ -462,6 +458,27 @@ impl Logics {
         self.resources
             .items
             .insert(id, (rsrc.val, rsrc.min, rsrc.max));
+    }
+}
+
+pub fn load_room(state: &mut State, logics: &mut Logics, room: usize) {
+    logics
+        .collision
+        .clear_and_resize_map(WORLD_SIZE, WORLD_SIZE);
+    logics.collision.clear_entities();
+
+    for (row, col_row) in state.rooms[room]
+        .map
+        .iter()
+        .zip(logics.collision.map.iter_mut())
+    {
+        for (tile, col_tile) in row.iter().zip(col_row.iter_mut()) {
+            *col_tile = *tile;
+        }
+    }
+
+    for (_, pos) in state.rooms[room].chars.iter() {
+        logics.consume_character(*pos);
     }
 }
 
@@ -476,17 +493,13 @@ pub fn set_current_room(state: &mut State, logics: &mut Logics, from_room: usize
         }
     }
 
-    logics
-        .collision
-        .clear_and_resize_map(WORLD_SIZE, WORLD_SIZE);
-
-    for (row, col_row) in state.rooms[to_room]
-        .map
-        .iter()
-        .zip(logics.collision.map.iter_mut())
+    for ((_, pos), col_pos) in state.rooms[from_room]
+        .chars
+        .iter_mut()
+        .zip(logics.collision.positions.iter().skip(1))
     {
-        for (tile, col_tile) in row.iter().zip(col_row.iter_mut()) {
-            *col_tile = *tile;
-        }
+        *pos = *col_pos;
     }
+
+    load_room(state, logics, to_room);
 }

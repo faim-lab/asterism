@@ -160,7 +160,8 @@ impl Game {
 
     pub(crate) fn character_synthesis(&mut self) {
         if let Some(synthesis) = self.events.character_synth.col.as_ref() {
-            for (i, char_id) in self.state.characters.iter().enumerate() {
+            let current_room = self.get_current_room();
+            for (i, (char_id, _)) in self.state.rooms[current_room].chars.iter().enumerate() {
                 let col_idx = self.state.get_col_idx(i, CollisionEnt::Character);
                 let mut col = self
                     .logics

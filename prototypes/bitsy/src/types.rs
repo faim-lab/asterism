@@ -5,7 +5,7 @@ macro_rules! id_impl_new {
     ($([$($derive:meta)*] $id_type:ident),*) => {
         $(
             $(#[$derive])*
-            #[derive(Clone, Copy, PartialEq, Eq)]
+            #[derive(Clone, Copy, PartialEq, Eq, Debug)]
             pub struct $id_type(usize);
 
             impl $id_type {
@@ -21,7 +21,7 @@ macro_rules! id_impl_new {
     };
 }
 
-id_impl_new!([derive(Debug, Hash, Ord, PartialOrd)] TileID, [derive(Hash, Debug, Ord, PartialOrd)] CharacterID, [derive(Debug, Hash, Ord, PartialOrd)] RsrcID, [derive(Ord, PartialOrd)] LinkID, [derive(Hash, Debug)] UserQueryID);
+id_impl_new!([derive(Hash, Ord, PartialOrd)] TileID, [derive(Hash, Ord, PartialOrd)] CharacterID, [derive(Hash, Ord, PartialOrd)] RsrcID, [derive(Ord, PartialOrd)] LinkID, [derive(Hash)] UserQueryID);
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) enum QueryType {

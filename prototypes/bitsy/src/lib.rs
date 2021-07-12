@@ -15,11 +15,9 @@
 //! - [x] See what errors still persist from there
 //! - [x] Add resource logics/inventory (I think????)
 //! - [x] Adding/removing entities
-//! - [ ] Add linking logics
+//! - [x] Add linking logics
 //!     - [x] graph/state machine struct
-//!     - [ ] composing multiple queries
-//!         - [ ] query tables???
-//! - [ ] Game mode logics/dialogue?
+//! - [x] composing multiple queries
 
 #![allow(clippy::upper_case_acronyms)]
 #![allow(clippy::new_without_default)]
@@ -116,6 +114,11 @@ impl Game {
             tables,
         }
     }
+
+    pub fn get_current_room(&self) -> usize {
+        let node = self.logics.linking.graphs[0].get_current_node();
+        self.state.links.get(&node).unwrap().0
+    }
 }
 
 pub struct Colors {
@@ -125,6 +128,7 @@ pub struct Colors {
 
 #[derive(Default)]
 pub struct Room {
+    pub chars: Vec<(CharacterID, IVec2)>,
     pub map: [[Option<TileID>; WORLD_SIZE]; WORLD_SIZE],
 }
 
@@ -133,7 +137,6 @@ pub struct State {
     pub player: bool,
     pub resources: Vec<RsrcID>,
     rsrc_id_max: usize,
-    pub characters: Vec<CharacterID>,
     char_id_max: usize,
     pub links: BTreeMap<LinkID, (usize, IVec2)>,
     link_id_max: usize,
@@ -147,7 +150,6 @@ impl State {
         Self {
             rooms: Vec::new(),
             player: false,
-            characters: Vec::new(),
             char_id_max: 0,
             resources: Vec::new(),
             rsrc_id_max: 0,
@@ -200,18 +202,19 @@ pub async fn run(mut game: Game) {
     game.logics
         .collision
         .clear_and_resize_map(WORLD_SIZE, WORLD_SIZE);
+    let player = game.logics.collision.get_synthesis(ColIdent::EntIdx(0));
 
-    let node = game.logics.linking.graphs[0].get_current_node();
-    let current_room = game.state.links.get(&node).unwrap().0;
-
-    for (row, col_row) in game.state.rooms[current_room]
-        .map
-        .iter()
-        .zip(game.logics.collision.map.iter_mut())
-    {
-        for (tile, col_tile) in row.iter().zip(col_row.iter_mut()) {
-            *col_tile = *tile;
-        }
+    let current_room = game.get_current_room();
+    entities::load_room(&mut game.state, &mut game.logics, current_room);
+    if let TileMapColData::Ent { pos, amt_moved, .. } = player {
+        game.logics.collision.positions.insert(0, pos);
+        game.logics.collision.amt_moved.insert(0, amt_moved);
+        game.logics
+            .collision
+            .metadata
+            .insert(0, CollisionData::new(true, false, CollisionEnt::Player));
+    } else {
+        unreachable!();
     }
 
     // control events default
@@ -223,7 +226,7 @@ pub async fn run(mut game: Game) {
                 let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
                 if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
                     pos.y = (pos.y - 1).max(0);
-                    amt_moved.y = (amt_moved.y.abs() - 1).max(-1);
+                    amt_moved.y = (amt_moved.y - 1).max(-1);
                 }
                 logics
                     .collision
@@ -238,7 +241,7 @@ pub async fn run(mut game: Game) {
                 let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
                 if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
                     pos.y = (pos.y + 1).min(WORLD_SIZE as i32 - 1);
-                    amt_moved.y = (amt_moved.y.abs() + 1).min(1);
+                    amt_moved.y = (amt_moved.y + 1).min(1);
                 }
                 logics
                     .collision
@@ -253,7 +256,7 @@ pub async fn run(mut game: Game) {
                 let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
                 if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
                     pos.x = (pos.x - 1).max(0);
-                    amt_moved.x = (amt_moved.x.abs() - 1).max(-1);
+                    amt_moved.x = (amt_moved.x - 1).max(-1);
                 }
                 logics
                     .collision
@@ -268,7 +271,7 @@ pub async fn run(mut game: Game) {
                 let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
                 if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
                     pos.x = (pos.x + 1).min(WORLD_SIZE as i32 - 1);
-                    amt_moved.x = (amt_moved.x.abs() + 1).min(1);
+                    amt_moved.x = (amt_moved.x + 1).min(1);
                 }
                 logics
                     .collision
@@ -277,13 +280,19 @@ pub async fn run(mut game: Game) {
         );
     }
 
+    let control_filter = game.events.add_query();
+    game.tables.add_query::<CtrlEvent>(
+        QueryType::User(control_filter),
+        Some(Compose::Filter(QueryType::ControlEvent)),
+    );
+
     loop {
         draw(&game);
 
         let add_queue = std::mem::take(&mut game.state.add_queue);
         for _ent in add_queue {}
 
-        control(&mut game);
+        control(&mut game, control_filter);
         collision(&mut game);
         resources(&mut game);
         linking(&mut game);
@@ -324,7 +333,7 @@ pub async fn run(mut game: Game) {
     }
 }
 
-fn control(game: &mut Game) {
+fn control(game: &mut Game, control_filter: UserQueryID) {
     game.player_ctrl_synthesis();
     game.logics.control.update(&());
     game.tables
@@ -341,6 +350,21 @@ fn control(game: &mut Game) {
             reaction(&mut game.state, &mut game.logics, event);
         }
     }
+
+    let ans = game
+        .tables
+        .update_filter(
+            QueryType::User(control_filter),
+            Box::new(|event: &CtrlEvent| event.event_type == ControlEventType::KeyPressed),
+        )
+        .unwrap();
+
+    // if all four direction keys are not being pressed, set vel = 0
+    if ans.is_empty() {
+        game.logics
+            .collision
+            .handle_predicate(&CollisionReaction::SetEntVel(0, IVec2::ZERO));
+    }
 }
 
 fn collision(game: &mut Game) {
@@ -352,6 +376,24 @@ fn collision(game: &mut Game) {
     game.tables
         .update_single::<ColEvent>(QueryType::ContactOnly, game.logics.collision.get_table())
         .unwrap();
+
+    // zip collision event + linking info
+    game.tables
+        .update_zip::<ColEvent, (usize, LinkID)>(QueryType::ContactRoom)
+        .unwrap();
+
+    for (id, (col_event, room_num), reaction) in game.events.collision.iter() {
+        let predicate = Box::new(|(col, (room, _)): &(ColEvent, (usize, LinkID))| {
+            col == col_event && room == room_num
+        });
+        let ans = game
+            .tables
+            .update_filter(QueryType::User(*id), predicate)
+            .unwrap();
+        for (col_event, (room, _)) in ans.iter() {
+            reaction(&mut game.state, &mut game.logics, &(*col_event, *room));
+        }
+    }
 }
 
 fn resources(game: &mut Game) {
@@ -367,6 +409,17 @@ fn resources(game: &mut Game) {
     game.tables
         .update_single::<RsrcEvent>(QueryType::ResourceEvent, game.logics.resources.get_table())
         .unwrap();
+
+    for (id, event, reaction) in game.events.resource_event.iter() {
+        let predicate = Box::new(|rsrc: &RsrcEvent| rsrc == event);
+        let ans = game
+            .tables
+            .update_filter(QueryType::User(*id), predicate)
+            .unwrap();
+        for event in ans.iter() {
+            reaction(&mut game.state, &mut game.logics, &event);
+        }
+    }
 }
 
 fn linking(game: &mut Game) {
@@ -375,13 +428,22 @@ fn linking(game: &mut Game) {
     game.tables
         .update_single::<(usize, LinkID)>(QueryType::LinkingIdent, game.logics.linking.get_table())
         .unwrap();
+
     game.tables
         .update_single::<LinkingEvent>(QueryType::LinkingEvent, game.logics.linking.get_table())
         .unwrap();
 
-    game.tables
-        .update_zip::<ColEvent, (usize, LinkID)>(QueryType::ContactRoom)
-        .unwrap();
+    // only linking events
+    for (id, event, reaction) in game.events.linking.iter() {
+        let predicate = Box::new(|link: &LinkingEvent| link == event);
+        let ans = game
+            .tables
+            .update_filter(QueryType::User(*id), predicate)
+            .unwrap();
+        for event in ans.iter() {
+            reaction(&mut game.state, &mut game.logics, &event);
+        }
+    }
 }
 
 fn draw(game: &Game) {
@@ -405,8 +467,9 @@ fn draw(game: &Game) {
         }
     }
 
+    let current_room = game.logics.linking.graphs[0].current_node;
     for (i, pos) in game.logics.collision.positions.iter().skip(1).enumerate() {
-        let character = game.state.characters[i];
+        let character = game.state.rooms[current_room].chars[i].0;
         let color = game
             .colors
             .colors
