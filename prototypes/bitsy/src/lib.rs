@@ -48,7 +48,6 @@ pub const GAME_SIZE: usize = TILE_SIZE * WORLD_SIZE;
 mod collision;
 mod entities;
 mod events;
-mod syntheses;
 mod tables;
 mod types;
 use events::*;
@@ -334,7 +333,6 @@ pub async fn run(mut game: Game) {
 }
 
 fn control(game: &mut Game, control_filter: UserQueryID) {
-    game.player_ctrl_synthesis();
     game.logics.control.update(&());
     game.tables
         .update_single::<CtrlEvent>(QueryType::ControlEvent, game.logics.control.get_table())
@@ -368,10 +366,6 @@ fn control(game: &mut Game, control_filter: UserQueryID) {
 }
 
 fn collision(game: &mut Game) {
-    game.player_col_synthesis();
-    game.tile_synthesis();
-    game.character_synthesis();
-
     game.logics.collision.update();
     game.tables
         .update_single::<ColEvent>(QueryType::ContactOnly, game.logics.collision.get_table())
@@ -397,7 +391,6 @@ fn collision(game: &mut Game) {
 }
 
 fn resources(game: &mut Game) {
-    game.player_rsrc_synthesis();
     game.logics.resources.update();
 
     game.tables
