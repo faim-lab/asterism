@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 
-use asterism::{Event, Logic, Reaction};
+use asterism::{Event, Logic, OutputTable, Reaction};
 use macroquad::math::IVec2;
 
 pub struct CollisionData<ID> {
@@ -15,7 +16,7 @@ impl<ID> CollisionData<ID> {
     }
 }
 
-pub struct TileMapCollision<TileID: std::fmt::Debug, EntID> {
+pub struct TileMapCollision<TileID: Debug, EntID> {
     pub map: Vec<Vec<Option<TileID>>>,
     pub tile_solid: BTreeMap<TileID, bool>,
     pub positions: Vec<IVec2>,
@@ -71,9 +72,7 @@ pub enum TileMapColData<TileID, EntID> {
 
 impl<TileID, EntID> Reaction for CollisionReaction<TileID, EntID> {}
 
-impl<TileID: Copy + Eq + Ord + std::fmt::Debug, EntID: Copy> Logic
-    for TileMapCollision<TileID, EntID>
-{
+impl<TileID: Copy + Eq + Ord + Debug, EntID: Copy> Logic for TileMapCollision<TileID, EntID> {
     type Event = Contact;
     type Reaction = CollisionReaction<TileID, EntID>;
     type Ident = ColIdent;
@@ -166,7 +165,7 @@ impl<TileID: Copy + Eq + Ord + std::fmt::Debug, EntID: Copy> Logic
     }
 }
 
-impl<TileID: Eq + Ord + Copy + std::fmt::Debug, EntID> TileMapCollision<TileID, EntID> {
+impl<TileID: Eq + Ord + Copy + Debug, EntID> TileMapCollision<TileID, EntID> {
     pub fn new(width: usize, height: usize) -> Self {
         let mut collision = Self {
             map: Vec::new(),
@@ -347,4 +346,46 @@ fn normalize(vec2: IVec2) -> IVec2 {
         vec2.y = -1;
     }
     vec2
+}
+
+type QueryIdent<TileID, EntID> = (
+    <TileMapCollision<TileID, EntID> as Logic>::Ident,
+    <TileMapCollision<TileID, EntID> as Logic>::IdentData,
+);
+
+impl<TileID, EntID> OutputTable<QueryIdent<TileID, EntID>> for TileMapCollision<TileID, EntID>
+where
+    TileID: Debug + Copy + Eq + Ord,
+    EntID: Copy,
+{
+    fn get_table(&self) -> Vec<QueryIdent<TileID, EntID>> {
+        let mut idents = Vec::new();
+
+        // tiles
+        for (y, row) in self.map.iter().enumerate() {
+            for (x, tile) in row.iter().enumerate() {
+                if tile.is_some() {
+                    let ident = ColIdent::Position(IVec2::new(x as i32, y as i32));
+                    idents.push((ident, self.get_synthesis(ident)));
+                }
+            }
+        }
+
+        // entities
+        let mut ents = (0..self.positions.len())
+            .map(|idx| {
+                let ident = ColIdent::EntIdx(idx);
+                (ident, self.get_synthesis(ident))
+            })
+            .collect::<Vec<_>>();
+        idents.append(&mut ents);
+
+        idents
+    }
+}
+
+impl<TileID: Debug, EntID> OutputTable<Contact> for TileMapCollision<TileID, EntID> {
+    fn get_table(&self) -> Vec<Contact> {
+        self.contacts.to_vec()
+    }
 }

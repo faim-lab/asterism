@@ -48,7 +48,6 @@ pub const GAME_SIZE: usize = TILE_SIZE * WORLD_SIZE;
 mod collision;
 mod entities;
 mod events;
-mod tables;
 mod types;
 use events::*;
 
