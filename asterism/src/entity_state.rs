@@ -77,12 +77,14 @@ pub struct State<ID> {
     pub edges: Vec<usize>,
 }
 
+#[derive(Copy, Clone)]
 pub struct EntityEvent {
     pub graph: usize,
     pub node: usize,
     event_type: EntityEventType,
 }
 
+#[derive(Copy, Clone)]
 pub enum EntityEventType {
     Activated,
     Traversed,

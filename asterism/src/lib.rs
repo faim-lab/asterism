@@ -25,12 +25,12 @@ pub trait Logic:
     OutputTable<(<Self as Logic>::Ident, <Self as Logic>::IdentData)>
     + OutputTable<<Self as Logic>::Event>
 {
-    type Event: Event;
+    type Event: Event + Copy;
     type Reaction: Reaction;
 
     /// a single unit/entity within the logic
-    type Ident: Clone + Copy;
-    type IdentData;
+    type Ident: Copy;
+    type IdentData: Clone;
 
     /// processes the reaction if a predicate condition is met
     fn handle_predicate(&mut self, reaction: &Self::Reaction);

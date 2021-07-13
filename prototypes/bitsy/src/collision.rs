@@ -55,6 +55,7 @@ pub enum ColIdent {
     EntIdx(usize),
 }
 
+#[derive(Clone)]
 pub enum TileMapColData<TileID, EntID> {
     Position {
         pos: IVec2,

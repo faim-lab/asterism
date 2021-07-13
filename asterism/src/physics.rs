@@ -12,6 +12,7 @@ pub struct PointPhysics {
     pub accelerations: Vec<Vec2>,
 }
 
+#[derive(Clone)]
 pub struct PointPhysData {
     pub pos: Vec2,
     pub vel: Vec2,
@@ -107,7 +108,7 @@ pub enum PhysicsReaction {
 }
 impl Reaction for PhysicsReaction {}
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct PhysicsEvent {
     ent: usize,
     event_type: PhysicsEventType,
@@ -120,7 +121,7 @@ impl Event for PhysicsEvent {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PhysicsEventType {
     VelChange,
     PosChange,

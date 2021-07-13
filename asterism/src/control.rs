@@ -240,7 +240,7 @@ pub enum ControlReaction<ID: Copy + Eq, KeyCode: Copy + Eq> {
 
 impl<ID: Copy + Eq, KeyCode: Copy + Eq> Reaction for ControlReaction<ID, KeyCode> {}
 
-#[derive(PartialEq, Eq, Ord, PartialOrd, Debug, Clone)]
+#[derive(PartialEq, Eq, Ord, PartialOrd, Debug, Clone, Copy)]
 pub struct ControlEvent<ID> {
     pub event_type: ControlEventType,
     pub set: usize,
@@ -254,7 +254,7 @@ impl<ID> Event for ControlEvent<ID> {
     }
 }
 
-#[derive(PartialEq, Eq, Ord, PartialOrd, Debug, Clone)]
+#[derive(PartialEq, Eq, Ord, PartialOrd, Debug, Clone, Copy)]
 pub enum ControlEventType {
     KeyPressed,
     KeyReleased,

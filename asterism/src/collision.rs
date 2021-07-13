@@ -217,6 +217,7 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
     }
 }
 
+#[derive(Clone)]
 pub struct AabbColData {
     pub center: Vec2,
     pub half_size: Vec2,
