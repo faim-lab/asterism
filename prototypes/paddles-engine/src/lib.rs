@@ -11,13 +11,9 @@ use macroquad::prelude::*;
 mod entities;
 mod events;
 mod predicates;
-mod syntheses;
-// mod tables;
 mod types;
 use events::*;
 use predicates::*;
-use syntheses::*;
-// use tables::*;
 
 // reexports
 pub use asterism::collision::{AabbColData, AabbCollision, CollisionReaction};
@@ -26,7 +22,7 @@ pub use asterism::physics::{PhysicsEvent, PhysicsReaction, PointPhysData};
 pub use asterism::resources::{ResourceEventType, ResourceReaction, Transaction};
 pub use asterism::tables::*;
 pub use asterism::Compare;
-pub use asterism::{Logic, QueryTable};
+pub use asterism::{Logic, OutputTable};
 pub use types::*;
 
 pub struct Logics {
@@ -114,16 +110,41 @@ pub struct Game {
     pub state: State,
     pub logics: Logics,
     pub(crate) events: Events,
-    pub(crate) table: ConditionTables<QueryID>,
+    pub(crate) tables: ConditionTables<QueryType>,
 }
 
 impl Game {
     pub fn new() -> Self {
+        let mut tables = ConditionTables::new();
+
+        // collision
+        tables.add_query::<AColEvent>(QueryType::ColEvent, None);
+        tables.add_query::<AColIdent>(QueryType::ColIdent, None);
+
+        // phys
+        tables.add_query::<APhysIdent>(QueryType::PhysIdent, None);
+        tables.add_query::<PhysEvent>(QueryType::PhysEvent, None);
+
+        // rsrc
+        tables.add_query::<ARsrcEvent>(QueryType::RsrcEvent, None);
+        tables.add_query::<ARsrcIdent>(QueryType::RsrcIdent, None);
+
+        // ctrl
+        tables.add_query::<CtrlEvent>(QueryType::CtrlEvent, None);
+        tables.add_query::<CtrlIdent>(QueryType::CtrlIdent, None);
+
+        // ball collision idents
+        // ball physics idents are just physics idents
+        tables.add_query::<AColIdent>(
+            QueryType::BallCol,
+            Some(Compose::Filter(QueryType::ColIdent)),
+        );
+
         Self {
             state: State::default(),
             logics: Logics::new(),
             events: Events::new(),
-            table: ConditionTables::new(),
+            tables,
         }
     }
 }
@@ -181,108 +202,154 @@ pub async fn run(mut game: Game) {
 }
 
 fn control(game: &mut Game) {
-    game.paddle_ctrl_synthesis();
-
     game.logics.control.update(&());
 
-    for Predicate { id, predicate } in game.events.control.iter() {
-        let pred_fn =
-            Box::new(|event: &<CtrlEvent as PaddlesEvent>::AsterEvent| event == predicate);
-        game.table
-            .update_single(*id, game.logics.control.check_predicate(pred_fn));
-    }
+    game.tables
+        .update_single::<CtrlEvent>(QueryType::CtrlEvent, game.logics.control.get_table())
+        .unwrap();
+    game.tables
+        .update_single::<CtrlIdent>(QueryType::CtrlIdent, game.logics.control.get_table())
+        .unwrap();
 
-    for condition in game.events.stages.control.iter() {
-        let reaction = game.events.reactions.get(condition).unwrap();
-        game.table.check_condition(*condition);
-        let Condition { compose, output } = game.table.get_condition(*condition);
-        for _ in output.iter().filter(|ans| **ans) {
-            reaction(&mut game.state, &mut game.logics, compose);
+    for Predicate {
+        id,
+        predicate,
+        reaction,
+    } in game.events.control.iter()
+    {
+        let predicate = Box::new(|event: &CtrlEvent| event == predicate);
+        let ans = game
+            .tables
+            .update_filter(QueryType::User(*id), predicate)
+            .unwrap();
+        for event in ans.iter() {
+            reaction(&mut game.state, &mut game.logics, event);
         }
     }
 }
 
 fn physics(game: &mut Game) {
-    game.ball_phys_synthesis();
-
     game.logics.physics.update();
 
-    for Predicate { predicate, id } in game.events.physics.iter() {
-        let square = |x| x * x;
+    game.tables
+        .update_single::<PhysEvent>(QueryType::PhysEvent, game.logics.physics.get_table())
+        .unwrap();
 
-        let pred_fn = Box::new(
-            |(_, ident_data): &<PhysIdent as PaddlesEvent>::AsterEvent| {
-                predicate.vel_op.cmp(
-                    ident_data.vel.length_squared(),
-                    square(predicate.vel_threshold),
-                ) && predicate.vel_op.cmp(
-                    ident_data.acc.length_squared(),
-                    square(predicate.acc_threshold),
-                )
-            },
-        );
+    let ans = game
+        .tables
+        .update_single::<APhysIdent>(QueryType::PhysIdent, game.logics.physics.get_table())
+        .unwrap();
 
-        let answers = game.logics.physics.check_predicate(pred_fn);
-        game.table.update_single(*id, answers);
+    // update physics positions to collision
+    for (idx, data) in ans.iter() {
+        let idx = game.state.get_col_idx(*idx, CollisionEnt::Ball);
+
+        game.logics
+            .collision
+            .handle_predicate(&CollisionReaction::SetPos(idx, data.pos));
     }
 
-    for condition in game.events.stages.physics.iter() {
-        let reaction = game.events.reactions.get(condition).unwrap();
-        game.table.check_condition(*condition);
-        let Condition { compose, output } = game.table.get_condition(*condition);
-        for _ in output.iter().filter(|ans| **ans) {
-            reaction(&mut game.state, &mut game.logics, compose);
+    // user defined events
+    for Predicate {
+        predicate,
+        id,
+        reaction,
+    } in game.events.physics.iter()
+    {
+        let square = |x| x * x;
+
+        let pred_fn = Box::new(|(_, ident_data): &APhysIdent| {
+            predicate.vel_op.cmp(
+                ident_data.vel.length_squared(),
+                square(predicate.vel_threshold),
+            ) && predicate.vel_op.cmp(
+                ident_data.acc.length_squared(),
+                square(predicate.acc_threshold),
+            )
+        });
+
+        let ans = game
+            .tables
+            .update_filter(QueryType::User(*id), pred_fn)
+            .unwrap();
+        for event in ans.iter() {
+            reaction(&mut game.state, &mut game.logics, event);
         }
     }
 }
 
 fn collision(game: &mut Game) {
-    game.paddle_col_synthesis();
-    game.ball_col_synthesis();
-    game.wall_synthesis();
-
     game.logics.collision.update();
 
-    for Predicate { predicate, id } in game.events.collision.iter() {
-        let pred_fn = Box::new(
-            |(i, j): &<ColEvent as PaddlesEvent>::AsterEvent| match predicate {
-                ColEvent::ByType(ty_i, ty_j) => {
-                    game.logics.collision.metadata[*i].id == *ty_i
-                        && game.logics.collision.metadata[*j].id == *ty_j
-                }
-                ColEvent::ByIdx(ev_i, ev_j) => ev_i == i && ev_j == j,
-            },
-        );
-        let answers = game.logics.collision.check_predicate(pred_fn);
-        game.table.update_single(*id, answers);
+    game.tables
+        .update_single::<AColEvent>(QueryType::ColEvent, game.logics.collision.get_table())
+        .unwrap();
+    game.tables
+        .update_single::<AColIdent>(QueryType::ColIdent, game.logics.collision.get_table())
+        .unwrap();
+
+    // update collision positions to physics
+    let paddles_len = game.state.paddles.len();
+    let walls_len = game.state.walls.len();
+    let ans = game
+        .tables
+        .update_filter(
+            QueryType::BallCol,
+            Box::new(|(idx, _): &AColIdent| *idx > paddles_len + walls_len),
+        )
+        .unwrap();
+    for (idx, data) in ans.iter() {
+        let idx = idx - paddles_len - walls_len;
+        game.logics
+            .physics
+            .handle_predicate(&PhysicsReaction::SetPos(idx, data.center - data.half_size));
     }
 
-    for condition in game.events.stages.collision.iter() {
-        let reaction = game.events.reactions.get(condition).unwrap();
-        game.table.check_condition(*condition);
-        let Condition { compose, output } = game.table.get_condition(*condition);
-        for _ in output.iter().filter(|ans| **ans) {
-            reaction(&mut game.state, &mut game.logics, compose);
+    // user defined filters
+    for Predicate {
+        predicate,
+        id,
+        reaction,
+    } in game.events.collision.iter()
+    {
+        let collision = &game.logics.collision;
+
+        let pred_fn = Box::new(|(i, j): &AColEvent| match predicate {
+            ColEvent::ByType(ty_i, ty_j) => {
+                collision.metadata[*i].id == *ty_i && collision.metadata[*j].id == *ty_j
+            }
+            ColEvent::ByIdx(ev_i, ev_j) => ev_i == i && ev_j == j,
+        });
+
+        let ans = game
+            .tables
+            .update_filter(QueryType::User(*id), pred_fn)
+            .unwrap();
+
+        for event in ans.iter() {
+            reaction(&mut game.state, &mut game.logics, event);
         }
     }
 }
 
 fn resources(game: &mut Game) {
-    game.score_synthesis();
-
     game.logics.resources.update();
 
-    for Predicate { predicate, id } in game.events.resources.iter() {
-        let predicate = Box::new(|event: &<RsrcEvent as PaddlesEvent>::AsterEvent| {
-            predicate.success == (event.event_type == ResourceEventType::PoolUpdated)
-        });
+    game.tables
+        .update_single::<ARsrcEvent>(QueryType::RsrcEvent, game.logics.resources.get_table())
+        .unwrap();
+    game.tables
+        .update_single::<ARsrcIdent>(QueryType::RsrcIdent, game.logics.resources.get_table())
+        .unwrap();
 
-        let answers = game.logics.resources.check_predicate(predicate);
-        game.table.update_single(*id, answers);
-    }
-
-    for Predicate { predicate, id } in game.events.resource_ident.iter() {
-        let predicate = Box::new(|(id, vals): &<RsrcIdent as PaddlesEvent>::AsterEvent| {
+    // user defined filters, idents
+    for Predicate {
+        predicate,
+        id,
+        reaction,
+    } in game.events.resource_ident.iter()
+    {
+        let pred_fn = Box::new(|(id, vals): &ARsrcIdent| {
             predicate.op.cmp(vals.0, predicate.threshold)
                 && if let Some(pool) = predicate.pool {
                     pool == *id
@@ -291,15 +358,34 @@ fn resources(game: &mut Game) {
                 }
         });
 
-        let answers = game.logics.resources.check_predicate(predicate);
-        game.table.update_single(*id, answers);
+        let ans = game
+            .tables
+            .update_filter(QueryType::User(*id), pred_fn)
+            .unwrap();
+
+        for event in ans.iter() {
+            reaction(&mut game.state, &mut game.logics, event);
+        }
     }
 
-    for id in game.events.stages.resources.iter() {
-        let reaction = game.events.reactions.get(condition).unwrap();
-        let output = game.table.check_condition(*id);
-        for out in output.iter() {
-            reaction(&mut game.state, &mut game.logics, out as &dyn std::any::Any);
+    // user defined filters, events
+    for Predicate {
+        predicate,
+        id,
+        reaction,
+    } in game.events.resources.iter()
+    {
+        let pred_fn = Box::new(|event: &ARsrcEvent| {
+            predicate.success == (event.event_type == ResourceEventType::PoolUpdated)
+        });
+
+        let ans = game
+            .tables
+            .update_filter(QueryType::User(*id), pred_fn)
+            .unwrap();
+
+        for event in ans.iter() {
+            reaction(&mut game.state, &mut game.logics, event);
         }
     }
 }

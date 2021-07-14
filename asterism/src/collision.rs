@@ -294,7 +294,9 @@ impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum CollisionReaction<ID> {
+    /// sets the position, _not_ the center
     SetPos(usize, Vec2),
+    /// sets the size, _not_ the half size
     SetSize(usize, Vec2),
     SetVel(usize, Vec2),
     SetMetadata(usize, bool, bool), // solid, fixed

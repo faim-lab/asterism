@@ -31,6 +31,7 @@ pub(crate) enum QueryType {
     LinkingIdent,
     TraverseRoom,
     ControlEvent,
+    ControlFilter,
     ResourceEvent,
     ResourceIdent,
     User(UserQueryID),

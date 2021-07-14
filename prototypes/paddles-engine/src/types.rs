@@ -37,7 +37,22 @@ macro_rules! id_impl_new {
     };
 }
 
-id_impl_new!([] PaddleID, [] WallID, [] BallID, [derive(PartialOrd, Ord, Debug)] ScoreID, [derive(PartialOrd, Ord, Debug)] ActionID, [derive(Hash)] QueryID);
+id_impl_new!([] PaddleID, [] WallID, [] BallID, [derive(PartialOrd, Ord, Debug)] ScoreID, [derive(PartialOrd, Ord, Debug)] ActionID, [derive(Hash, Debug)] UserQueryID);
+
+#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub enum QueryType {
+    CtrlEvent,
+    CtrlIdent,
+    ColEvent,
+    ColIdent,
+    PhysEvent,
+    PhysIdent,
+    RsrcEvent,
+    RsrcIdent,
+    BallCol,
+    User(UserQueryID),
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CollisionEnt {
@@ -221,6 +236,12 @@ impl PaddlesEvent for CtrlEvent {
     type AsterEvent = ControlEvent<ActionID>;
 }
 
+pub type CtrlIdent = (usize, Vec<asterism::control::Action<ActionID, KeyCode>>);
+
+impl PaddlesEvent for CtrlIdent {
+    type AsterEvent = CtrlIdent;
+}
+
 pub enum ColEvent {
     ByType(CollisionEnt, CollisionEnt),
     ByIdx(usize, usize),
@@ -232,13 +253,19 @@ impl PaddlesEvent for ColEvent {
 
 pub type AColEvent = CollisionEvent;
 
-// replace syntheses with condition tables too?
-//
-// pub struct ColIdent;
+pub struct ColIdent {
+    pub pos_threshold: f32,
+    pub pos_op: Compare,
+    pub fixed: Option<bool>,
+    pub solid: Option<bool>,
+    pub id: Option<bool>,
+}
 
-// impl PaddlesEvent for ColIdent {
-//     type AsterEvent = (usize, asterism::collision::AabbColData);
-// }
+impl PaddlesEvent for ColIdent {
+    type AsterEvent = (usize, asterism::collision::AabbColData);
+}
+
+pub type AColIdent = (usize, asterism::collision::AabbColData);
 
 use asterism::Compare;
 pub struct RsrcIdent {
@@ -273,3 +300,9 @@ impl PaddlesEvent for PhysIdent {
 }
 
 pub type APhysIdent = (usize, asterism::physics::PointPhysData);
+
+impl PaddlesEvent for PhysEvent {
+    type AsterEvent = PhysEvent;
+}
+
+pub type PhysEvent = asterism::physics::PhysicsEvent;

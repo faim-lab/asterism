@@ -1,9 +1,9 @@
 use crate::types::*;
-use crate::{Logics, Predicate, State, Synthesis};
-use std::any::Any;
-use std::collections::HashMap;
+use crate::{Logics, Predicate, State};
+// use std::collections::HashMap;
 
-pub type ReactionFn = Box<dyn Fn(&mut State, &mut Logics, &dyn Any)>; // use Any for now. unsure how to make it more types-y
+#[allow(unused)]
+pub type ReactionFn<Event> = Box<dyn Fn(&mut State, &mut Logics, &Event)>;
 
 pub struct Events {
     pub queries_max_id: usize,
@@ -16,41 +16,16 @@ pub struct Events {
     pub resources: Vec<Predicate<RsrcEvent>>,
     pub resource_ident: Vec<Predicate<RsrcIdent>>,
     pub physics: Vec<Predicate<PhysIdent>>,
-
-    pub reactions: HashMap<QueryID, ReactionFn>,
-    pub stages: Stages,
-
-    // syntheses
-    pub paddle_synth: PaddleSynth,
-    pub ball_synth: BallSynth,
-    pub wall_synth: WallSynth,
-    pub score_synth: ScoreSynth,
+    // pub reactions: HashMap<QueryID, ReactionFn>,
+    // pub stages: Stages,
 }
 
-pub struct Stages {
-    pub control: Vec<QueryID>,
-    pub collision: Vec<QueryID>,
-    pub physics: Vec<QueryID>,
-    pub resources: Vec<QueryID>,
-}
-
-pub struct PaddleSynth {
-    pub ctrl: Option<Synthesis<Paddle>>,
-    pub col: Option<Synthesis<Paddle>>,
-}
-
-pub struct BallSynth {
-    pub col: Option<Synthesis<Ball>>,
-    pub phys: Option<Synthesis<Ball>>,
-}
-
-pub struct WallSynth {
-    pub col: Option<Synthesis<Wall>>,
-}
-
-pub struct ScoreSynth {
-    pub rsrc: Option<Synthesis<Score>>,
-}
+// pub struct Stages {
+//     pub control: Vec<QueryID>,
+//     pub collision: Vec<QueryID>,
+//     pub physics: Vec<QueryID>,
+//     pub resources: Vec<QueryID>,
+// }
 
 impl Events {
     pub fn new() -> Self {
@@ -61,25 +36,14 @@ impl Events {
             resources: Vec::new(),
             resource_ident: Vec::new(),
             physics: Vec::new(),
-            reactions: HashMap::new(),
+            // reactions: HashMap::new(),
 
-            stages: Stages {
-                control: Vec::new(),
-                collision: Vec::new(),
-                physics: Vec::new(),
-                resources: Vec::new(),
-            },
-
-            paddle_synth: PaddleSynth {
-                col: None,
-                ctrl: None,
-            },
-            ball_synth: BallSynth {
-                col: Some(Box::new(|ball: Ball| ball)),
-                phys: Some(Box::new(|ball: Ball| ball)),
-            },
-            wall_synth: WallSynth { col: None },
-            score_synth: ScoreSynth { rsrc: None },
+            // stages: Stages {
+            //     control: Vec::new(),
+            //     collision: Vec::new(),
+            //     physics: Vec::new(),
+            //     resources: Vec::new(),
+            // },
         }
     }
 }

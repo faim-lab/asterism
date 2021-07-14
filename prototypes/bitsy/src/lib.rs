@@ -197,92 +197,7 @@ impl Logics {
 }
 
 pub async fn run(mut game: Game) {
-    game.logics
-        .collision
-        .clear_and_resize_map(WORLD_SIZE, WORLD_SIZE);
-    let player = game.logics.collision.get_synthesis(ColIdent::EntIdx(0));
-
-    let current_room = game.get_current_room();
-    entities::load_room(&mut game.state, &mut game.logics, current_room);
-    if let TileMapColData::Ent { pos, amt_moved, .. } = player {
-        game.logics.collision.positions.insert(0, pos);
-        game.logics.collision.amt_moved.insert(0, amt_moved);
-        game.logics
-            .collision
-            .metadata
-            .insert(0, CollisionData::new(true, false, CollisionEnt::Player));
-    } else {
-        unreachable!();
-    }
-
-    // control events default
-    if game.events.control.is_empty() {
-        game.add_ctrl_predicate(
-            ActionID::Up,
-            ControlEventType::KeyPressed,
-            Box::new(|_, logics, _| {
-                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
-                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
-                    pos.y = (pos.y - 1).max(0);
-                    amt_moved.y = (amt_moved.y - 1).max(-1);
-                }
-                logics
-                    .collision
-                    .update_synthesis(ColIdent::EntIdx(0), player_col);
-            }),
-        );
-
-        game.add_ctrl_predicate(
-            ActionID::Down,
-            ControlEventType::KeyPressed,
-            Box::new(|_, logics, _| {
-                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
-                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
-                    pos.y = (pos.y + 1).min(WORLD_SIZE as i32 - 1);
-                    amt_moved.y = (amt_moved.y + 1).min(1);
-                }
-                logics
-                    .collision
-                    .update_synthesis(ColIdent::EntIdx(0), player_col);
-            }),
-        );
-
-        game.add_ctrl_predicate(
-            ActionID::Left,
-            ControlEventType::KeyPressed,
-            Box::new(|_, logics, _| {
-                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
-                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
-                    pos.x = (pos.x - 1).max(0);
-                    amt_moved.x = (amt_moved.x - 1).max(-1);
-                }
-                logics
-                    .collision
-                    .update_synthesis(ColIdent::EntIdx(0), player_col);
-            }),
-        );
-
-        game.add_ctrl_predicate(
-            ActionID::Right,
-            ControlEventType::KeyPressed,
-            Box::new(|_, logics, _| {
-                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
-                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
-                    pos.x = (pos.x + 1).min(WORLD_SIZE as i32 - 1);
-                    amt_moved.x = (amt_moved.x + 1).min(1);
-                }
-                logics
-                    .collision
-                    .update_synthesis(ColIdent::EntIdx(0), player_col);
-            }),
-        );
-    }
-
-    let control_filter = game.events.add_query();
-    game.tables.add_query::<CtrlEvent>(
-        QueryType::User(control_filter),
-        Some(Compose::Filter(QueryType::ControlEvent)),
-    );
+    setup(&mut game);
 
     loop {
         draw(&game);
@@ -290,7 +205,7 @@ pub async fn run(mut game: Game) {
         let add_queue = std::mem::take(&mut game.state.add_queue);
         for _ent in add_queue {}
 
-        control(&mut game, control_filter);
+        control(&mut game);
         collision(&mut game);
         resources(&mut game);
         linking(&mut game);
@@ -331,7 +246,7 @@ pub async fn run(mut game: Game) {
     }
 }
 
-fn control(game: &mut Game, control_filter: UserQueryID) {
+fn control(game: &mut Game) {
     game.logics.control.update(&());
     game.tables
         .update_single::<CtrlEvent>(QueryType::ControlEvent, game.logics.control.get_table())
@@ -351,7 +266,7 @@ fn control(game: &mut Game, control_filter: UserQueryID) {
     let ans = game
         .tables
         .update_filter(
-            QueryType::User(control_filter),
+            QueryType::ControlFilter,
             Box::new(|event: &CtrlEvent| event.event_type == ControlEventType::KeyPressed),
         )
         .unwrap();
@@ -495,4 +410,93 @@ fn draw(game: &Game) {
             );
         }
     }
+}
+
+// returns the control_filter query id
+fn setup(game: &mut Game) {
+    game.logics
+        .collision
+        .clear_and_resize_map(WORLD_SIZE, WORLD_SIZE);
+    let player = game.logics.collision.get_synthesis(ColIdent::EntIdx(0));
+
+    let current_room = game.get_current_room();
+    entities::load_room(&mut game.state, &mut game.logics, current_room);
+    if let TileMapColData::Ent { pos, amt_moved, .. } = player {
+        game.logics.collision.positions.insert(0, pos);
+        game.logics.collision.amt_moved.insert(0, amt_moved);
+        game.logics
+            .collision
+            .metadata
+            .insert(0, CollisionData::new(true, false, CollisionEnt::Player));
+    } else {
+        unreachable!();
+    }
+
+    // control events default
+    if game.events.control.is_empty() {
+        game.add_ctrl_predicate(
+            ActionID::Up,
+            ControlEventType::KeyPressed,
+            Box::new(|_, logics, _| {
+                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
+                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
+                    pos.y = (pos.y - 1).max(0);
+                    amt_moved.y = (amt_moved.y - 1).max(-1);
+                }
+                logics
+                    .collision
+                    .update_synthesis(ColIdent::EntIdx(0), player_col);
+            }),
+        );
+
+        game.add_ctrl_predicate(
+            ActionID::Down,
+            ControlEventType::KeyPressed,
+            Box::new(|_, logics, _| {
+                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
+                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
+                    pos.y = (pos.y + 1).min(WORLD_SIZE as i32 - 1);
+                    amt_moved.y = (amt_moved.y + 1).min(1);
+                }
+                logics
+                    .collision
+                    .update_synthesis(ColIdent::EntIdx(0), player_col);
+            }),
+        );
+
+        game.add_ctrl_predicate(
+            ActionID::Left,
+            ControlEventType::KeyPressed,
+            Box::new(|_, logics, _| {
+                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
+                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
+                    pos.x = (pos.x - 1).max(0);
+                    amt_moved.x = (amt_moved.x - 1).max(-1);
+                }
+                logics
+                    .collision
+                    .update_synthesis(ColIdent::EntIdx(0), player_col);
+            }),
+        );
+
+        game.add_ctrl_predicate(
+            ActionID::Right,
+            ControlEventType::KeyPressed,
+            Box::new(|_, logics, _| {
+                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
+                if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
+                    pos.x = (pos.x + 1).min(WORLD_SIZE as i32 - 1);
+                    amt_moved.x = (amt_moved.x + 1).min(1);
+                }
+                logics
+                    .collision
+                    .update_synthesis(ColIdent::EntIdx(0), player_col);
+            }),
+        );
+    }
+
+    game.tables.add_query::<CtrlEvent>(
+        QueryType::ControlFilter,
+        Some(Compose::Filter(QueryType::ControlEvent)),
+    );
 }
