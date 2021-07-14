@@ -88,7 +88,7 @@ fn init(game: &mut Game) {
 
     // expands to a match statement mapping the values 0, 1 to the two inputs given
     //
-    // example: {{{1
+    // example:
     // match_set!(set, 1, 0)
     //
     // expands to
@@ -98,7 +98,6 @@ fn init(game: &mut Game) {
     //     1 => 0,
     //     _ => unreachable!(),
     // }
-    // }}}
     macro_rules! match_set {
         ($which_set:expr, $if1:expr, $if2:expr) => {
             match $which_set {
@@ -284,6 +283,3 @@ fn init(game: &mut Game) {
         Box::new(bounce_ball),
     );
 }
-
-// this is a vim setting for folds, if you're not using vim don't worry about it, if you're using vim... enjoy???
-// vi:fdm=marker

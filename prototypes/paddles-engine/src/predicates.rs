@@ -81,7 +81,7 @@ impl Game {
             id,
             reaction,
         });
-        self.tables.add_query::<ARsrcEvent>(
+        self.tables.add_query::<ARsrcIdent>(
             QueryType::User(id),
             Some(Compose::Filter(QueryType::RsrcIdent)),
         );

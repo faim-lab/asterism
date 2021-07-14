@@ -122,9 +122,9 @@ pub enum TableError<QueryID: std::fmt::Debug> {
 
 use std::any::TypeId;
 
-/// Wrapper around `anycollections::AnyHashMap` that also does typechecking at runtime so you don't have to worry about accidentally transmuting something you shouldn't have and causing undefined behavior.
+/// Wrapper around `anycollections::AnyHashMap` that does typechecking at runtime so you don't have to worry about accidentally transmuting something you shouldn't have and causing undefined behavior. NOTE that `get()` and `get_mut()` in `anycollections::AnyHashMap` are very unsafe, but aren't marked as such.
 ///
-/// The double lookups aren't ideal but works for now. Something like `HashMap/BTreeMap<ID, (TypeId, Box<something something UnsafeAny>)>` (????) would be better performance-wise but I can't be bothered to write that at the moment. 📌 unsafe-any: https://docs.rs/unsafe-any/0.4.2/unsafe_any/
+/// The double lookups aren't ideal but work for now. Something like `HashMap/BTreeMap<ID, (TypeId, Box<something something UnsafeAny>)>` (????) would be better performance-wise but I can't be bothered to write that at the moment. (📌 unsafe-any: https://docs.rs/unsafe-any/0.4.2/unsafe_any/)
 struct AnyHashMap<ID: Hash + Eq> {
     map: anycollections::AnyHashMap<ID>,
     /// `types_map.get(id)` *must* always be the `TypeId` of the type of map.get(id)'s output, otherwise very unsafe things will happen.

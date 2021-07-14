@@ -18,10 +18,10 @@ impl Game {
 
         for Predicate { predicate, .. } in self.events.collision.iter_mut() {
             if let ColEvent::ByIdx(i, j) = predicate {
-                if *i <= id.idx() {
+                if *i >= id.idx() {
                     *i += 1;
                 }
-                if *j <= id.idx() {
+                if *j >= id.idx() {
                     *j += 1;
                 }
             }
@@ -34,20 +34,19 @@ impl Game {
 
     pub fn add_ball(&mut self, ball: Ball) -> BallID {
         let id = BallID::new(self.state.ball_id_max);
-        self.logics.consume_ball(
-            self.state
-                .get_col_idx(self.state.balls.len(), CollisionEnt::Ball),
-            ball,
-        );
+        let col_idx = self
+            .state
+            .get_col_idx(self.state.balls.len(), CollisionEnt::Ball);
+        self.logics.consume_ball(col_idx, ball);
         self.state.ball_id_max += 1;
         self.state.balls.push(id);
 
         for Predicate { predicate, .. } in self.events.collision.iter_mut() {
             if let ColEvent::ByIdx(i, j) = predicate {
-                if *i <= id.idx() {
+                if *i >= col_idx {
                     *i += 1;
                 }
-                if *j <= id.idx() {
+                if *j >= col_idx {
                     *j += 1;
                 }
             }
@@ -58,20 +57,19 @@ impl Game {
 
     pub fn add_wall(&mut self, wall: Wall) -> WallID {
         let id = WallID::new(self.state.wall_id_max);
-        self.logics.consume_wall(
-            self.state
-                .get_col_idx(self.state.walls.len(), CollisionEnt::Wall),
-            wall,
-        );
+        let col_idx = self
+            .state
+            .get_col_idx(self.state.walls.len(), CollisionEnt::Wall);
+        self.logics.consume_wall(col_idx, wall);
         self.state.wall_id_max += 1;
         self.state.walls.push(id);
 
         for Predicate { predicate, .. } in self.events.collision.iter_mut() {
             if let ColEvent::ByIdx(i, j) = predicate {
-                if *i <= id.idx() {
+                if *i >= col_idx {
                     *i += 1;
                 }
-                if *j <= id.idx() {
+                if *j >= col_idx {
                     *j += 1;
                 }
             }
@@ -112,10 +110,10 @@ impl Game {
                 if *i == col_idx || *j == col_idx {
                     remove.push(idx);
                 }
-                if *i > ent_i {
+                if *i > col_idx {
                     *i -= 1;
                 }
-                if *j > ent_i {
+                if *j > col_idx {
                     *j -= 1;
                 }
             }
@@ -164,10 +162,10 @@ impl Game {
                 if *i == col_idx || *j == col_idx {
                     remove.push(idx);
                 }
-                if *i > ent_i {
+                if *i > col_idx {
                     *i -= 1;
                 }
-                if *j > ent_i {
+                if *j > col_idx {
                     *j -= 1;
                 }
             }
@@ -205,10 +203,10 @@ impl Game {
                 if *i == col_idx || *j == col_idx {
                     remove.push(idx);
                 }
-                if *i > ent_i {
+                if *i > col_idx {
                     *i -= 1;
                 }
-                if *j > ent_i {
+                if *j > col_idx {
                     *j -= 1;
                 }
             }

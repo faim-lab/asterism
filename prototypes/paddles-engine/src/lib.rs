@@ -98,6 +98,19 @@ impl State {
         EntID::Ball(ball)
     }
 
+    pub fn paddles(&self) -> &[PaddleID] {
+        &self.paddles
+    }
+    pub fn walls(&self) -> &[WallID] {
+        &self.walls
+    }
+    pub fn balls(&self) -> &[BallID] {
+        &self.balls
+    }
+    pub fn scores(&self) -> &[ScoreID] {
+        &self.scores
+    }
+
     pub fn queue_remove(&mut self, ent: EntID) {
         self.remove_queue.push(ent);
     }
@@ -149,6 +162,64 @@ impl Game {
     }
 }
 
+// macro to make matching entities to statements less verbose
+macro_rules! match_ent {
+    (
+        $match_to:expr,
+        $wall:ident: $wall_block:block,
+        $ball:ident: $ball_block:block,
+        $paddle:ident: $paddle_block:block,
+        $score:ident: $score_block:block
+    ) => {
+        match $match_to {
+            Ent::Wall($wall) => $wall_block,
+            Ent::Ball($ball) => $ball_block,
+            Ent::Paddle($paddle) => $paddle_block,
+            Ent::Score($score) => $score_block,
+        }
+    };
+    (
+        $match_to:expr,
+        only $ent:ident: $ent_block:block
+    ) => {
+        match $match_to {
+            EntID::Wall($ent) => $ent_block,
+            EntID::Ball($ent) => $ent_block,
+            EntID::Paddle($ent) => $ent_block,
+            EntID::Score($ent) => $ent_block,
+        }
+    };
+}
+
+// macro to make matching entity ids to statements less verbose
+macro_rules! match_ent_id {
+    (
+        $match_to:expr,
+        $wall:ident: $wall_block:block,
+        $ball:ident: $ball_block:block,
+        $paddle:ident: $paddle_block:block,
+        $score:ident: $score_block:block
+    ) => {
+        match $match_to {
+            EntID::Wall($wall) => $wall_block,
+            EntID::Ball($ball) => $ball_block,
+            EntID::Paddle($paddle) => $paddle_block,
+            EntID::Score($score) => $score_block,
+        }
+    };
+    (
+        $match_to:expr,
+        only $ent:ident: $ent_block:block
+    ) => {
+        match $match_to {
+            EntID::Wall($ent) => $ent_block,
+            EntID::Ball($ent) => $ent_block,
+            EntID::Paddle($ent) => $ent_block,
+            EntID::Score($ent) => $ent_block,
+        }
+    };
+}
+
 pub async fn run(mut game: Game) {
     loop {
         if is_key_down(KeyCode::Escape) {
@@ -156,45 +227,38 @@ pub async fn run(mut game: Game) {
         }
         draw(&game);
 
-        let add_queue = std::mem::take(&mut game.state.add_queue);
-        for ent in add_queue {
-            match ent {
-                Ent::Wall(wall) => {
-                    game.add_wall(wall);
-                }
-                Ent::Ball(ball) => {
-                    game.add_ball(ball);
-                }
-                Ent::Paddle(paddle) => {
-                    game.add_paddle(paddle);
-                }
-                Ent::Score(score) => {
-                    game.add_score(score);
-                }
-            };
-        }
-
         control(&mut game);
         physics(&mut game);
         collision(&mut game);
         resources(&mut game);
 
+        // remove
+        game.state.remove_queue.sort_by(|a, b| {
+            let a = match_ent_id!(a, only ent: { ent.idx() } );
+            let b = match_ent_id!(b, only ent: { ent.idx() });
+            a.cmp(&b)
+        });
         let remove_queue = std::mem::take(&mut game.state.remove_queue);
         for ent in remove_queue {
-            match ent {
-                EntID::Wall(wall) => {
-                    game.remove_wall(wall);
-                }
-                EntID::Ball(ball) => {
-                    game.remove_ball(ball);
-                }
-                EntID::Paddle(paddle) => {
-                    game.remove_paddle(paddle);
-                }
-                EntID::Score(score) => {
-                    game.remove_score(score);
-                }
-            };
+            match_ent_id!(
+                ent,
+                wall: { game.remove_wall(wall); },
+                ball: { game.remove_ball(ball); },
+                paddle: { game.remove_paddle(paddle); },
+                score: { game.remove_score(score); }
+            );
+        }
+
+        // add
+        let add_queue = std::mem::take(&mut game.state.add_queue);
+        for ent in add_queue {
+            match_ent!(
+                ent,
+                wall: { game.add_wall(wall); },
+                ball: { game.add_ball(ball); },
+                paddle: { game.add_paddle(paddle); },
+                score: { game.add_score(score); }
+            );
         }
 
         next_frame().await;

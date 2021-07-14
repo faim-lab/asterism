@@ -83,7 +83,7 @@ fn init(game: &mut Game) {
 
     let score = game.add_score(Score::new());
 
-    game.add_ctrl_predicate(
+    game.add_ctrl_query(
         CtrlEvent {
             set: 0,
             action_id: left,
@@ -97,7 +97,7 @@ fn init(game: &mut Game) {
         }),
     );
 
-    game.add_ctrl_predicate(
+    game.add_ctrl_query(
         CtrlEvent {
             set: 0,
             action_id: right,
@@ -112,7 +112,21 @@ fn init(game: &mut Game) {
     );
 
     let reset_game = move |state: &mut State, logics: &mut Logics| {
-        // reset blocks? not sure how to do this
+        let blocks = state.walls()[4..].to_vec();
+        for id in blocks.into_iter() {
+            state.queue_remove(EntID::Wall(id));
+        }
+
+        // there are probably better ways to do this but whatever
+        let block_size = Vec2::new(32.0, 16.0);
+        (0..5).for_each(|y| {
+            (0..8).for_each(|x| {
+                let mut wall = Wall::new();
+                wall.set_pos(Vec2::new(x as f32 * 32.0, y as f32 * 16.0));
+                wall.set_size(block_size);
+                state.queue_add(Ent::Wall(wall));
+            })
+        });
 
         logics
             .physics
@@ -122,27 +136,27 @@ fn init(game: &mut Game) {
             .resources
             .handle_predicate(&(RsrcPool::Score(score), Transaction::Set(0)));
 
-        logics
-            .collision
-            .handle_predicate(&CollisionReaction::SetPos(
-                state.get_col_idx(0, CollisionEnt::Ball),
-                Vec2::new(
-                    WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
-                    HEIGHT as f32 - PADDLE_OFF_X as f32 * 2.0,
-                ),
-            ));
+        logics.physics.handle_predicate(&PhysicsReaction::SetPos(
+            0,
+            Vec2::new(
+                WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
+                HEIGHT as f32 - PADDLE_OFF_X as f32 * 2.0,
+            ),
+        ));
         logics
             .control
             .handle_predicate(&ControlReaction::SetKeyValid(0, action_serve));
     };
 
-    game.add_collision_predicate(
+    game.add_collision_query(
         ColEvent::ByIdx(
             game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
             game.state
                 .get_col_idx(bottom_wall.idx(), CollisionEnt::Wall),
         ),
-        Box::new(move |state, logics, _| reset_game(state, logics)),
+        Box::new(move |state, logics, _| {
+            reset_game(state, logics);
+        }),
     );
 
     let bounce = move |state: &mut State, logics: &mut Logics, (i, j): &AColEvent| {
@@ -170,17 +184,17 @@ fn init(game: &mut Game) {
         }
     };
 
-    game.add_collision_predicate(
+    game.add_collision_query(
         ColEvent::ByType(CollisionEnt::Ball, CollisionEnt::Wall),
         Box::new(bounce),
     );
 
-    game.add_collision_predicate(
+    game.add_collision_query(
         ColEvent::ByType(CollisionEnt::Ball, CollisionEnt::Paddle),
         Box::new(bounce),
     );
 
-    game.add_rsrc_ident_predicate(
+    game.add_rsrc_ident_query(
         RsrcIdent {
             pool: Some(RsrcPool::Score(score)),
             threshold: 40,
@@ -198,7 +212,7 @@ fn init(game: &mut Game) {
             .handle_predicate(&ControlReaction::SetKeyInvalid(event.set, event.action_id));
     };
 
-    game.add_ctrl_predicate(
+    game.add_ctrl_query(
         CtrlEvent {
             set: paddle.idx(),
             action_id: action_serve,
