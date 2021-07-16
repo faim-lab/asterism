@@ -17,11 +17,11 @@ const PADDLE_OFF_Y: u32 = 36;
 const PADDLE_HEIGHT: u32 = 36;
 const PADDLE_WIDTH: u32 = 36;
 const BALL_SIZE: u32 = 36;
-const BALL_NUM: u8 = 5;
+const BALL_NUM: u8 = 3;
 const WALL_DEPTH: u32 = 8;
 const GOAL_WIDTH: u32 = 72;
 //number of distinct ball sprites, number of rows in spritesheet - paddle rows
-const DIST_BALL: u32 = 4;
+const DIST_BALL: u32 = 3;
 
 const BASE_COLOR: Color = Color::new(0.86, 1., 0.86, 1.);
 const FENCE_COLOR: Color = Color::new(0.94, 0.9, 0.54, 1.);
@@ -213,7 +213,7 @@ async fn main() {
             i.into(),
         ));
 	animation.objects.push(AnimObject::new(animation.sheet
-							   .get_entity((i % (BALL_NUM -1)) as usize),
+							   .get_entity((i as u32 % DIST_BALL) as usize),
 							   world.balls[i as usize].pos));
     }
     animation.objects.push(AnimObject::new(animation.sheet.get_entity(4),
