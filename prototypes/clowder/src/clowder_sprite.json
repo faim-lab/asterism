@@ -1,16 +1,16 @@
 [
   {
-    "name": "Calico",
+    "name": "Eli",
     "sheet_index": 0,
     "default_seq": 0,
     "seqs": [
       {
-        "seq_name": "Running",
-        "frame_rate": 12,
+        "seq_name": "Eli Running",
+        "frame_rate": 10,
         "is_cycle": true,
         "is_active": false,
-        "priority": 0,
-        "current": 0,
+        "priority": 1,
+        "current": 1,
         "sprites": [
           {
             "index": 0,
@@ -41,18 +41,11 @@
             }
           }
         ]
-      }
-    ]
-  },
-  {
-    "name": "Eli",
-    "sheet_index": 1,
-    "default_seq": 0,
-    "seqs": [
+      },
       {
-        "seq_name": "Running",
-        "frame_rate": 12,
-        "is_cycle": true,
+        "seq_name": "Eli Scared",
+        "frame_rate": 10,
+        "is_cycle": false,
         "is_active": false,
         "priority": 0,
         "current": 0,
@@ -61,7 +54,7 @@
             "index": 0,
             "frame": {
               "x": 0,
-              "y": 48,
+              "y": 0,
               "w": 48,
               "h": 48
             },
@@ -75,7 +68,49 @@
             "index": 1,
             "frame": {
               "x": 48,
-              "y": 48,
+              "y": 0,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 2,
+            "frame": {
+              "x": 96,
+              "y": 0,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 3,
+            "frame": {
+              "x": 144,
+              "y": 0,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 4,
+            "frame": {
+              "x": 192,
+              "y": 0,
               "w": 48,
               "h": 48
             },
@@ -91,12 +126,12 @@
   },
   {
     "name": "Felix",
-    "sheet_index": 2,
+    "sheet_index": 1,
     "default_seq": 0,
     "seqs": [
       {
-        "seq_name": "Running",
-        "frame_rate": 12,
+        "seq_name": "Felix Running",
+        "frame_rate": 10,
         "is_cycle": true,
         "is_active": false,
         "priority": 0,
@@ -121,6 +156,277 @@
             "frame": {
               "x": 48,
               "y": 96,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          }
+        ]
+      },
+      {
+        "seq_name": "Felix Scared Orange",
+        "frame_rate": 10,
+        "is_cycle": true,
+        "is_active": false,
+        "priority": 0,
+        "current": 0,
+        "sprites": [
+          {
+            "index": 0,
+            "frame": {
+              "x": 0,
+              "y": 48,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 1,
+            "frame": {
+              "x": 48,
+              "y": 48,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 2,
+            "frame": {
+              "x": 96,
+              "y": 48,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 3,
+            "frame": {
+              "x": 144,
+              "y": 48,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 4,
+            "frame": {
+              "x": 192,
+              "y": 48,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          }
+        ]
+      },
+      {
+        "seq_name": "Felix Scared Blue",
+        "frame_rate": 10,
+        "is_cycle": true,
+        "is_active": false,
+        "priority": 0,
+        "current": 0,
+        "sprites": [
+          {
+            "index": 0,
+            "frame": {
+              "x": 0,
+              "y": 48,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 1,
+            "frame": {
+              "x": 48,
+              "y": 48,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 2,
+            "frame": {
+              "x": 0,
+              "y": 96,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 3,
+            "frame": {
+              "x": 48,
+              "y": 96,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 4,
+            "frame": {
+              "x": 96,
+              "y": 96,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Portals",
+    "sheet_index": 2,
+    "default_seq": 0,
+    "seqs": [
+      {
+        "seq_name": "Orange Portals",
+        "frame_rate": 10,
+        "is_cycle": false,
+        "is_active": false,
+        "priority": 0,
+        "current": 0,
+        "sprites": [
+          {
+            "index": 0,
+            "frame": {
+              "x": 144,
+              "y": 96,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 1,
+            "frame": {
+              "x": 192,
+              "y": 96,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 2,
+            "frame": {
+              "x": 0,
+              "y": 144,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          }
+        ]
+      },
+      {
+        "seq_name": "Blue Portals",
+        "frame_rate": 10,
+        "is_cycle": false,
+        "is_active": false,
+        "priority": 0,
+        "current": 0,
+        "sprites": [
+          {
+            "index": 0,
+            "frame": {
+              "x": 48,
+              "y": 144,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 1,
+            "frame": {
+              "x": 96,
+              "y": 144,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 2,
+            "frame": {
+              "x": 144,
+              "y": 144,
               "w": 48,
               "h": 48
             },
@@ -140,8 +446,8 @@
     "default_seq": 0,
     "seqs": [
       {
-        "seq_name": "Running",
-        "frame_rate": 12,
+        "seq_name": "Rhubarb Running",
+        "frame_rate": 10,
         "is_cycle": true,
         "is_active": false,
         "priority": 0,
@@ -176,24 +482,31 @@
             }
           }
         ]
-      }
-    ]
-  },
-  {
-    "name": "Squirt Puppy",
-    "sheet_index": 4,
-    "default_seq": 0,
-    "seqs": [
+      },
       {
-        "seq_name": "Running",
-        "frame_rate": 12,
-        "is_cycle": true,
+        "seq_name": "Rhubarb Scared",
+        "frame_rate": 10,
+        "is_cycle": false,
         "is_active": false,
         "priority": 0,
         "current": 0,
         "sprites": [
           {
             "index": 0,
+            "frame": {
+              "x": 192,
+              "y": 144,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 1,
             "frame": {
               "x": 0,
               "y": 192,
@@ -207,10 +520,83 @@
             }
           },
           {
-            "index": 1,
+            "index": 2,
             "frame": {
               "x": 48,
               "y": 192,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 3,
+            "frame": {
+              "x": 96,
+              "y": 192,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 4,
+            "frame": {
+              "x": 144,
+              "y": 192,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Squirt Puppy",
+    "sheet_index": 4,
+    "default_seq": 0,
+    "seqs": [
+      {
+        "seq_name": "Squirt Puppy Running",
+        "frame_rate": 10,
+        "is_cycle": true,
+        "is_active": false,
+        "priority": 0,
+        "current": 0,
+        "sprites": [
+          {
+            "index": 0,
+            "frame": {
+              "x": 192,
+              "y": 192,
+              "w": 48,
+              "h": 48
+            },
+            "trimmed": false,
+            "size": {
+              "w": 48,
+              "h": 48
+            }
+          },
+          {
+            "index": 1,
+            "frame": {
+              "x": 0,
+              "y": 240,
               "w": 48,
               "h": 48
             },
