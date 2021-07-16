@@ -282,4 +282,23 @@ fn init(game: &mut Game) {
         ColEvent::ByType(CollisionEnt::Ball, CollisionEnt::Paddle),
         Box::new(bounce_ball),
     );
+
+    let paddle_idents = QueryType::User(game.add_query());
+    let paddle_col_and_rsrc = QueryType::User(game.add_query());
+
+    rules!(game ->
+        control: {}
+        physics: {}
+        collision: {
+            [filter paddle_idents, QueryType::ColIdent => paddle = AColIdent: {
+                paddle.1.id == CollisionEnt::Paddle
+            }]
+        }
+        resources: {
+            [zip paddle_col_and_rsrc, (paddle_idents => AColIdent, QueryType::RsrcIdent => ARsrcIdent),
+            foreach (_, (pool, (val, ..))) => {
+                let RsrcPool::Score(score) = pool; println!("paddle {} has {} points", score.idx() + 1, val);
+            }]
+        }
+    );
 }

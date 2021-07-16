@@ -9,7 +9,7 @@ use asterism::{
 use macroquad::prelude::*;
 
 mod entities;
-mod events;
+pub mod events;
 mod predicates;
 mod types;
 use events::*;
@@ -23,6 +23,7 @@ pub use asterism::resources::{ResourceEventType, ResourceReaction, Transaction};
 pub use asterism::tables::*;
 pub use asterism::Compare;
 pub use asterism::{Logic, OutputTable};
+// pub use events::PaddlesUserEvents;
 pub use types::*;
 
 pub struct Logics {
@@ -119,11 +120,14 @@ impl State {
     }
 }
 
+pub trait PaddlesGame {}
+impl PaddlesGame for Game {}
+
 pub struct Game {
     pub state: State,
     pub logics: Logics,
-    pub(crate) events: Events,
-    pub(crate) tables: ConditionTables<QueryType>,
+    pub events: Events,
+    pub tables: ConditionTables<QueryType>,
 }
 
 impl Game {
@@ -160,9 +164,15 @@ impl Game {
             tables,
         }
     }
+
+    pub fn add_query(&mut self) -> UserQueryID {
+        let id = UserQueryID::new(self.events.queries_max_id);
+        self.events.queries_max_id += 1;
+        id
+    }
 }
 
-// macro to make matching entities to statements less verbose
+// macro to make matching entities to statements take up less space
 macro_rules! match_ent {
     (
         $match_to:expr,
@@ -290,6 +300,10 @@ fn control(game: &mut Game) {
             reaction(&mut game.state, &mut game.logics, event);
         }
     }
+
+    if let Some(control) = game.events.user.control.clone() {
+        control(game);
+    }
 }
 
 fn physics(game: &mut Game) {
@@ -339,6 +353,10 @@ fn physics(game: &mut Game) {
         for event in ans.iter() {
             reaction(&mut game.state, &mut game.logics, event);
         }
+    }
+
+    if let Some(physics) = game.events.user.physics.clone() {
+        physics(game);
     }
 }
 
@@ -393,6 +411,10 @@ fn collision(game: &mut Game) {
         for event in ans.iter() {
             reaction(&mut game.state, &mut game.logics, event);
         }
+    }
+
+    if let Some(collision) = game.events.user.collision.clone() {
+        collision(game);
     }
 }
 
@@ -451,6 +473,10 @@ fn resources(game: &mut Game) {
         for event in ans.iter() {
             reaction(&mut game.state, &mut game.logics, event);
         }
+    }
+
+    if let Some(resources) = game.events.user.resources.clone() {
+        resources(game);
     }
 }
 

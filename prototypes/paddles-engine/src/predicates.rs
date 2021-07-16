@@ -17,8 +17,7 @@ impl Game {
         predicate: CtrlEvent,
         reaction: PredicateFn<CtrlEvent>,
     ) -> UserQueryID {
-        let id = UserQueryID::new(self.events.queries_max_id);
-        self.events.queries_max_id += 1;
+        let id = self.add_query();
         self.events.control.push(Predicate {
             predicate,
             id,
@@ -36,8 +35,7 @@ impl Game {
         predicate: ColEvent,
         reaction: PredicateFn<ColEvent>,
     ) -> UserQueryID {
-        let id = UserQueryID::new(self.events.queries_max_id);
-        self.events.queries_max_id += 1;
+        let id = self.add_query();
         self.events.collision.push(Predicate {
             predicate,
             id,
@@ -55,8 +53,7 @@ impl Game {
         predicate: RsrcEvent,
         reaction: PredicateFn<RsrcEvent>,
     ) -> UserQueryID {
-        let id = UserQueryID::new(self.events.queries_max_id);
-        self.events.queries_max_id += 1;
+        let id = self.add_query();
         self.events.resources.push(Predicate {
             predicate,
             id,
@@ -74,8 +71,7 @@ impl Game {
         predicate: RsrcIdent,
         reaction: PredicateFn<RsrcIdent>,
     ) -> UserQueryID {
-        let id = UserQueryID::new(self.events.queries_max_id);
-        self.events.queries_max_id += 1;
+        let id = self.add_query();
         self.events.resource_ident.push(Predicate {
             predicate,
             id,

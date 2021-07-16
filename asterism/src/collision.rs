@@ -218,12 +218,13 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
 }
 
 #[derive(Clone)]
-pub struct AabbColData {
+pub struct AabbColData<ID: Copy + Eq> {
     pub center: Vec2,
     pub half_size: Vec2,
     pub vel: Vec2,
     pub fixed: bool,
     pub solid: bool,
+    pub id: ID,
 }
 
 impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
@@ -231,7 +232,7 @@ impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
     type Reaction = CollisionReaction<ID>;
 
     type Ident = usize;
-    type IdentData = AabbColData;
+    type IdentData = AabbColData<ID>;
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         match reaction {
@@ -280,6 +281,7 @@ impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
             vel: self.velocities[ident],
             fixed: self.metadata[ident].fixed,
             solid: self.metadata[ident].solid,
+            id: self.metadata[ident].id,
         }
     }
 

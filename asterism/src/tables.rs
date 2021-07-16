@@ -31,8 +31,8 @@ impl<QueryID: Hash + Eq + Copy + std::fmt::Debug> ConditionTables<QueryID> {
 
     pub fn add_query<T: 'static>(&mut self, id: QueryID, compose: Option<Compose<QueryID>>) {
         let output: Vec<T> = Vec::new();
-        self.query_output.insert(id, output);
         self.composes.insert(id, compose);
+        self.query_output.insert(id, output);
     }
 
     pub fn update_single<T: 'static>(
@@ -99,7 +99,7 @@ impl<QueryID: Hash + Eq + Copy + std::fmt::Debug> ConditionTables<QueryID> {
     }
 }
 
-/// Possible ways to compose queries
+/// Possible ways to compose queries. It would be very cool to have more expressivity here!!!!!!!!!!!!!
 #[non_exhaustive]
 #[derive(Clone)]
 pub enum Compose<QueryID: Copy> {

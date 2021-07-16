@@ -262,10 +262,10 @@ pub struct ColIdent {
 }
 
 impl PaddlesEvent for ColIdent {
-    type AsterEvent = (usize, asterism::collision::AabbColData);
+    type AsterEvent = (usize, asterism::collision::AabbColData<CollisionEnt>);
 }
 
-pub type AColIdent = (usize, asterism::collision::AabbColData);
+pub type AColIdent = (usize, asterism::collision::AabbColData<CollisionEnt>);
 
 use asterism::Compare;
 pub struct RsrcIdent {
