@@ -47,6 +47,7 @@ struct Sequence {
     is_active: bool,
     priority: u64,
     current: usize,
+    pause: bool,
     sprites: Vec<Sprite>,
 }
 
@@ -67,6 +68,7 @@ pub struct AnimObject
     pivot: Option<Vec2>,
     pub pos: Vec2,
     pub is_visible: bool,
+    pub paused: bool,
 }
 
 //sprite sheet
@@ -81,7 +83,7 @@ impl Sequence
     {
 	return self.sprites[self.current].clone();
     }
-    fn progress_seq (&mut self, frames_drawn:u64) -> ()
+    fn progress_seq (&mut self, frames_drawn:u64) -> bool
     {
 	if frames_drawn % self.frame_rate == 0
 	{
@@ -100,6 +102,7 @@ impl Sequence
 		}
 	    }
 	}
+	return self.is_active;
     }
 }
 impl SpriteSheet {
@@ -127,6 +130,7 @@ impl AnimObject
 	    pivot: None,
 	    pos: pos,
 	    is_visible: true,
+	    paused: false,
 	}
     }
 
@@ -167,6 +171,14 @@ impl AnimObject
     {
 	self.pivot = new_pivot;
     }
+    pub fn pause(&mut self) ->()
+    {
+	self.paused = true;
+    }
+     pub fn unpause(&mut self) ->()
+    {
+	self.paused = false;
+    }
 
      fn create_param(&self, sprite: Sprite) -> DrawTextureParams {
         let mut texture = DrawTextureParams::default();
@@ -206,9 +218,21 @@ impl AnimObject
 			WHITE,
 			self.create_param(self.entity.seqs[cur_index].cur_sprite()));
 
+	//is not just drawing default seq, default current
 	if self.entity.seqs[cur_index].is_active
 	{
-	    self.entity.seqs[cur_index].progress_seq(frames_drawn);
+	    //if still active after progressing
+	    if self.entity.seqs[cur_index].progress_seq(frames_drawn)
+	    {
+		//keep paused in accordance with active seq
+		self.paused = self.entity.seqs[cur_index].pause;
+	    }
+	    //if the seq that just finished pauses the object
+	    else if self.entity.seqs[cur_index].pause
+	    {
+		//unpause
+		self.paused = false
+	    }
 	}
 	
 

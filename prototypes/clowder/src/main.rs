@@ -526,13 +526,18 @@ impl World {
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>, animation: &mut SimpleAnim) {
         for (i, ball) in self.balls.iter_mut().enumerate() {
-            ball.pos.x = (collision.centers[i + 7].x - collision.half_sizes[i + 7].x).trunc();
+	    //if object is not paused
+	    //if !animation.objects[ball.id].paused
+	   // {
+	
+	   // }
+	    	ball.pos.x = (collision.centers[i + 7].x - collision.half_sizes[i + 7].x).trunc();
             ball.pos.y = (collision.centers[i + 7].y - collision.half_sizes[i + 7].y).trunc();
-
+		animation.objects[ball.id].pos = ball.pos;
+            
 	    //sets pivot around center and position
 	    animation.objects[ball.id].set_pivot(Some(Vec2::new(ball.pos.x + (BALL_SIZE / 2) as f32,
 	    ball.pos.y + (BALL_SIZE / 2) as f32)));
-	    animation.objects[ball.id].pos = ball.pos;
 
 	    // animation.objects[ball.id].set_rotation( f32::sqrt(ball.vel.x * ball.vel.x + ball.vel.y * ball.vel.y));
        
