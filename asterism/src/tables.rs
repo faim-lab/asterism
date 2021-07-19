@@ -1,6 +1,6 @@
-//! Existence-based processing operates over lists, filtering/zipping/otherwise processing them, kind of like an [iterator][std::iter::Iterator]. More here: https://dataorienteddesign.com/dodmain/node4.html
+//! Existence-based processing operates over lists, filtering/zipping/otherwise processing them, kind of like an [iterator](std::iter::Iterator). More here: <https://dataorienteddesign.com/dodmain/node4.html>
 //!
-//! This is adjacent to/uses similar concepts as query/condition tables: https://www.dataorienteddesign.com/dodmain/node7.html#SECTION00710000000000000000 and https://www.dataorienteddesign.com/dodmain/node12.html
+//! This is adjacent to/uses similar concepts as query/condition tables: <https://www.dataorienteddesign.com/dodmain/node7.html#SECTION00710000000000000000> and <https://www.dataorienteddesign.com/dodmain/node12.html>
 //!
 //! The outputs in asterism are the identities + syntheses and the events. Ex. for a collision logic the identities could be the positions/sizes/metadata of each collision body, while the events would be contacts.
 //!
@@ -29,12 +29,14 @@ impl<QueryID: Hash + Eq + Copy + std::fmt::Debug> ConditionTables<QueryID> {
         }
     }
 
+    /// adds a query to the table, associating a new row of outputs with the given ID.
     pub fn add_query<T: 'static>(&mut self, id: QueryID, compose: Option<Compose<QueryID>>) {
         let output: Vec<T> = Vec::new();
         self.composes.insert(id, compose);
         self.query_output.insert(id, output);
     }
 
+    /// updates a row of the table with the given output, doing no processing.
     pub fn update_single<T: 'static>(
         &mut self,
         id: QueryID,
@@ -50,6 +52,7 @@ impl<QueryID: Hash + Eq + Copy + std::fmt::Debug> ConditionTables<QueryID> {
         }
     }
 
+    /// filters a row of the table with the given predicate, and writes the output to another row
     pub fn update_filter<T: Clone + 'static>(
         &mut self,
         id: QueryID,
@@ -73,6 +76,7 @@ impl<QueryID: Hash + Eq + Copy + std::fmt::Debug> ConditionTables<QueryID> {
         }
     }
 
+    /// zips two rows of the table and writes the output to another row.
     pub fn update_zip<A: Clone + 'static, B: Clone + 'static>(
         &mut self,
         id: QueryID,
@@ -99,7 +103,7 @@ impl<QueryID: Hash + Eq + Copy + std::fmt::Debug> ConditionTables<QueryID> {
     }
 }
 
-/// Possible ways to compose queries. It would be very cool to have more expressivity here!!!!!!!!!!!!!
+/// Possible ways to compose queries.
 #[non_exhaustive]
 #[derive(Clone)]
 pub enum Compose<QueryID: Copy> {
@@ -107,12 +111,8 @@ pub enum Compose<QueryID: Copy> {
     Zip(QueryID, QueryID),
 }
 
-pub struct Condition<QueryID: Copy> {
-    pub compose: Compose<QueryID>,
-    pub output: Vec<bool>,
-}
-
 #[derive(Debug)]
+// TODO: proper error handling here would be cool...
 pub enum TableError<QueryID: std::fmt::Debug> {
     ComposeNotFound,
     QueryNotFound(QueryID),

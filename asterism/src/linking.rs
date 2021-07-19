@@ -6,7 +6,7 @@
 use crate::graph::StateMachine;
 use crate::{tables::OutputTable, Event, EventType, Logic, Reaction};
 
-/// A generic linking logic. See [StateMachine][asterism::graph::StateMachine] documentation for more information.
+/// A generic linking logic. See [StateMachine][crate::graph::StateMachine] documentation for more information.
 ///
 /// I think this is the exact same code as FlatEntityState actually. The difference might make become more clear when rendering?
 pub struct GraphedLinking<NodeID: Copy + Eq> {

@@ -149,7 +149,6 @@ pub enum ResourceError {
 
 pub type ResourceReaction<ID, Value> = (ID, Transaction<Value>);
 
-// this type should just be a result <__<
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct ResourceEvent<ID> {
     pub pool: ID,

@@ -1,3 +1,5 @@
+//! Various structs related to graphs/state machines.
+
 /// State machine with links represented by a directed graph with an adjacency matrix.
 ///
 /// Uses a condition table to check if an edge is traversable. If `graph.conditions[node_idx] == true`, then the edge from `graph.nodes[current_node]` to `graph.nodes[node_idx]` is traversable.
@@ -56,6 +58,7 @@ impl<NodeID: Copy + Eq> StateMachine<NodeID> {
 }
 
 #[derive(Clone)]
+/// A graph implemented with an adjacency matrix
 pub struct Graph<NodeID: Clone + Eq> {
     /// list of nodes in the graph. Possibly unnecessary, I can't decide if I want to remove this or not
     pub nodes: Vec<NodeID>,
@@ -79,7 +82,7 @@ impl<NodeID: Eq + Clone> Graph<NodeID> {
         self.edges[from][to]
     }
 
-    // "but allocation---" eh
+    /// The edges connected to a node, by their indices (not IDs)
     pub fn get_edges(&mut self, node: usize) -> Vec<usize> {
         self.edges[node]
             .iter()
@@ -88,6 +91,7 @@ impl<NodeID: Eq + Clone> Graph<NodeID> {
             .collect::<Vec<_>>()
     }
 
+    /// The index in the graph of the given node
     pub fn node_idx(&self, node: &NodeID) -> Option<usize> {
         self.nodes.iter().position(|id| id == node)
     }

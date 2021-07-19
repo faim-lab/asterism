@@ -19,7 +19,6 @@ pub use asterism::control::{Action, ControlEventType, ControlReaction, Values};
 pub use asterism::physics::{PhysicsEvent, PhysicsReaction, PointPhysData};
 pub use asterism::resources::{ResourceEventType, ResourceReaction, Transaction};
 pub use asterism::tables::*;
-pub use asterism::Compare;
 pub use asterism::{Logic, OutputTable};
 // pub use events::PaddlesUserEvents;
 pub use types::*;

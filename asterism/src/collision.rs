@@ -301,8 +301,9 @@ pub enum CollisionReaction<ID> {
     /// sets the size, _not_ the half size
     SetSize(usize, Vec2),
     SetVel(usize, Vec2),
-    SetMetadata(usize, bool, bool), // solid, fixed
-    /// NOTE that using this predicate will likely break anything involving contacts until this logic is updated
+    /// sets the metadata for the given entity: `SetMetadata(entity_index, solid, fixed)`
+    SetMetadata(usize, bool, bool),
+    /// removes a collision body. NOTE that using this predicate will likely break anything involving contacts until this logic is updated
     RemoveBody(usize),
     AddBody {
         pos: Vec2,
@@ -316,6 +317,7 @@ pub enum CollisionReaction<ID> {
 
 impl<ID> Reaction for CollisionReaction<ID> {}
 
+/// the indices of the two collision bodies involved in the contact.
 pub type CollisionEvent = (usize, usize);
 
 impl Event for CollisionEvent {
@@ -326,6 +328,9 @@ impl Event for CollisionEvent {
     }
 }
 
+/// the collision event type. Collision bodies can do one thing: touch.
+///
+/// (should maybe add restituting here too)
 pub enum CollisionEventType {
     Touching,
 }

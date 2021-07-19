@@ -13,7 +13,7 @@ trait Input {
 
 /// A keyboard control logic.
 ///
-/// A Wrapper is a helper struct that helps keep track of information that libraries may not but we do want, such as [BevyInputWrapper], [MacroquadInputWrapper], or [WinitInputWrapper].
+/// A Wrapper is a helper struct that helps keep track of keypress information that libraries may not but we do want. This is currently only necessary if you're using `winit_input_helper`.
 pub struct KeyboardControl<ID, Wrapper>
 where
     ID: Copy + Eq + Ord,
@@ -182,7 +182,9 @@ impl<KeyCode: Copy> Input for KeyInput<KeyCode> {
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum InputType {
+    /// an input that can be a range of values (joystick, etc)
     Analog,
+    /// an input that can only be pressed or not pressed
     Digital,
 }
 
@@ -233,6 +235,7 @@ impl<ID, KeyCode: Copy> Action<ID, KeyCode> {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ControlReaction<ID: Copy + Eq, KeyCode: Copy + Eq> {
+    /// add a key to the set with the given id, and if it's valid or not.
     AddKeyToSet(usize, ID, KeyCode, bool),
     SetKeyValid(usize, ID),
     SetKeyInvalid(usize, ID),
@@ -328,7 +331,9 @@ impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> OutputTable<QueryEvent<ID, Wrap
 
 /// A wrapper to help keep track of input information that preexisting input handlers may not offer, but that we need.
 pub trait InputWrapper {
+    /// what kind of keycode the InputWrapper will keep track of
     type KeyCode: Copy + Eq;
+    /// the InputHelper that the engine's input handler uses, ex. Bevy's `bevy_input::Input` or winit_input_helper's `WinitInputHelper`.
     type InputHelper;
     fn new() -> Self;
 

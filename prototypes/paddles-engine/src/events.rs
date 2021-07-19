@@ -23,13 +23,15 @@ impl Events {
 #[macro_export]
 /// paddles_engine rules!
 ///
-/// @setup rules are used during initialization to add a row of query outputs to the table. @run rules are used in the game loop to update those table rows.
-///
-/// These rules are defined in a way that requires knowledge of how existence-based processing works, which is... not super ideal, since the concept is sort of difficult to get your head around. But it works?????? which is cool????????????
+/// These rules are defined in a way that requires knowledge of how existence-based processing works, which is... not super ideal maybe??, since the concept is sort of difficult to get your head around. But it works?????? which is cool????
 ///
 /// You define each rule in a stage: control, physics, collision, and resources, in the order they're executed. Each rule declares whether it zips two output tables or filters them, corresponding to the actions currently available in [ConditionTables][asterism::tables::ConditionTables] and [Compose][asterism::tables::Compose].
 ///
-/// Finally, optionally, the user can define if they want a predicate to run on each value of the resulting output table ("foreach"), or a predicate to run if at least one is true ("ifany").
+/// Finally, optionally, the user can define if they want a predicate to run on each value of the resulting output table ("foreach"), or a predicate to run if at least one is true ("ifany"). (MORE HERE?)
+///
+/// Note that it's impossible to add events while the game is running. This is a restriction of how the macro works (with closures rather than from a data structure or JSON file or something).
+///
+/// @setup rules are used during initialization to add a row of query outputs to the table. @run rules are used in the game loop to update those table rows. @then rules execute a piece of code according to the table output (as described above).
 macro_rules! rules {
     (@setup filter $id:expr, $filter:expr => $filter_type:ty, |$_filter_pat:pat, $logic:pat, $state:pat| $_predicate:block $(, $($_then:tt)*)?) => {
         |game: &mut $crate::Game| {
