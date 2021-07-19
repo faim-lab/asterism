@@ -5,7 +5,7 @@
     "default_seq": 0,
     "seqs": [
       {
-        "seq_name": "Eli Running",
+        "seq_name": "Running",
         "frame_rate": 10,
         "is_cycle": true,
         "is_active": false,
@@ -43,7 +43,7 @@
         ]
       },
       {
-        "seq_name": "Eli Scared",
+        "seq_name": "Scared",
         "frame_rate": 10,
         "is_cycle": false,
         "is_active": false,
@@ -130,7 +130,7 @@
     "default_seq": 0,
     "seqs": [
       {
-        "seq_name": "Felix Running",
+        "seq_name": "Running",
         "frame_rate": 10,
         "is_cycle": true,
         "is_active": false,
@@ -335,7 +335,7 @@
     "default_seq": 0,
     "seqs": [
       {
-        "seq_name": "Rhubarb Running",
+        "seq_name": "Running",
         "frame_rate": 10,
         "is_cycle": true,
         "is_active": false,
@@ -373,7 +373,7 @@
         ]
       },
       {
-        "seq_name": "Rhubarb Scared",
+        "seq_name": "Scared",
         "frame_rate": 10,
         "is_cycle": false,
         "is_active": false,
@@ -571,7 +571,7 @@
     "default_seq": 0,
     "seqs": [
       {
-        "seq_name": "Squirt Puppy Running",
+        "seq_name": "Running",
         "frame_rate": 10,
         "is_cycle": true,
         "is_active": false,
