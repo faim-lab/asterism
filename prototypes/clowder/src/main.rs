@@ -352,6 +352,8 @@ impl World {
                         .collision
                         .sides_touched(contact, &CollisionID::Ball(i));
 
+		    animation.activate_seq(self.balls[i].id, "Scared");
+
                     if (self.balls[i].vel.x, self.balls[i].vel.y) == (0.0, 0.0) {
                         if sides_touched.x != 1.0 || sides_touched.y != 1.0 {
                             self.balls[i].vel = Vec2::new(sides_touched.x, sides_touched.y);
@@ -417,6 +419,10 @@ impl World {
         {
             animation.activate_seq(BALL_NUM as usize, "Running");
         }
+	else
+	{
+	     animation.deactivate_seq(BALL_NUM as usize, "Running");
+	}
 
 	//if moving left
 	if control.values[0][0].value > 0.0
@@ -458,14 +464,15 @@ impl World {
             ball.pos = *pos;
             ball.vel = *vel;
 	    //not moving
-	    if ball.vel == Vec2::ZERO
+	    if ball.vel != Vec2::ZERO
 	    {
-		animation.seq_false(ball.id, 0);
+		animation.activate_seq(ball.id, "Running");
 	    }
 	    else//moving
 	    {
-		animation.seq_true(ball.id, 0);
+		animation.deactivate_seq(ball.id, "Running");
 	    }
+	    
 	    //if moving left
 	    if ball.vel.x > 0.0
 	    {

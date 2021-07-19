@@ -206,7 +206,11 @@ impl AnimObject
 			WHITE,
 			self.create_param(self.entity.seqs[cur_index].cur_sprite()));
 
-	self.entity.seqs[cur_index].progress_seq(frames_drawn);
+	if self.entity.seqs[cur_index].is_active
+	{
+	    self.entity.seqs[cur_index].progress_seq(frames_drawn);
+	}
+	
 
 			
     }
@@ -269,8 +273,7 @@ impl SimpleAnim {
 	    {
 		if seq.seq_name.eq(seq_name)
 		{
-		    seq.is_active = false;
-		}
+		    seq.is_active = false;		}
 	    }
 	
     }
