@@ -34,7 +34,7 @@ fn init(game: &mut Game) {
         HEIGHT as f32 / 2.0 - BALL_SIZE as f32 / 2.0,
     ));
     ball.set_size(Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32));
-    let ball = game.add_ball(ball);
+    game.add_ball(ball);
 
     // walls
     // left
@@ -51,12 +51,12 @@ fn init(game: &mut Game) {
     let mut wall = Wall::new();
     wall.set_pos(Vec2::new(0.0, -1.0));
     wall.set_size(Vec2::new(WIDTH as f32, 1.0));
-    let top_wall = game.add_wall(wall);
+    game.add_wall(wall);
     // bottom
     let mut wall = Wall::new();
     wall.set_pos(Vec2::new(0.0, HEIGHT as f32));
     wall.set_size(Vec2::new(WIDTH as f32, 1.0));
-    let bottom_wall = game.add_wall(wall);
+    game.add_wall(wall);
 
     // paddle 1
     let mut paddle1 = Paddle::new();
@@ -123,39 +123,6 @@ fn init(game: &mut Game) {
         logics.collision.update_synthesis(set, paddle_col);
     };
 
-    game.add_ctrl_query(
-        CtrlEvent {
-            set: 0,
-            action_id: action_q,
-            event_type: ControlEventType::KeyHeld,
-        },
-        Box::new(move |_, logics, _| move_up(logics, 0)),
-    );
-    game.add_ctrl_query(
-        CtrlEvent {
-            set: 0,
-            action_id: action_a,
-            event_type: ControlEventType::KeyHeld,
-        },
-        Box::new(move |_, logics, _| move_down(logics, 0)),
-    );
-    game.add_ctrl_query(
-        CtrlEvent {
-            set: 1,
-            action_id: action_o,
-            event_type: ControlEventType::KeyHeld,
-        },
-        Box::new(move |_, logics, _| move_up(logics, 1)),
-    );
-    game.add_ctrl_query(
-        CtrlEvent {
-            set: 1,
-            action_id: action_l,
-            event_type: ControlEventType::KeyHeld,
-        },
-        Box::new(move |_, logics, _| move_down(logics, 1)),
-    );
-
     // serving
     let serve_ball = move |logics: &mut Logics, set: usize| {
         let vel = match_set!(set, Vec2::splat(1.0), Vec2::splat(-1.0));
@@ -167,24 +134,6 @@ fn init(game: &mut Game) {
             .control
             .handle_predicate(&ControlReaction::SetKeyInvalid(set, action_id));
     };
-
-    game.add_ctrl_query(
-        CtrlEvent {
-            set: 0,
-            action_id: action_w,
-            event_type: ControlEventType::KeyPressed,
-        },
-        Box::new(move |_, logics, _| serve_ball(logics, 0)),
-    );
-
-    game.add_ctrl_query(
-        CtrlEvent {
-            set: 1,
-            action_id: action_i,
-            event_type: ControlEventType::KeyPressed,
-        },
-        Box::new(move |_, logics, _| serve_ball(logics, 1)),
-    );
 
     // increase score on collision with side wall
     let inc_score = move |logics: &mut Logics, set: usize| {
@@ -200,53 +149,7 @@ fn init(game: &mut Game) {
         ));
     };
 
-    game.add_collision_query(
-        ColEvent::ByIdx(
-            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
-            game.state.get_col_idx(right_wall.idx(), CollisionEnt::Wall),
-        ),
-        Box::new(move |_, logics, _| {
-            inc_score(logics, 0);
-        }),
-    );
-    game.add_collision_query(
-        ColEvent::ByIdx(
-            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
-            game.state.get_col_idx(left_wall.idx(), CollisionEnt::Wall),
-        ),
-        Box::new(move |_, logics, _| {
-            inc_score(logics, 1);
-        }),
-    );
-
-    // reset ball on score
-    game.add_rsrc_query(
-        RsrcEvent { success: true },
-        Box::new(move |_, logics, event| {
-            let RsrcPool::Score(score) = event.pool;
-
-            println!(
-                "p{} scored: {}",
-                score.idx() + 1,
-                logics.resources.get_synthesis(event.pool).0
-            );
-            logics
-                .physics
-                .handle_predicate(&PhysicsReaction::SetVel(0, Vec2::ZERO));
-            logics.physics.handle_predicate(&PhysicsReaction::SetPos(
-                0,
-                Vec2::splat(WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0),
-            ));
-            logics
-                .control
-                .handle_predicate(&ControlReaction::SetKeyValid(
-                    score.idx(),
-                    match_set!(score.idx(), action_w, action_i),
-                ));
-        }),
-    );
-
-    let bounce_ball = |state: &mut State, logics: &mut Logics, (i, j): &AColEvent| {
+    let bounce_ball = |(i, j): &ColEvent, state: &mut State, logics: &mut Logics| {
         let id = state.get_id(*i);
         if let EntID::Ball(ball_id) = id {
             let sides_touched = logics.collision.sides_touched(*i, *j);
@@ -261,44 +164,108 @@ fn init(game: &mut Game) {
         }
     };
 
-    game.add_collision_query(
-        ColEvent::ByIdx(
-            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
-            game.state.get_col_idx(top_wall.idx(), CollisionEnt::Wall),
-        ),
-        Box::new(bounce_ball),
-    );
+    let move_paddle = QueryType::User(game.add_query());
+    let serve = QueryType::User(game.add_query());
+    let bounce = QueryType::User(game.add_query());
+    let score = QueryType::User(game.add_query());
+    let score_increased = QueryType::User(game.add_query());
 
-    game.add_collision_query(
-        ColEvent::ByIdx(
-            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
-            game.state
-                .get_col_idx(bottom_wall.idx(), CollisionEnt::Wall),
-        ),
-        Box::new(bounce_ball),
-    );
+    paddles_engine::rules!(game ->
+        control: [
+            {
+                filter move_paddle,
+                QueryType::CtrlEvent => CtrlEvent,
+                |ctrl, _, _| {
+                    ctrl.event_type == ControlEventType::KeyHeld
+                },
+                foreach |ctrl, _, logics| {
+                    if ctrl.action_id == action_q || ctrl.action_id == action_o {
+                        move_up(logics, ctrl.set);
+                    } else if ctrl.action_id == action_a || ctrl.action_id == action_l {
+                        move_down(logics, ctrl.set);
+                    }
+                }
+            },
+            {
+                filter serve,
+                QueryType::CtrlEvent => CtrlEvent,
+                |ctrl, _, _| {
+                    ctrl.event_type == ControlEventType::KeyPressed && (ctrl.action_id == action_w || ctrl.action_id == action_i)
+                },
+                foreach |ctrl, _, logics| {
+                    serve_ball(logics, ctrl.set);
+                }
+            }
+        ]
 
-    game.add_collision_query(
-        ColEvent::ByType(CollisionEnt::Ball, CollisionEnt::Paddle),
-        Box::new(bounce_ball),
-    );
+        physics: []
 
-    let paddle_idents = QueryType::User(game.add_query());
-    let paddle_col_and_rsrc = QueryType::User(game.add_query());
+        collision: [
+            {
+                filter bounce,
+                QueryType::ColEvent => ColEvent,
+                |(i, j), _, logics| {
+                    let i_id = logics.collision.metadata[*i].id;
+                    let j_id = logics.collision.metadata[*j].id;
+                    i_id == CollisionEnt::Ball &&
+                        (j_id == CollisionEnt::Wall || j_id == CollisionEnt::Paddle)
+                },
+                foreach |col, state, logics| {
+                    bounce_ball(col, state, logics);
+                }
+            },
+            {
+                filter score,
+                QueryType::ColEvent => ColEvent,
+                |(i, j), state, logics| {
+                    let i_id = logics.collision.metadata[*i].id;
+                    i_id == CollisionEnt::Ball &&
+                        (*j == state.get_col_idx(left_wall.idx(), CollisionEnt::Wall) || *j == state.get_col_idx(right_wall.idx(), CollisionEnt::Wall))
+                },
+                foreach |(_, j), state, logics| {
+                    if *j == state.get_col_idx(left_wall.idx(), CollisionEnt::Wall) {
+                        inc_score(logics, 1);
+                    } else if *j == state.get_col_idx(right_wall.idx(), CollisionEnt::Wall) {
+                        inc_score(logics, 0);
+                    } else {
+                        unreachable!();
+                    }
+                }
+            }
+        ]
 
-    rules!(game ->
-        control: {}
-        physics: {}
-        collision: {
-            [filter paddle_idents, QueryType::ColIdent => paddle = AColIdent: {
-                paddle.1.id == CollisionEnt::Paddle
-            }]
-        }
-        resources: {
-            [zip paddle_col_and_rsrc, (paddle_idents => AColIdent, QueryType::RsrcIdent => ARsrcIdent),
-            foreach (_, (pool, (val, ..))) => {
-                let RsrcPool::Score(score) = pool; println!("paddle {} has {} points", score.idx() + 1, val);
-            }]
-        }
+        resources: [
+            {
+                filter score_increased,
+                QueryType::RsrcEvent => RsrcEvent,
+                |pool, _, _| {
+                    pool.event_type == ResourceEventType::PoolUpdated
+                },
+                foreach |event, _, logics| {
+                    let RsrcPool::Score(score) = event.pool;
+
+                    println!(
+                        "p{} scored: {}",
+                        score.idx() + 1,
+                        logics.resources.get_synthesis(event.pool).0
+                    );
+                    logics
+                        .physics
+                        .handle_predicate(&PhysicsReaction::SetVel(0, Vec2::ZERO));
+
+                    logics.physics.handle_predicate(&PhysicsReaction::SetPos(
+                        0,
+                        Vec2::splat(WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0),
+                    ));
+
+                    logics
+                        .control
+                        .handle_predicate(&ControlReaction::SetKeyValid(
+                            score.idx(),
+                            match_set!(score.idx(), action_w, action_i),
+                        ));
+                }
+            }
+        ]
     );
 }

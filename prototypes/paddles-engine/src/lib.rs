@@ -10,10 +10,8 @@ use macroquad::prelude::*;
 
 mod entities;
 pub mod events;
-mod predicates;
 mod types;
 use events::*;
-use predicates::*;
 
 // reexports
 pub use asterism::collision::{AabbColData, AabbCollision, CollisionReaction};
@@ -113,7 +111,9 @@ impl State {
     }
 
     pub fn queue_remove(&mut self, ent: EntID) {
-        self.remove_queue.push(ent);
+        if !self.remove_queue.iter().any(|id| ent == *id) {
+            self.remove_queue.push(ent);
+        }
     }
     pub fn queue_add(&mut self, ent: Ent) {
         self.add_queue.push(ent);
@@ -135,16 +135,16 @@ impl Game {
         let mut tables = ConditionTables::new();
 
         // collision
-        tables.add_query::<AColEvent>(QueryType::ColEvent, None);
-        tables.add_query::<AColIdent>(QueryType::ColIdent, None);
+        tables.add_query::<ColEvent>(QueryType::ColEvent, None);
+        tables.add_query::<ColIdent>(QueryType::ColIdent, None);
 
         // phys
-        tables.add_query::<APhysIdent>(QueryType::PhysIdent, None);
+        tables.add_query::<PhysIdent>(QueryType::PhysIdent, None);
         tables.add_query::<PhysEvent>(QueryType::PhysEvent, None);
 
         // rsrc
-        tables.add_query::<ARsrcEvent>(QueryType::RsrcEvent, None);
-        tables.add_query::<ARsrcIdent>(QueryType::RsrcIdent, None);
+        tables.add_query::<RsrcEvent>(QueryType::RsrcEvent, None);
+        tables.add_query::<RsrcIdent>(QueryType::RsrcIdent, None);
 
         // ctrl
         tables.add_query::<CtrlEvent>(QueryType::CtrlEvent, None);
@@ -152,7 +152,7 @@ impl Game {
 
         // ball collision idents
         // ball physics idents are just physics idents
-        tables.add_query::<AColIdent>(
+        tables.add_query::<ColIdent>(
             QueryType::BallCol,
             Some(Compose::Filter(QueryType::ColIdent)),
         );
@@ -285,23 +285,7 @@ fn control(game: &mut Game) {
         .update_single::<CtrlIdent>(QueryType::CtrlIdent, game.logics.control.get_table())
         .unwrap();
 
-    for Predicate {
-        id,
-        predicate,
-        reaction,
-    } in game.events.control.iter()
-    {
-        let predicate = Box::new(|event: &CtrlEvent| event == predicate);
-        let ans = game
-            .tables
-            .update_filter(QueryType::User(*id), predicate)
-            .unwrap();
-        for event in ans.iter() {
-            reaction(&mut game.state, &mut game.logics, event);
-        }
-    }
-
-    if let Some(control) = game.events.user.control.clone() {
+    if let Some(control) = game.events.control.clone() {
         control(game);
     }
 }
@@ -315,7 +299,7 @@ fn physics(game: &mut Game) {
 
     let ans = game
         .tables
-        .update_single::<APhysIdent>(QueryType::PhysIdent, game.logics.physics.get_table())
+        .update_single::<PhysIdent>(QueryType::PhysIdent, game.logics.physics.get_table())
         .unwrap();
 
     // update physics positions to collision
@@ -327,35 +311,7 @@ fn physics(game: &mut Game) {
             .handle_predicate(&CollisionReaction::SetPos(idx, data.pos));
     }
 
-    // user defined events
-    for Predicate {
-        predicate,
-        id,
-        reaction,
-    } in game.events.physics.iter()
-    {
-        let square = |x| x * x;
-
-        let pred_fn = Box::new(|(_, ident_data): &APhysIdent| {
-            predicate.vel_op.cmp(
-                ident_data.vel.length_squared(),
-                square(predicate.vel_threshold),
-            ) && predicate.vel_op.cmp(
-                ident_data.acc.length_squared(),
-                square(predicate.acc_threshold),
-            )
-        });
-
-        let ans = game
-            .tables
-            .update_filter(QueryType::User(*id), pred_fn)
-            .unwrap();
-        for event in ans.iter() {
-            reaction(&mut game.state, &mut game.logics, event);
-        }
-    }
-
-    if let Some(physics) = game.events.user.physics.clone() {
+    if let Some(physics) = game.events.physics.clone() {
         physics(game);
     }
 }
@@ -364,10 +320,10 @@ fn collision(game: &mut Game) {
     game.logics.collision.update();
 
     game.tables
-        .update_single::<AColEvent>(QueryType::ColEvent, game.logics.collision.get_table())
+        .update_single::<ColEvent>(QueryType::ColEvent, game.logics.collision.get_table())
         .unwrap();
     game.tables
-        .update_single::<AColIdent>(QueryType::ColIdent, game.logics.collision.get_table())
+        .update_single::<ColIdent>(QueryType::ColIdent, game.logics.collision.get_table())
         .unwrap();
 
     // update collision positions to physics
@@ -377,7 +333,7 @@ fn collision(game: &mut Game) {
         .tables
         .update_filter(
             QueryType::BallCol,
-            Box::new(|(idx, _): &AColIdent| *idx > paddles_len + walls_len),
+            Box::new(|(idx, _): &ColIdent| *idx > paddles_len + walls_len),
         )
         .unwrap();
     for (idx, data) in ans.iter() {
@@ -387,33 +343,7 @@ fn collision(game: &mut Game) {
             .handle_predicate(&PhysicsReaction::SetPos(idx, data.center - data.half_size));
     }
 
-    // user defined filters
-    for Predicate {
-        predicate,
-        id,
-        reaction,
-    } in game.events.collision.iter()
-    {
-        let collision = &game.logics.collision;
-
-        let pred_fn = Box::new(|(i, j): &AColEvent| match predicate {
-            ColEvent::ByType(ty_i, ty_j) => {
-                collision.metadata[*i].id == *ty_i && collision.metadata[*j].id == *ty_j
-            }
-            ColEvent::ByIdx(ev_i, ev_j) => ev_i == i && ev_j == j,
-        });
-
-        let ans = game
-            .tables
-            .update_filter(QueryType::User(*id), pred_fn)
-            .unwrap();
-
-        for event in ans.iter() {
-            reaction(&mut game.state, &mut game.logics, event);
-        }
-    }
-
-    if let Some(collision) = game.events.user.collision.clone() {
+    if let Some(collision) = game.events.collision.clone() {
         collision(game);
     }
 }
@@ -422,60 +352,13 @@ fn resources(game: &mut Game) {
     game.logics.resources.update();
 
     game.tables
-        .update_single::<ARsrcEvent>(QueryType::RsrcEvent, game.logics.resources.get_table())
+        .update_single::<RsrcEvent>(QueryType::RsrcEvent, game.logics.resources.get_table())
         .unwrap();
     game.tables
-        .update_single::<ARsrcIdent>(QueryType::RsrcIdent, game.logics.resources.get_table())
+        .update_single::<RsrcIdent>(QueryType::RsrcIdent, game.logics.resources.get_table())
         .unwrap();
 
-    // user defined filters, idents
-    for Predicate {
-        predicate,
-        id,
-        reaction,
-    } in game.events.resource_ident.iter()
-    {
-        let pred_fn = Box::new(|(id, vals): &ARsrcIdent| {
-            predicate.op.cmp(vals.0, predicate.threshold)
-                && if let Some(pool) = predicate.pool {
-                    pool == *id
-                } else {
-                    true
-                }
-        });
-
-        let ans = game
-            .tables
-            .update_filter(QueryType::User(*id), pred_fn)
-            .unwrap();
-
-        for event in ans.iter() {
-            reaction(&mut game.state, &mut game.logics, event);
-        }
-    }
-
-    // user defined filters, events
-    for Predicate {
-        predicate,
-        id,
-        reaction,
-    } in game.events.resources.iter()
-    {
-        let pred_fn = Box::new(|event: &ARsrcEvent| {
-            predicate.success == (event.event_type == ResourceEventType::PoolUpdated)
-        });
-
-        let ans = game
-            .tables
-            .update_filter(QueryType::User(*id), pred_fn)
-            .unwrap();
-
-        for event in ans.iter() {
-            reaction(&mut game.state, &mut game.logics, event);
-        }
-    }
-
-    if let Some(resources) = game.events.user.resources.clone() {
+    if let Some(resources) = game.events.resources.clone() {
         resources(game);
     }
 }

@@ -34,7 +34,7 @@ fn init(game: &mut Game) {
         HEIGHT as f32 - PADDLE_OFF_X as f32 * 2.0,
     ));
     ball.set_size(Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32));
-    let ball = game.add_ball(ball);
+    game.add_ball(ball);
 
     // walls
     // left
@@ -79,37 +79,9 @@ fn init(game: &mut Game) {
         HEIGHT as f32 - PADDLE_OFF_X as f32,
     ));
     paddle.set_size(Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32));
-    let paddle = game.add_paddle(paddle);
+    game.add_paddle(paddle);
 
     let score = game.add_score(Score::new());
-
-    game.add_ctrl_query(
-        CtrlEvent {
-            set: 0,
-            action_id: left,
-            event_type: ControlEventType::KeyHeld,
-        },
-        Box::new(|_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
-            let mut paddle_col = logics.collision.get_synthesis(event.set);
-            paddle_col.center.x -= 1.0;
-            paddle_col.vel.x = (paddle_col.vel.x.abs() - 1.0).max(-1.0);
-            logics.collision.update_synthesis(event.set, paddle_col);
-        }),
-    );
-
-    game.add_ctrl_query(
-        CtrlEvent {
-            set: 0,
-            action_id: right,
-            event_type: ControlEventType::KeyHeld,
-        },
-        Box::new(|_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
-            let mut paddle_col = logics.collision.get_synthesis(event.set);
-            paddle_col.center.x += 1.0;
-            paddle_col.vel.x = (paddle_col.vel.x.abs() + 1.0).min(1.0);
-            logics.collision.update_synthesis(event.set, paddle_col);
-        }),
-    );
 
     let reset_game = move |state: &mut State, logics: &mut Logics| {
         let blocks = state.walls()[4..].to_vec();
@@ -148,18 +120,7 @@ fn init(game: &mut Game) {
             .handle_predicate(&ControlReaction::SetKeyValid(0, action_serve));
     };
 
-    game.add_collision_query(
-        ColEvent::ByIdx(
-            game.state.get_col_idx(ball.idx(), CollisionEnt::Ball),
-            game.state
-                .get_col_idx(bottom_wall.idx(), CollisionEnt::Wall),
-        ),
-        Box::new(move |state, logics, _| {
-            reset_game(state, logics);
-        }),
-    );
-
-    let bounce = move |state: &mut State, logics: &mut Logics, (i, j): &AColEvent| {
+    let bounce_ball = move |(i, j): &ColEvent, state: &mut State, logics: &mut Logics| {
         let id = state.get_id(*i);
         if let EntID::Ball(ball_id) = id {
             let sides_touched = logics.collision.sides_touched(*i, *j);
@@ -184,40 +145,90 @@ fn init(game: &mut Game) {
         }
     };
 
-    game.add_collision_query(
-        ColEvent::ByType(CollisionEnt::Ball, CollisionEnt::Wall),
-        Box::new(bounce),
-    );
+    let move_paddle = QueryType::User(game.add_query());
+    let serve = QueryType::User(game.add_query());
+    let bounce = QueryType::User(game.add_query());
+    let reset_lose = QueryType::User(game.add_query());
+    let reset_win = QueryType::User(game.add_query());
 
-    game.add_collision_query(
-        ColEvent::ByType(CollisionEnt::Ball, CollisionEnt::Paddle),
-        Box::new(bounce),
-    );
+    paddles_engine::rules!(game ->
+        control: [
+            {
+                filter move_paddle,
+                QueryType::CtrlEvent => CtrlEvent,
+                |ctrl, _, _| {
+                    ctrl.event_type == ControlEventType::KeyHeld && ctrl.action_id != action_serve
+                },
+                foreach |ctrl, _, logics| {
+                    let mut paddle_col = logics.collision.get_synthesis(ctrl.set);
+                    if ctrl.action_id == left {
+                        paddle_col.center.x -= 1.0;
+                        paddle_col.vel.x = (paddle_col.vel.x.abs() - 1.0).max(-1.0);
+                    } else if ctrl.action_id == right {
+                        paddle_col.center.x += 1.0;
+                        paddle_col.vel.x = (paddle_col.vel.x.abs() + 1.0).min(1.0);
+                    }
+                    logics.collision.update_synthesis(ctrl.set, paddle_col);
+                }
+            },
+            {
+                filter serve,
+                QueryType::CtrlEvent => CtrlEvent,
+                |ctrl, _, _| {
+                    ctrl.event_type == ControlEventType::KeyPressed && ctrl.action_id == action_serve
+                },
+                foreach |ctrl, _, logics| {
+                    logics
+                        .physics
+                        .handle_predicate(&PhysicsReaction::SetVel(0, Vec2::splat(1.0)));
+                    logics
+                        .control
+                        .handle_predicate(&ControlReaction::SetKeyInvalid(ctrl.set, ctrl.action_id));
+                }
+            }
+        ]
 
-    game.add_rsrc_ident_query(
-        RsrcIdent {
-            pool: Some(RsrcPool::Score(score)),
-            threshold: 40,
-            op: Compare::GreaterEq,
-        },
-        Box::new(move |state, logics, _| reset_game(state, logics)),
-    );
+        physics: []
 
-    let move_ball = |_: &mut State, logics: &mut Logics, event: &CtrlEvent| {
-        logics
-            .physics
-            .handle_predicate(&PhysicsReaction::SetVel(0, Vec2::new(1.0, 1.0)));
-        logics
-            .control
-            .handle_predicate(&ControlReaction::SetKeyInvalid(event.set, event.action_id));
-    };
+        collision: [
+            {
+                filter bounce,
+                QueryType::ColEvent => ColEvent,
+                |(i, j), _, logics| {
+                    let i_id = logics.collision.metadata[*i].id;
+                    let j_id = logics.collision.metadata[*j].id;
+                    i_id == CollisionEnt::Ball &&
+                        (j_id == CollisionEnt::Wall || j_id == CollisionEnt::Paddle)
+                },
+                foreach |col, state, logics| {
+                    bounce_ball(col, state, logics);
+                }
+            },
+            {
+                filter reset_lose,
+                QueryType::ColEvent => ColEvent,
+                |(i, j), state, logics| {
+                    let i_id = logics.collision.metadata[*i].id;
+                    i_id == CollisionEnt::Ball &&
+                        *j == state.get_col_idx(bottom_wall.idx(), CollisionEnt::Wall)
+                },
+                foreach |_, state, logics| {
+                    reset_game(state, logics);
+                }
+            }
+        ]
 
-    game.add_ctrl_query(
-        CtrlEvent {
-            set: paddle.idx(),
-            action_id: action_serve,
-            event_type: ControlEventType::KeyPressed,
-        },
-        Box::new(move_ball),
+        resources: [
+            {
+                filter reset_win,
+                QueryType::RsrcIdent => RsrcIdent,
+                |(_, (val, ..)), _, _| {
+                    *val >= 40
+                },
+                foreach |_, state, logics| {
+                    reset_game(state, logics);
+                }
+            }
+        ]
     );
 }

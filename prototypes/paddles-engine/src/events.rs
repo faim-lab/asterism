@@ -1,51 +1,21 @@
-use crate::types::*;
-use crate::Predicate;
 use std::rc::Rc;
 
 pub struct Events {
     pub queries_max_id: usize,
-
-    // queries
-    pub control: Vec<Predicate<CtrlEvent>>,
-    pub control_ident: Vec<Predicate<CtrlIdent>>,
-    pub collision: Vec<Predicate<ColEvent>>,
-    pub collision_ident: Vec<Predicate<ColIdent>>,
-    pub resources: Vec<Predicate<RsrcEvent>>,
-    pub resource_ident: Vec<Predicate<RsrcIdent>>,
-    pub physics: Vec<Predicate<PhysIdent>>,
-    pub user: UserEvents,
-}
-
-pub struct UserEvents {
     pub control: Option<Rc<dyn Fn(&mut crate::Game)>>,
     pub physics: Option<Rc<dyn Fn(&mut crate::Game)>>,
     pub collision: Option<Rc<dyn Fn(&mut crate::Game)>>,
     pub resources: Option<Rc<dyn Fn(&mut crate::Game)>>,
 }
 
-impl UserEvents {
-    pub fn new() -> Self {
-        Self {
-            control: None,
-            physics: None,
-            collision: None,
-            resources: None,
-        }
-    }
-}
-
 impl Events {
     pub fn new() -> Self {
         Self {
             queries_max_id: 0,
-            control: Vec::new(),
-            control_ident: Vec::new(),
-            collision: Vec::new(),
-            collision_ident: Vec::new(),
-            resources: Vec::new(),
-            resource_ident: Vec::new(),
-            physics: Vec::new(),
-            user: UserEvents::new(),
+            control: None,
+            physics: None,
+            collision: None,
+            resources: None,
         }
     }
 }
@@ -61,7 +31,7 @@ impl Events {
 ///
 /// Finally, optionally, the user can define if they want a predicate to run on each value of the resulting output table ("foreach"), or a predicate to run if at least one is true ("ifany").
 macro_rules! rules {
-    (@setup filter $id:expr, $filter:expr => $_filter_pat:pat = $filter_type:ty: $_predicate:block $(, $($_then:tt)*)?) => {
+    (@setup filter $id:expr, $filter:expr => $filter_type:ty, |$_filter_pat:pat, $logic:pat, $state:pat| $_predicate:block $(, $($_then:tt)*)?) => {
         |game: &mut $crate::Game| {
             game.tables.add_query::<$filter_type>(
                 $id,
@@ -81,21 +51,27 @@ macro_rules! rules {
         }
     };
 
-    (@run filter $id:expr, $filter:expr => $filter_pat:pat = $filter_type:ty: $predicate:block) => {
+    (@run filter $id:expr, $filter:expr => $filter_type:ty, |$filter_pat:pat, $state:pat, $logics:pat| $predicate:block) => {
         |game: &mut Game| {
+            let $logics = &game.logics;
+            let $state = &game.state;
             game
                 .tables
                 .update_filter($id, |$filter_pat: &$filter_type| $predicate)
                 .unwrap();
             }
     };
-    (@run filter $id:expr, $filter:expr => $filter_pat:pat = $filter_type:ty: $predicate:block, $($then:tt)*) => {
+    (@run filter $id:expr, $filter:expr => $filter_type:ty, |$filter_pat:pat, $state:pat, $logics:pat| $predicate:block, $($then:tt)*) => {
         |game: &mut Game| {
-            let ans = game
+            let ans = {
+                let $state = &game.state;
+                let $logics = &game.logics;
+                game
                 .tables
                 .update_filter($id, |$filter_pat: &$filter_type| $predicate)
-                .unwrap();
-            $crate::rules!(@then ans &$filter_type, $($then)*);
+                .unwrap()
+            };
+            $crate::rules!(@then [ans] [game] [&$filter_type], $($then)*);
         }
     };
 
@@ -112,27 +88,30 @@ macro_rules! rules {
             let ans = game.tables
                 .update_zip::<$zip_ty1, $zip_ty2>($id)
                 .unwrap();
-            $crate::rules!(@then ans &($zip_ty1, $zip_ty2), $($then)*);
+            $crate::rules!(@then [ans] [game] [&($zip_ty1, $zip_ty2)], $($then)*);
         }
     };
 
-    (@then $answers:ident $ev_type:ty, foreach $event:pat => $predicate:block) => {
-        let predicate = |$event: $ev_type| $predicate;
+    (@then [$answers:ident] [$game:ident] [$ev_type:ty], foreach |$event:pat, $state:pat, $logics:pat| $predicate:block) => {
+        let predicate = |$event: $ev_type, $state: &mut $crate::State, $logics: &mut $crate::Logics| $predicate;
         for ans in $answers.iter() {
-            predicate(ans);
+            predicate(ans, &mut $game.state, &mut $game.logics);
         }
     };
-    (@then $answers:ident $_ev_type:ty, ifany $predicate:block) => {
+
+    (@then [$answers:ident] [$game:ident] [$_ev_type:ty], ifany |$state:pat, $logics:pat| $predicate:block) => {
+        let $state = &game.state;
+        let $logics = &game.logics;
         if !$answers.is_empty() {
             $predicate
         }
     };
 
     ($game:ident ->
-        control: { $([$($ctrl_rule:tt)+])* }
-        physics: { $([$($phys_rule:tt)+])* }
-        collision: { $([$($col_rule:tt)+])* }
-        resources: { $([$($rsrc_rule:tt)+])* }
+        control: [ $({$($ctrl_rule:tt)+}),* ]
+        physics: [ $({$($phys_rule:tt)+}),* ]
+        collision: [ $({$($col_rule:tt)+}),* ]
+        resources: [ $({$($rsrc_rule:tt)+}),* ]
     ) => {
         {
             use std::rc::Rc;
@@ -148,16 +127,16 @@ macro_rules! rules {
                     setup(self);
                 }
                 fn control(&mut self, control: Rc<dyn Fn(&mut Self)>) {
-                    self.events.user.control = Some(control);
+                    self.events.control = Some(control);
                 }
                 fn collision(&mut self, collision: Rc<dyn Fn(&mut Self)>) {
-                    self.events.user.collision = Some(collision);
+                    self.events.collision = Some(collision);
                 }
                 fn resources(&mut self, resources: Rc<dyn Fn(&mut Self)>) {
-                    self.events.user.resources = Some(resources);
+                    self.events.resources = Some(resources);
             }
                 fn physics(&mut self, physics: Rc<dyn Fn(&mut Self)>) {
-                    self.events.user.physics = Some(physics);
+                    self.events.physics = Some(physics);
                 }
             }
 

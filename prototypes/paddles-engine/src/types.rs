@@ -226,83 +226,11 @@ impl Logics {
 use asterism::collision::CollisionEvent;
 use asterism::control::ControlEvent;
 
-pub trait PaddlesEvent {
-    type AsterEvent;
-}
-
 pub type CtrlEvent = ControlEvent<ActionID>;
-
-impl PaddlesEvent for CtrlEvent {
-    type AsterEvent = ControlEvent<ActionID>;
-}
-
 pub type CtrlIdent = (usize, Vec<asterism::control::Action<ActionID, KeyCode>>);
-
-impl PaddlesEvent for CtrlIdent {
-    type AsterEvent = CtrlIdent;
-}
-
-pub enum ColEvent {
-    ByType(CollisionEnt, CollisionEnt),
-    ByIdx(usize, usize),
-}
-
-impl PaddlesEvent for ColEvent {
-    type AsterEvent = CollisionEvent;
-}
-
-pub type AColEvent = CollisionEvent;
-
-pub struct ColIdent {
-    pub pos_threshold: f32,
-    pub pos_op: Compare,
-    pub fixed: Option<bool>,
-    pub solid: Option<bool>,
-    pub id: Option<bool>,
-}
-
-impl PaddlesEvent for ColIdent {
-    type AsterEvent = (usize, asterism::collision::AabbColData<CollisionEnt>);
-}
-
-pub type AColIdent = (usize, asterism::collision::AabbColData<CollisionEnt>);
-
-use asterism::Compare;
-pub struct RsrcIdent {
-    pub pool: Option<RsrcPool>,
-    pub threshold: u16,
-    pub op: Compare,
-}
-
-impl PaddlesEvent for RsrcIdent {
-    type AsterEvent = (RsrcPool, (u16, u16, u16));
-}
-pub type ARsrcIdent = (RsrcPool, (u16, u16, u16));
-
-pub struct RsrcEvent {
-    pub success: bool,
-}
-
-impl PaddlesEvent for RsrcEvent {
-    type AsterEvent = asterism::resources::ResourceEvent<RsrcPool>;
-}
-pub type ARsrcEvent = asterism::resources::ResourceEvent<RsrcPool>;
-
-pub struct PhysIdent {
-    pub vel_threshold: f32,
-    pub vel_op: Compare,
-    pub acc_threshold: f32,
-    pub acc_op: Compare,
-}
-
-impl PaddlesEvent for PhysIdent {
-    type AsterEvent = (usize, asterism::physics::PointPhysData);
-}
-
-pub type APhysIdent = (usize, asterism::physics::PointPhysData);
-
-impl PaddlesEvent for PhysEvent {
-    type AsterEvent = PhysEvent;
-}
-
+pub type ColEvent = CollisionEvent;
+pub type ColIdent = (usize, asterism::collision::AabbColData<CollisionEnt>);
+pub type RsrcIdent = (RsrcPool, (u16, u16, u16));
+pub type RsrcEvent = asterism::resources::ResourceEvent<RsrcPool>;
+pub type PhysIdent = (usize, asterism::physics::PointPhysData);
 pub type PhysEvent = asterism::physics::PhysicsEvent;
