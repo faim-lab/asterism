@@ -448,6 +448,7 @@ impl SimpleAnim {
     {
 	self.background_color = new_color;
     }
+    
     // draws a current frame, i.e. background + all visible objects
     pub fn draw(&mut self) -> ()
     {
