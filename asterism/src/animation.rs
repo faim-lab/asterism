@@ -10,11 +10,20 @@ use serde::Deserialize;
 use serde_json;
 use std::fs;
 
-//simple animations across a spritesheet
+/*SimpleAnim
+simple animations across a spritesheet
+stationary background that is represented with simple rectangles- not sprites
+
+sheet: spritesheet being used to draw from, holds all sprites
+frames_drawn: number of times drawn is called
+objects: animation objects being drawn
+background: stationary background elements being drawn
+*/
 pub struct SimpleAnim {
     pub sheet: SpriteSheet,
     pub frames_drawn: u64,
-    pub objects: Vec<AnimObject>
+    pub objects: Vec<AnimObject>,
+    pub background: Vec<BackElement>
 }
 
 /*wrapper, 
@@ -127,6 +136,22 @@ pub struct AnimObject
 }
 
 /*
+BackElement
+a background element, 
+is stationary throughout the game but still needs to be drawn
+does not have any asosciated sprites but instead is a simple rectangle
+
+pos: the x and y position of the upper left hand corner
+bounds: the width and height of the element
+color: the color of the element
+*/
+pub struct BackElement
+{
+    pos: Vec2,
+    bounds: Vec2,
+    color: Color,
+}
+/*
 SpriteSheet
 stores the image file for all sprites/visuals used in animations
 stores the information gained from a json/datafile to 
@@ -139,6 +164,8 @@ pub struct SpriteSheet {
     image: Texture2D,
     entities: Vec<Entity>,
 }
+
+
 
 impl Sequence
 {
@@ -176,6 +203,28 @@ returns the state of the sequence (active/inactive)
     }
 }
 
+impl BackElement
+{
+    fn new(x: f32, y: f32, w: f32, h: f32, color: Color) -> Self
+    {
+	Self
+	{
+	    pos: Vec2::new(x,y),
+	    bounds: Vec2::new(w,h),
+	    color: color,
+	}
+    }
+
+    //draws background element
+    fn draw(&self) -> ()
+    {
+	draw_rectangle(self.pos.x,
+		       self.pos.y,
+		       self.bounds.x,
+		       self.bounds.y,
+		       self.color);
+    }
+}
 impl SpriteSheet {
     fn new(image_file: Texture2D, data_file: Vec<Entity>) -> Self {
         Self {
@@ -189,6 +238,7 @@ impl SpriteSheet {
 	return self.entities[entity_index].clone();
     }
 }
+
 
 impl AnimObject
 {
@@ -343,6 +393,7 @@ impl SimpleAnim {
             ),
             frames_drawn: 0,
 	    objects: Vec::new(),
+	    background: Vec::new(),
         }
     }
 
@@ -393,9 +444,16 @@ impl SimpleAnim {
 	
     }
 
-    // draws a current frame, i.e. all visible objects
+    // draws a current frame, i.e. background + all visible objects
     pub fn draw(&mut self) -> ()
     {
+	//draws background elements
+	for element in self.background.iter_mut()
+	{
+	    element.draw();
+	}
+
+	//draws all visible objects
 	for obj in self.objects.iter_mut()
 	{
 	    if obj.is_visible{
