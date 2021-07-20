@@ -17,13 +17,15 @@ stationary background that is represented with simple rectangles- not sprites
 sheet: spritesheet being used to draw from, holds all sprites
 frames_drawn: number of times drawn is called
 objects: animation objects being drawn
-background: stationary background elements being drawn
+b_elements: stationary background elements being drawn
+background_color: the color of the background
 */
 pub struct SimpleAnim {
     pub sheet: SpriteSheet,
     pub frames_drawn: u64,
     pub objects: Vec<AnimObject>,
-    pub background: Vec<BackElement>
+    pub b_elements: Vec<BackElement>,
+    pub background_color: Color,
 }
 
 /*wrapper, 
@@ -205,7 +207,7 @@ returns the state of the sequence (active/inactive)
 
 impl BackElement
 {
-    fn new(x: f32, y: f32, w: f32, h: f32, color: Color) -> Self
+    pub fn new(x: f32, y: f32, w: f32, h: f32, color: Color) -> Self
     {
 	Self
 	{
@@ -373,8 +375,6 @@ creates a DrawTextureParams (something needed by macroquad for draw method) for 
 	    }
 	}
 	
-
-			
     }
 
     
@@ -393,10 +393,10 @@ impl SimpleAnim {
             ),
             frames_drawn: 0,
 	    objects: Vec::new(),
-	    background: Vec::new(),
+	    b_elements: Vec::new(),
+	    background_color: WHITE,
         }
     }
-
 
     //incriments frames drawn
     pub fn incr_frames(&mut self) -> () {
@@ -444,11 +444,17 @@ impl SimpleAnim {
 	
     }
 
+    pub fn set_background_color (&mut self, new_color: Color) -> ()
+    {
+	self.background_color = new_color;
+    }
     // draws a current frame, i.e. background + all visible objects
     pub fn draw(&mut self) -> ()
     {
+	clear_background(self.background_color);
+	
 	//draws background elements
-	for element in self.background.iter_mut()
+	for element in self.b_elements.iter_mut()
 	{
 	    element.draw();
 	}

@@ -1,7 +1,7 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
 use asterism::{
-    animation::{SimpleAnim,AnimObject},
+    animation::{SimpleAnim,AnimObject, BackElement},
     collision::AabbCollision,
     control::{KeyboardControl, MacroQuadKeyboardControl},
     physics::PointPhysics,
@@ -204,6 +204,46 @@ async fn main() {
     let mut world = World::new();
     let mut logics = Logics::new();
 
+    //sets background color
+    animation.set_background_color(BASE_COLOR);
+    
+    //adding the background elements to animation i.e. the walls
+    //top left wall
+    animation.b_elements.push(BackElement::new(0.0,
+					       0.0,
+					       ((WIDTH / 2) - (GOAL_WIDTH / 2)) as f32,
+					       WALL_DEPTH as f32,
+					       FENCE_COLOR));
+
+    //top right wall
+    animation.b_elements.push(BackElement::new(((WIDTH / 2) + (GOAL_WIDTH / 2)) as f32,
+					       0.0,
+					       ((WIDTH / 2) - (GOAL_WIDTH / 2)) as f32,
+					       WALL_DEPTH as f32,
+					       FENCE_COLOR));
+
+    //left wall
+    animation.b_elements.push(BackElement::new(0.0,
+					       0.0,
+					       WALL_DEPTH as f32,
+					       HEIGHT as f32,
+					       FENCE_COLOR));
+
+    //right wall
+    animation.b_elements.push(BackElement::new((WIDTH - WALL_DEPTH) as f32,
+					       0.0,
+					       WALL_DEPTH as f32,
+					       HEIGHT as f32,
+					       FENCE_COLOR));
+
+    //bottom wall
+    animation.b_elements.push(BackElement::new(0.0,
+					       (HEIGHT - WALL_DEPTH) as f32,
+					       WIDTH as f32,
+					       WALL_DEPTH as f32,
+					       FENCE_COLOR));
+
+    //creates and adds ball objects
     for i in 0..BALL_NUM {
         world.balls.push(Ball::new(
             Vec2::new(
@@ -212,12 +252,12 @@ async fn main() {
             ),
             i.into(),
         ));
-	
+	//adds ball objecrs to animation, cycles through distinct ball entities in sheet
 	animation.objects.push(AnimObject::new(animation.sheet
 							   .get_entity((i as u32 % DIST_BALL) as usize),
 							   world.balls[i as usize].pos));
     }
-    //dog 
+    //dog animation
     animation.objects.push(AnimObject::new(animation.sheet.get_entity(4),
 						       world.paddles.0));
 
@@ -227,7 +267,7 @@ async fn main() {
                 break;
             }
         }
-        world.draw(&mut animation);
+        animation.draw();
         next_frame().await;
     }
 }
