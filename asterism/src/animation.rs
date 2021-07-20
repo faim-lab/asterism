@@ -17,6 +17,10 @@ pub struct SimpleAnim {
     pub objects: Vec<AnimObject>
 }
 
+/*wrapper, 
+keeps track of the top corner x & y position
+as well as the width and height of a rectangle
+*/
 #[derive(Clone, Copy, Debug, Deserialize)]
 struct Rectangle {
     x: u64,
@@ -25,12 +29,23 @@ struct Rectangle {
     h: u64,
 }
 
+/*
+wrapper tuple, keeps track of a width and height
+*/
 #[derive(Clone, Copy, Debug, Deserialize)]
 struct Size {
     w: u64,
     h: u64,
 }
 
+/*
+Sprite
+represents the information needed to access a specifc sprite (image) 
+from a larger sprite sheet
+index: order in sequence
+frame: the specific location  it takes in the spritesheet
+size: the size of the image
+*/
 #[derive(Clone, Copy, Debug, Deserialize)]
 struct Sprite {
     index: usize,
@@ -39,6 +54,22 @@ struct Sprite {
     size: Size,
 }
 
+/*
+Sequence
+a series of sprites that can be played together 
+in order to create an animation
+seq_name: the name of the sequence
+frame_rate: determines when the sequence switches to a new sprite
+is_cycle: does these sequence cycle (start over) or does it play once and end
+is_active: has this sequence been activated i.e. needs to be played, 
+by events in the game
+priority: if there are multiple active sequences, what priority does this 
+sequence have over the others. Lower priority takes precidence
+current: index of current sprite to be displayed
+pause: whether or not this sequence pauses/puts a hold on certain game events
+(for example changes in position) until it finishes (WIP)
+sprites: a list of sprites that make up this sequence
+*/
 #[derive(Clone, Debug, Deserialize)]
 struct Sequence {
     seq_name: String,
@@ -51,6 +82,16 @@ struct Sequence {
     sprites: Vec<Sprite>,
 }
 
+/*
+Entity
+A collection of sequences that can be used to represent one figure/game entity
+ex all sequences (and therefore all sprites) 
+depicting  Mario would be an entity
+name: the name of the entity being represented
+sheet_index: order of entity in sheet 
+default_seq: the sequence that plays when no other sequences are active
+seqs: list of sequences
+*/
 #[derive(Clone, Debug, Deserialize)]
 pub struct Entity {
     name: String,
@@ -59,6 +100,20 @@ pub struct Entity {
     seqs: Vec<Sequence>,
 }
 
+/*
+AnimObject
+a specific instance of an entity, 
+the link between animation and other logics/the game itself
+entity: the entity (all animation/sprite data) asosciated with this object
+rotation: the rotation of this object
+flip_x: if the object is flipped on the x axis
+flip_y: if the object is flipped on the y axis
+pivot: the pivot point of the object
+pos: the position of the object in the game
+is_visible: whether or not this object is drawn
+paused: whether or not this object is waiting for some sequence to 
+finish before resuming regular behvaior (WIP)
+*/
 pub struct AnimObject
 {
     entity: Entity,
@@ -71,7 +126,15 @@ pub struct AnimObject
     pub paused: bool,
 }
 
-//sprite sheet
+/*
+SpriteSheet
+stores the image file for all sprites/visuals used in animations
+stores the information gained from a json/datafile to 
+access and use specific sprites from the image file
+
+image: the image file loaded as a texture
+entities: the list of entities that can be found in the image
+*/
 pub struct SpriteSheet {
     image: Texture2D,
     entities: Vec<Entity>,
@@ -79,10 +142,17 @@ pub struct SpriteSheet {
 
 impl Sequence
 {
+    //returns a clone of the current sprite
     fn cur_sprite (&self) -> Sprite
     {
 	return self.sprites[self.current].clone();
     }
+    /*
+    moves the sequence forward, loops back to zero (the start) if needed 
+and then makes the sequence inactive if not a cycle
+
+returns the state of the sequence (active/inactive)
+*/
     fn progress_seq (&mut self, frames_drawn:u64) -> bool
     {
 	if frames_drawn % self.frame_rate == 0
@@ -105,6 +175,7 @@ impl Sequence
 	return self.is_active;
     }
 }
+
 impl SpriteSheet {
     fn new(image_file: Texture2D, data_file: Vec<Entity>) -> Self {
         Self {
@@ -112,7 +183,7 @@ impl SpriteSheet {
             entities: data_file,
         }
     }
-
+    //returns a clone of a given entity
     pub fn get_entity(&self, entity_index: usize) -> Entity
     {
 	return self.entities[entity_index].clone();
@@ -180,6 +251,9 @@ impl AnimObject
 	self.paused = false;
     }
 
+    /*
+creates a DrawTextureParams (something needed by macroquad for draw method) for a given sprite
+*/
      fn create_param(&self, sprite: Sprite) -> DrawTextureParams {
         let mut texture = DrawTextureParams::default();
 
@@ -198,20 +272,34 @@ impl AnimObject
         return texture;
      }
 
+    /*
+    draws the object
+    image: the image file where the object's entity is located
+    frames_drawn: the number of times draw has been called for Animation 
+    (i.e. how many frames have been drawn total, outside of this object)
+*/
+    
     fn draw(&mut self, image: Texture2D, frames_drawn: u64) -> ()
     {
+	//start at default seq for object
 	let mut cur_index = self.entity.default_seq;
+	//set priority to default
 	let mut cur_priority = self.entity.seqs[cur_index].priority;
 
+	//loop through all seqs in the entity
 	for (i, seq) in self.entity.seqs.iter().enumerate()
 	{
+	    //if the seq is active and
+	    //takes precidence over the current seq
 	    if seq.is_active && seq.priority < cur_priority
 	    {
+		//set as new current
 		cur_priority = seq.priority;
 		cur_index = i;
 	    }
 	}
 
+	//draw sprite based on seq 
 	draw_texture_ex(image,
 			self.pos.x,
 			self.pos.y,
@@ -242,6 +330,8 @@ impl AnimObject
     
 }
 impl SimpleAnim {
+
+    //takes a image file and data file and loads then into a spritesheet
     pub async fn new(image_file: &str, data_file: &str) -> Self {
         Self {
             sheet: SpriteSheet::new(
@@ -260,7 +350,8 @@ impl SimpleAnim {
     //incriments frames drawn
     pub fn incr_frames(&mut self) -> () {
 
-	if self.frames_drawn < u64::MAX
+	//makes sure no overflow
+	if self.frames_drawn < u64::MAX 
 	{
 	    self.frames_drawn = self.frames_drawn +1; 
 	}
@@ -302,6 +393,7 @@ impl SimpleAnim {
 	
     }
 
+    // draws a current frame, i.e. all visible objects
     pub fn draw(&mut self) -> ()
     {
 	for obj in self.objects.iter_mut()
