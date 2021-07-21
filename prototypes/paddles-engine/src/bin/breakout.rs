@@ -151,7 +151,7 @@ fn init(game: &mut Game) {
     let reset_lose = QueryType::User(game.add_query());
     let reset_win = QueryType::User(game.add_query());
 
-    paddles_engine::rules!(game ->
+    paddles_engine::rules!(game =>
         control: [
             {
                 filter move_paddle,

@@ -170,7 +170,7 @@ fn init(game: &mut Game) {
     let score = QueryType::User(game.add_query());
     let score_increased = QueryType::User(game.add_query());
 
-    paddles_engine::rules!(game ->
+    paddles_engine::rules!(game =>
         control: [
             {
                 filter move_paddle,

@@ -109,7 +109,7 @@ macro_rules! rules {
         }
     };
 
-    ($game:ident ->
+    ($game:ident =>
         control: [ $({$($ctrl_rule:tt)+}),* ]
         physics: [ $({$($phys_rule:tt)+}),* ]
         collision: [ $({$($col_rule:tt)+}),* ]
