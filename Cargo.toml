@@ -1,6 +1,6 @@
 [workspace]
 
-members = ["prototypes/bitsy", "prototypes/paddles-engine"]
+members = ["prototypes/boxsy", "prototypes/paddles-engine"]
 
 # members = ["prototypes/*"]
 # exclude = ["prototypes/.DS_Store", "prototypes/README.md"]
