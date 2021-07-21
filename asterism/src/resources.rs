@@ -36,14 +36,14 @@ where
         self.transactions.push(*reaction);
     }
 
-    fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
+    fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData {
         *self
             .items
             .get(&ident)
             .unwrap_or_else(|| panic!("requested pool {:?} doesn't exist in resource logic", ident))
     }
 
-    fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
+    fn update_ident_data(&mut self, ident: Self::Ident, data: Self::IdentData) {
         let vals = self
             .items
             .get_mut(&ident)
@@ -185,7 +185,7 @@ where
     fn get_table(&self) -> Vec<QueryIdent<ID, Value>> {
         self.items
             .keys()
-            .map(|id| (*id, self.get_synthesis(*id)))
+            .map(|id| (*id, self.get_ident_data(*id)))
             .collect()
     }
 }

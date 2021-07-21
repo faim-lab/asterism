@@ -124,11 +124,11 @@ impl<ID: Copy + Eq> Logic for FlatEntityState<ID> {
         }
     }
 
-    fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
+    fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData {
         self.graphs[ident].get_current_node()
     }
 
-    fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
+    fn update_ident_data(&mut self, ident: Self::Ident, data: Self::IdentData) {
         let graph = &mut self.graphs[ident];
         let node = graph.graph.nodes.iter().position(|id| *id == data);
         if let Some(idx) = node {
@@ -144,7 +144,7 @@ type QueryIdent<ID> = (
 impl<ID: Copy + Eq> OutputTable<QueryIdent<ID>> for FlatEntityState<ID> {
     fn get_table(&self) -> Vec<QueryIdent<ID>> {
         (0..self.graphs.len())
-            .map(|idx| (idx, self.get_synthesis(idx)))
+            .map(|idx| (idx, self.get_ident_data(idx)))
             .collect()
     }
 }

@@ -124,14 +124,14 @@ fn init(game: &mut Game) {
         let id = state.get_id(*i);
         if let EntID::Ball(ball_id) = id {
             let sides_touched = logics.collision.sides_touched(*i, *j);
-            let mut vals = logics.physics.get_synthesis(ball_id.idx());
+            let mut vals = logics.physics.get_ident_data(ball_id.idx());
             if sides_touched.y != 0.0 {
                 vals.vel.y *= -1.0;
             }
             if sides_touched.x != 0.0 {
                 vals.vel.x *= -1.0;
             }
-            logics.physics.update_synthesis(ball_id.idx(), vals);
+            logics.physics.update_ident_data(ball_id.idx(), vals);
 
             let id = state.get_id(*j);
             if let EntID::Wall(wall_id) = id {
@@ -160,7 +160,7 @@ fn init(game: &mut Game) {
                     ctrl.event_type == ControlEventType::KeyHeld && ctrl.action_id != action_serve
                 },
                 foreach |ctrl, _, logics| {
-                    let mut paddle_col = logics.collision.get_synthesis(ctrl.set);
+                    let mut paddle_col = logics.collision.get_ident_data(ctrl.set);
                     if ctrl.action_id == left {
                         paddle_col.center.x -= 1.0;
                         paddle_col.vel.x = (paddle_col.vel.x.abs() - 1.0).max(-1.0);
@@ -168,7 +168,7 @@ fn init(game: &mut Game) {
                         paddle_col.center.x += 1.0;
                         paddle_col.vel.x = (paddle_col.vel.x.abs() + 1.0).min(1.0);
                     }
-                    logics.collision.update_synthesis(ctrl.set, paddle_col);
+                    logics.collision.update_ident_data(ctrl.set, paddle_col);
                 }
             },
             {

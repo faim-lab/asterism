@@ -274,7 +274,7 @@ impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
         }
     }
 
-    fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
+    fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData {
         AabbColData {
             center: self.centers[ident],
             half_size: self.half_sizes[ident],
@@ -285,7 +285,7 @@ impl<ID: Copy + Eq> Logic for AabbCollision<ID> {
         }
     }
 
-    fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
+    fn update_ident_data(&mut self, ident: Self::Ident, data: Self::IdentData) {
         self.centers[ident] = data.center;
         self.half_sizes[ident] = data.half_size;
         self.velocities[ident] = data.vel;
@@ -345,7 +345,7 @@ type QueryIdent<ID> = (
 impl<ID: Copy + Eq> OutputTable<QueryIdent<ID>> for AabbCollision<ID> {
     fn get_table(&self) -> Vec<QueryIdent<ID>> {
         (0..self.centers.len())
-            .map(|idx| (idx, self.get_synthesis(idx)))
+            .map(|idx| (idx, self.get_ident_data(idx)))
             .collect()
     }
 }

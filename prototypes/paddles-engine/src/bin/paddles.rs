@@ -110,17 +110,17 @@ fn init(game: &mut Game) {
 
     // paddle movement
     let move_down = |logics: &mut Logics, set| {
-        let mut paddle_col = logics.collision.get_synthesis(set);
+        let mut paddle_col = logics.collision.get_ident_data(set);
         paddle_col.center.y += 1.0;
         paddle_col.vel.y = (paddle_col.vel.y.abs() + 1.0).min(1.0);
-        logics.collision.update_synthesis(set, paddle_col);
+        logics.collision.update_ident_data(set, paddle_col);
     };
 
     let move_up = |logics: &mut Logics, set| {
-        let mut paddle_col = logics.collision.get_synthesis(set);
+        let mut paddle_col = logics.collision.get_ident_data(set);
         paddle_col.center.y -= 1.0;
         paddle_col.vel.y = (paddle_col.vel.y.abs() - 1.0).max(-1.0);
-        logics.collision.update_synthesis(set, paddle_col);
+        logics.collision.update_ident_data(set, paddle_col);
     };
 
     // serving
@@ -153,14 +153,14 @@ fn init(game: &mut Game) {
         let id = state.get_id(*i);
         if let EntID::Ball(ball_id) = id {
             let sides_touched = logics.collision.sides_touched(*i, *j);
-            let mut vals = logics.physics.get_synthesis(ball_id.idx());
+            let mut vals = logics.physics.get_ident_data(ball_id.idx());
             if sides_touched.y != 0.0 {
                 vals.vel.y *= -1.0;
             }
             if sides_touched.x != 0.0 {
                 vals.vel.x *= -1.0;
             }
-            logics.physics.update_synthesis(ball_id.idx(), vals);
+            logics.physics.update_ident_data(ball_id.idx(), vals);
         }
     };
 
@@ -247,7 +247,7 @@ fn init(game: &mut Game) {
                     println!(
                         "p{} scored: {}",
                         score.idx() + 1,
-                        logics.resources.get_synthesis(event.pool).0
+                        logics.resources.get_ident_data(event.pool).0
                     );
                     logics
                         .physics

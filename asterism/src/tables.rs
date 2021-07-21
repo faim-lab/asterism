@@ -2,7 +2,7 @@
 //!
 //! This is adjacent to/uses similar concepts as query/condition tables: <https://www.dataorienteddesign.com/dodmain/node7.html#SECTION00710000000000000000> and <https://www.dataorienteddesign.com/dodmain/node12.html>
 //!
-//! The outputs in asterism are the identities + syntheses and the events. Ex. for a collision logic the identities could be the positions/sizes/metadata of each collision body, while the events would be contacts.
+//! The outputs in asterism are the identities + their associated data and the events. Ex. for a collision logic the identities could be the positions/sizes/metadata of each collision body, while the events would be contacts.
 //!
 //! A condition table composes those individual queries together.
 use std::collections::HashMap;

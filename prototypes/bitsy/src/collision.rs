@@ -106,7 +106,7 @@ impl<TileID: Copy + Eq + Ord + Debug, EntID: Copy> Logic for TileMapCollision<Ti
         };
     }
 
-    fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
+    fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData {
         match ident {
             ColIdent::Position(pos) => {
                 let id = self.map[pos.y as usize][pos.x as usize]
@@ -130,7 +130,7 @@ impl<TileID: Copy + Eq + Ord + Debug, EntID: Copy> Logic for TileMapCollision<Ti
         }
     }
 
-    fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
+    fn update_ident_data(&mut self, ident: Self::Ident, data: Self::IdentData) {
         match (ident, data) {
             (ColIdent::Position(pos_ident), TileMapColData::Position { pos, solid, id }) => {
                 if pos_ident != pos {
@@ -367,7 +367,7 @@ where
             for (x, tile) in row.iter().enumerate() {
                 if tile.is_some() {
                     let ident = ColIdent::Position(IVec2::new(x as i32, y as i32));
-                    idents.push((ident, self.get_synthesis(ident)));
+                    idents.push((ident, self.get_ident_data(ident)));
                 }
             }
         }
@@ -376,7 +376,7 @@ where
         let mut ents = (0..self.positions.len())
             .map(|idx| {
                 let ident = ColIdent::EntIdx(idx);
-                (ident, self.get_synthesis(ident))
+                (ident, self.get_ident_data(ident))
             })
             .collect::<Vec<_>>();
         idents.append(&mut ents);

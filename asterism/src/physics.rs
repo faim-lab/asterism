@@ -48,7 +48,7 @@ impl Logic for PointPhysics {
         }
     }
 
-    fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
+    fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData {
         PointPhysData {
             pos: self.positions[ident],
             vel: self.velocities[ident],
@@ -56,7 +56,7 @@ impl Logic for PointPhysics {
         }
     }
 
-    fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
+    fn update_ident_data(&mut self, ident: Self::Ident, data: Self::IdentData) {
         self.positions[ident] = data.pos;
         self.velocities[ident] = data.vel;
         self.accelerations[ident] = data.acc;
@@ -136,7 +136,7 @@ type QueryIdent = (
 impl OutputTable<QueryIdent> for PointPhysics {
     fn get_table(&self) -> Vec<QueryIdent> {
         (0..self.positions.len())
-            .map(|idx| (idx, self.get_synthesis(idx)))
+            .map(|idx| (idx, self.get_ident_data(idx)))
             .collect()
     }
 }

@@ -58,11 +58,11 @@ where
         }
     }
 
-    fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData {
+    fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData {
         self.mapping[ident].clone()
     }
 
-    fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData) {
+    fn update_ident_data(&mut self, ident: Self::Ident, data: Self::IdentData) {
         self.mapping[ident] = data;
     }
 }
@@ -277,7 +277,7 @@ impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> OutputTable<QueryIdent<ID, Wrap
 {
     fn get_table(&self) -> Vec<QueryIdent<ID, Wrapper>> {
         (0..self.mapping.len())
-            .map(|idx| (idx, self.get_synthesis(idx)))
+            .map(|idx| (idx, self.get_ident_data(idx)))
             .collect()
     }
 }

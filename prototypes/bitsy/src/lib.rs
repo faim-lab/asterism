@@ -397,7 +397,7 @@ fn draw(game: &Game) {
             .colors
             .get(&EntID::Player)
             .expect("player color not set");
-        let pos = game.logics.collision.get_synthesis(ColIdent::EntIdx(
+        let pos = game.logics.collision.get_ident_data(ColIdent::EntIdx(
             game.state.get_col_idx(0, CollisionEnt::Player),
         ));
         if let TileMapColData::Ent { pos, .. } = pos {
@@ -417,7 +417,7 @@ fn setup(game: &mut Game) {
     game.logics
         .collision
         .clear_and_resize_map(WORLD_SIZE, WORLD_SIZE);
-    let player = game.logics.collision.get_synthesis(ColIdent::EntIdx(0));
+    let player = game.logics.collision.get_ident_data(ColIdent::EntIdx(0));
 
     let current_room = game.get_current_room();
     entities::load_room(&mut game.state, &mut game.logics, current_room);
@@ -438,14 +438,14 @@ fn setup(game: &mut Game) {
             ActionID::Up,
             ControlEventType::KeyPressed,
             Box::new(|_, logics, _| {
-                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
+                let mut player_col = logics.collision.get_ident_data(ColIdent::EntIdx(0));
                 if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
                     pos.y = (pos.y - 1).max(0);
                     amt_moved.y = (amt_moved.y - 1).max(-1);
                 }
                 logics
                     .collision
-                    .update_synthesis(ColIdent::EntIdx(0), player_col);
+                    .update_ident_data(ColIdent::EntIdx(0), player_col);
             }),
         );
 
@@ -453,14 +453,14 @@ fn setup(game: &mut Game) {
             ActionID::Down,
             ControlEventType::KeyPressed,
             Box::new(|_, logics, _| {
-                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
+                let mut player_col = logics.collision.get_ident_data(ColIdent::EntIdx(0));
                 if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
                     pos.y = (pos.y + 1).min(WORLD_SIZE as i32 - 1);
                     amt_moved.y = (amt_moved.y + 1).min(1);
                 }
                 logics
                     .collision
-                    .update_synthesis(ColIdent::EntIdx(0), player_col);
+                    .update_ident_data(ColIdent::EntIdx(0), player_col);
             }),
         );
 
@@ -468,14 +468,14 @@ fn setup(game: &mut Game) {
             ActionID::Left,
             ControlEventType::KeyPressed,
             Box::new(|_, logics, _| {
-                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
+                let mut player_col = logics.collision.get_ident_data(ColIdent::EntIdx(0));
                 if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
                     pos.x = (pos.x - 1).max(0);
                     amt_moved.x = (amt_moved.x - 1).max(-1);
                 }
                 logics
                     .collision
-                    .update_synthesis(ColIdent::EntIdx(0), player_col);
+                    .update_ident_data(ColIdent::EntIdx(0), player_col);
             }),
         );
 
@@ -483,14 +483,14 @@ fn setup(game: &mut Game) {
             ActionID::Right,
             ControlEventType::KeyPressed,
             Box::new(|_, logics, _| {
-                let mut player_col = logics.collision.get_synthesis(ColIdent::EntIdx(0));
+                let mut player_col = logics.collision.get_ident_data(ColIdent::EntIdx(0));
                 if let TileMapColData::Ent { pos, amt_moved, .. } = &mut player_col {
                     pos.x = (pos.x + 1).min(WORLD_SIZE as i32 - 1);
                     amt_moved.x = (amt_moved.x + 1).min(1);
                 }
                 logics
                     .collision
-                    .update_synthesis(ColIdent::EntIdx(0), player_col);
+                    .update_ident_data(ColIdent::EntIdx(0), player_col);
             }),
         );
     }

@@ -39,10 +39,10 @@ pub trait Logic:
     fn handle_predicate(&mut self, reaction: &Self::Reaction);
 
     /// exposes the data associated with a particular ""entity"" of the logic. NOTE that modifying the data returned here does NOT change the logic's data!!!
-    fn get_synthesis(&self, ident: Self::Ident) -> Self::IdentData;
+    fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData;
 
     /// updates the data of a unit of the logic
-    fn update_synthesis(&mut self, ident: Self::Ident, data: Self::IdentData);
+    fn update_ident_data(&mut self, ident: Self::Ident, data: Self::IdentData);
 }
 
 /// An event produced by the logic. Holds both the data associated with the event and information about what the event is---these should be separated for easier matching.

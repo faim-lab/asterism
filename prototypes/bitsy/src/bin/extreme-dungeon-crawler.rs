@@ -88,7 +88,7 @@ r#"
         Box::new(|_: &mut State, logics: &mut Logics, event: &RsrcEvent| {
             println!(
                 "got a rock (total rocks: {})",
-                logics.resources.get_synthesis(event.pool).0
+                logics.resources.get_ident_data(event.pool).0
             );
         }),
     );
