@@ -399,7 +399,7 @@ impl SimpleAnim {
     }
 
     //incriments frames drawn
-    pub fn incr_frames(&mut self) -> () {
+    fn incr_frames(&mut self) -> () {
 
 	//makes sure no overflow
 	if self.frames_drawn < u64::MAX 

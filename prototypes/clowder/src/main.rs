@@ -630,7 +630,7 @@ impl World {
         }
     }
 
-    /// Draw the `World` state to the frame buffer.
+   /* /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: [`wgpu::TextureFormat::Rgba8UnormSrgb`]
     fn draw(&self, animation: &mut SimpleAnim) {
@@ -678,7 +678,7 @@ impl World {
 
         //increments animation frames
         animation.incr_frames();
-    }
+    }*/
 }
 
 impl Ball {
