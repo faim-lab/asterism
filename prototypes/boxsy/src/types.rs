@@ -38,9 +38,9 @@ pub(crate) enum QueryType {
 }
 
 pub enum Ent {
-    Player(Player),
-    Tile(Tile),
-    Character(Character),
+    /// tile id of tile to add, position, room
+    TileID(TileID, IVec2, usize),
+    Character(Character, usize),
 }
 
 // the stonks meme but it says derive

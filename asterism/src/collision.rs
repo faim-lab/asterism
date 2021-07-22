@@ -182,7 +182,7 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
         self.add_collision_entity(center, hs, vel, solid, fixed, id);
     }
 
-    /// Returns unit vector of normal of displacement for the entity of the given ID in the given contact. I.e., if a contact is moved in a positive x direction after restitution _because of_ the other entity involved in collision, `sides_touched` will return `Vec2::new(1.0, 0.0)`. Panics if the given EntityID isn't that of either entity in the contact.
+    /// Returns unit vector of normal of displacement for the entity of the given ID in the given contact. I.e., if a contact is moved in a positive x direction after restitution _because of_ the other entity involved in collision, `sides_touched` will return `Vec2::new(1.0, 0.0)`.
     pub fn sides_touched(&self, i: usize, j: usize) -> Vec2 {
         let should_swap = self.metadata[i].fixed && !self.metadata[j].fixed;
         let mut i = i;

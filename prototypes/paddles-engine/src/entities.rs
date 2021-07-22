@@ -1,9 +1,10 @@
 //! adding/removing entities
 use asterism::Logic;
 use asterism::{collision::CollisionReaction, physics::PhysicsReaction};
+use macroquad::math::Vec2;
 
 use crate::types::*;
-use crate::Game;
+use crate::{Game, Logics};
 
 impl Game {
     pub fn add_paddle(&mut self, paddle: Paddle) -> PaddleID {
@@ -115,5 +116,73 @@ impl Game {
         self.logics.resources.items.remove(&rsrc);
 
         self.state.scores.remove(ent_i);
+    }
+}
+
+impl Logics {
+    pub fn consume_paddle(&mut self, id: PaddleID, col_idx: usize, paddle: Paddle) {
+        let hs = paddle.size / 2.0;
+        let center = paddle.pos + hs;
+        self.collision.centers.insert(col_idx, center);
+        self.collision.half_sizes.insert(col_idx, hs);
+        self.collision.velocities.insert(col_idx, Vec2::ZERO);
+
+        use asterism::collision::CollisionData;
+        self.collision.metadata.insert(
+            col_idx,
+            CollisionData {
+                solid: true,
+                fixed: true,
+                id: CollisionEnt::Paddle,
+            },
+        );
+
+        for (act_id, keycode, valid) in paddle.controls {
+            self.control.add_key_map(id.idx(), keycode, act_id, valid);
+        }
+    }
+
+    pub fn consume_wall(&mut self, col_idx: usize, wall: Wall) {
+        let hs = wall.size / 2.0;
+        let center = wall.pos + hs;
+        self.collision.centers.insert(col_idx, center);
+        self.collision.half_sizes.insert(col_idx, hs);
+        self.collision.velocities.insert(col_idx, Vec2::ZERO);
+
+        use asterism::collision::CollisionData;
+        self.collision.metadata.insert(
+            col_idx,
+            CollisionData {
+                solid: true,
+                fixed: true,
+                id: CollisionEnt::Wall,
+            },
+        );
+    }
+
+    pub fn consume_ball(&mut self, col_idx: usize, ball: Ball) {
+        self.physics
+            .add_physics_entity(ball.pos, ball.vel, Vec2::ZERO);
+        let hs = ball.size / 2.0;
+        let center = ball.pos + hs;
+        self.collision.centers.insert(col_idx, center);
+        self.collision.half_sizes.insert(col_idx, hs);
+        self.collision.velocities.insert(col_idx, Vec2::ZERO);
+
+        use asterism::collision::CollisionData;
+        self.collision.metadata.insert(
+            col_idx,
+            CollisionData {
+                solid: true,
+                fixed: false,
+                id: CollisionEnt::Ball,
+            },
+        );
+    }
+
+    pub fn consume_score(&mut self, id: ScoreID, score: Score) {
+        self.resources
+            .items
+            .insert(RsrcPool::Score(id), (score.value, Score::MIN, Score::MAX));
     }
 }

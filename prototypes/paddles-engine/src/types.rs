@@ -1,5 +1,3 @@
-use crate::Logics;
-
 use macroquad::{input::KeyCode, math::Vec2};
 
 /// generates identifier structs (i got tired of typing all of them out). example: `id_impl_new!([derive(PartialOrd, Ord)] ScoreID)` expands out to
@@ -144,82 +142,14 @@ pub struct Score {
 }
 
 impl Score {
-    const MIN: u16 = 0;
-    const MAX: u16 = u16::MAX;
+    pub(crate) const MIN: u16 = 0;
+    pub(crate) const MAX: u16 = u16::MAX;
     pub fn new() -> Self {
         Self::default()
     }
 
     pub fn set_value(&mut self, value: u16) {
         self.value = value;
-    }
-}
-
-impl Logics {
-    pub fn consume_paddle(&mut self, id: PaddleID, col_idx: usize, paddle: Paddle) {
-        let hs = paddle.size / 2.0;
-        let center = paddle.pos + hs;
-        self.collision.centers.insert(col_idx, center);
-        self.collision.half_sizes.insert(col_idx, hs);
-        self.collision.velocities.insert(col_idx, Vec2::ZERO);
-
-        use asterism::collision::CollisionData;
-        self.collision.metadata.insert(
-            col_idx,
-            CollisionData {
-                solid: true,
-                fixed: true,
-                id: CollisionEnt::Paddle,
-            },
-        );
-
-        for (act_id, keycode, valid) in paddle.controls {
-            self.control.add_key_map(id.0, keycode, act_id, valid);
-        }
-    }
-
-    pub fn consume_wall(&mut self, col_idx: usize, wall: Wall) {
-        let hs = wall.size / 2.0;
-        let center = wall.pos + hs;
-        self.collision.centers.insert(col_idx, center);
-        self.collision.half_sizes.insert(col_idx, hs);
-        self.collision.velocities.insert(col_idx, Vec2::ZERO);
-
-        use asterism::collision::CollisionData;
-        self.collision.metadata.insert(
-            col_idx,
-            CollisionData {
-                solid: true,
-                fixed: true,
-                id: CollisionEnt::Wall,
-            },
-        );
-    }
-
-    pub fn consume_ball(&mut self, col_idx: usize, ball: Ball) {
-        self.physics
-            .add_physics_entity(ball.pos, ball.vel, Vec2::ZERO);
-        let hs = ball.size / 2.0;
-        let center = ball.pos + hs;
-        self.collision.centers.insert(col_idx, center);
-        self.collision.half_sizes.insert(col_idx, hs);
-        self.collision.velocities.insert(col_idx, Vec2::ZERO);
-
-        use asterism::collision::CollisionData;
-        self.collision.metadata.insert(
-            col_idx,
-            CollisionData {
-                solid: true,
-                fixed: false,
-                id: CollisionEnt::Ball,
-            },
-        );
-    }
-
-    pub fn consume_score(&mut self, id: ScoreID, score: Score) {
-        self.resources
-            .items
-            .insert(RsrcPool::Score(id), (score.value, Score::MIN, Score::MAX));
     }
 }
 
