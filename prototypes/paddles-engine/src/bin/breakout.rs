@@ -200,7 +200,7 @@ fn init(game: &mut Game) {
                     i_id == CollisionEnt::Ball &&
                         (j_id == CollisionEnt::Wall || j_id == CollisionEnt::Paddle)
                 },
-                foreach |col, state, logics| {
+                forfirst |col, state, logics| {
                     bounce_ball(col, state, logics);
                 }
             },

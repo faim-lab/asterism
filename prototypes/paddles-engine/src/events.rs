@@ -27,7 +27,7 @@ impl Events {
 ///
 /// You define each rule in a stage: control, physics, collision, and resources, in the order they're executed. Each rule declares whether it zips two output tables or filters them, corresponding to the actions currently available in [ConditionTables][asterism::tables::ConditionTables] and [Compose][asterism::tables::Compose].
 ///
-/// Finally, optionally, the user can define if they want a predicate to run on each value of the resulting output table ("foreach"), or a predicate to run if at least one is true ("ifany"). (MORE HERE?)
+/// Finally, optionally, the user can define if they want a predicate to run on each value of the resulting output table ("foreach"), if at least one is true ("ifany"), or only on the first value of the output table ("forfirst"). (MORE OPTIONS HERE?)
 ///
 /// Note that it's impossible to add events while the game is running. This is a restriction of how the macro works (with closures rather than from a data structure or JSON file or something).
 ///
@@ -106,6 +106,13 @@ macro_rules! rules {
         let $logics = &game.logics;
         if !$answers.is_empty() {
             $predicate
+        }
+    };
+
+    (@then [$answers:ident] [$game:ident] [$ev_type:ty], forfirst |$event:pat, $state:pat, $logics:pat| $predicate:block) => {
+        let predicate = |$event: $ev_type, $state: &mut $crate::State, $logics: &mut $crate::Logics| $predicate;
+        if let Some(ans) = $answers.iter().next() {
+            predicate(ans, &mut $game.state, &mut $game.logics);
         }
     };
 
