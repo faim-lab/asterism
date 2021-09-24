@@ -1,11 +1,10 @@
 use asterism::{
     animation::SimpleAnim,
     collision::AabbCollision,
-    control::{KeyboardControl, MacroQuadKeyboardControl},
+    control::{KeyboardControl, MacroquadInputWrapper},
     entity_state::FlatEntityState,
     physics::PointPhysics,
-    resources::{PoolInfo, QueuedResources, Transaction},
-    Logic,
+    resources::{QueuedResources, Transaction},
 };
 use json::*;
 use macroquad::prelude::*;
@@ -50,23 +49,9 @@ enum StateID {
     FullBasket,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
 enum PoolID {
     Points,
-}
-
-impl PoolInfo for PoolID {
-    fn max_value(&self) -> f64 {
-        match self {
-            Self::Points => std::u32::MAX as f64,
-        }
-    }
-
-    fn min_value(&self) -> f64 {
-        match self {
-            Self::Points => std::u32::MIN as f64,
-        }
-    }
 }
 
 struct Apple {
@@ -86,11 +71,11 @@ fn window_conf() -> Conf {
 }
 
 struct Logics {
-    control: MacroQuadKeyboardControl<ActionID>,
+    control: KeyboardControl<ActionID, MacroquadInputWrapper>,
     entity_state: FlatEntityState<StateID>,
-    physics: PointPhysics<Vec2>,
-    collision: AabbCollision<CollisionID, Vec2>,
-    resources: QueuedResources<PoolID>,
+    physics: PointPhysics,
+    collision: AabbCollision<CollisionID>,
+    resources: QueuedResources<PoolID, u32>,
 }
 
 struct World {
@@ -131,10 +116,10 @@ impl Logics {
     fn new() -> Self {
         Self {
             control: {
-                let mut control = MacroQuadKeyboardControl::new();
-                control.add_key_map(0, KeyCode::Right, ActionID::MoveRight);
-                control.add_key_map(0, KeyCode::Left, ActionID::MoveLeft);
-                control.add_key_map(0, KeyCode::Escape, ActionID::Quit);
+                let mut control = KeyboardControl::new();
+                control.add_key_map(0, KeyCode::Right, ActionID::MoveRight, true);
+                control.add_key_map(0, KeyCode::Left, ActionID::MoveLeft, true);
+                control.add_key_map(0, KeyCode::Escape, ActionID::Quit, true);
                 control
             },
             physics: PointPhysics::new(),
@@ -296,18 +281,18 @@ impl World {
         Ok(true)
     }
 
-    fn project_control(&self, control: &mut MacroQuadKeyboardControl<ActionID>) {
+    fn project_control(&self, control: &mut KeyboardControl<ActionID, MacroquadInputWrapper>) {
         control.mapping[0][0].is_valid = true;
         control.mapping[0][1].is_valid = true;
         control.mapping[0][2].is_valid = true;
     }
 
-    fn unproject_control(&mut self, control: &MacroQuadKeyboardControl<ActionID>) {
+    fn unproject_control(&mut self, control: &KeyboardControl<ActionID, MacroquadInputWrapper>) {
         self.basket_vel.x = -control.get_action(ActionID::MoveLeft).unwrap().value
             + control.get_action(ActionID::MoveRight).unwrap().value;
     }
 
-    fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
+    fn project_physics(&self, physics: &mut PointPhysics) {
         physics.positions.clear();
         physics.velocities.clear();
         physics.accelerations.clear();
@@ -321,7 +306,7 @@ impl World {
         );
     }
 
-    fn unproject_physics(&mut self, physics: &PointPhysics<Vec2>) {
+    fn unproject_physics(&mut self, physics: &PointPhysics) {
         for ((apple, pos), vel) in self
             .apples
             .iter_mut()
@@ -338,7 +323,7 @@ impl World {
         self.basket_vel = physics.velocities[self.apples.len()];
     }
 
-    fn project_collision(&self, collision: &mut AabbCollision<CollisionID, Vec2>) {
+    fn project_collision(&self, collision: &mut AabbCollision<CollisionID>) {
         collision.centers.resize_with(4, Default::default);
         collision.half_sizes.resize_with(4, Default::default);
         collision.velocities.resize_with(4, Default::default);
@@ -366,7 +351,7 @@ impl World {
         }
     }
 
-    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID, Vec2>) {
+    fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
         self.basket = collision
             .get_xy_pos_for_entity(CollisionID::Basket)
             .unwrap();
@@ -380,7 +365,7 @@ impl World {
     fn project_entity_state(
         &self,
         entity_state: &mut FlatEntityState<StateID>,
-        collision: &AabbCollision<CollisionID, Vec2>,
+        collision: &AabbCollision<CollisionID>,
     ) {
         entity_state.maps.clear();
         entity_state.conditions.clear();
@@ -499,20 +484,20 @@ impl World {
         }
     }
 
-    fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
+    fn project_resources(&self, resources: &mut QueuedResources<PoolID, u32>) {
         if !resources.items.contains_key(&PoolID::Points) {
-            resources.items.insert(PoolID::Points, 0.0);
+            resources.items.insert(PoolID::Points, 0);
         }
     }
 
-    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {
+    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID, u32>) {
         for completed in resources.completed.iter() {
             match completed {
                 Ok(item_types) => {
                     for item_type in item_types {
                         let value = resources.get_value_by_itemtype(item_type).unwrap();
                         match item_type {
-                            PoolID::Points => self.score = value as u32,
+                            PoolID::Points => self.score = value,
                         }
                     }
                 }
