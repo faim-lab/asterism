@@ -1,5 +1,5 @@
 use asterism::{
-    animation::SimpleAnim,
+    animation::{SimpleAnim, AnimObject},
     collision::AabbCollision,
     control::{KeyboardControl, MacroquadInputWrapper},
     entity_state::FlatEntityState,
@@ -93,21 +93,17 @@ async fn main() {
     rows.push(0);
     rows.push(1);
     rows.push(2);
-    let mut animation = SimpleAnim::new();
-    animation
-        .load_sprite_sheet("src/apple_tree_sprite.png", "src/apple_tree_sprite.json")
-        .await;
-    animation.assign_rows(rows);
+    let mut animation = SimpleAnim::new("src/apple_tree_sprite.png", "src/apple_tree.sprite.json");
     let mut world = World::new();
     let mut logics = Logics::new();
 
     loop {
-        if let Ok(cont) = world.update(&mut logics) {
+        if let Ok(cont) = world.update(&mut logics, &mut animation) {
             if !cont {
                 break;
             }
         }
-        world.draw(&mut animation, &logics.entity_state);
+        animation.draw();
         next_frame().await;
     }
 }
@@ -129,7 +125,7 @@ impl Logics {
                 collision.add_entity_as_xywh(
                     Vec2::new(-2.0, 0.0),
                     Vec2::new(2.0, HEIGHT as f32),
-                    Vec2::zero(),
+                    Vec2::ZERO,
                     true,
                     true,
                     CollisionID::Wall,
@@ -138,7 +134,7 @@ impl Logics {
                 collision.add_entity_as_xywh(
                     Vec2::new(WIDTH as f32, 0.0),
                     Vec2::new(2.0, HEIGHT as f32),
-                    Vec2::zero(),
+                    Vec2::ZERO,
                     true,
                     true,
                     CollisionID::Wall,
@@ -147,7 +143,7 @@ impl Logics {
                 collision.add_entity_as_xywh(
                     Vec2::new(0.0, -2.0),
                     Vec2::new(WIDTH as f32, 2.0),
-                    Vec2::zero(),
+                    Vec2::ZERO,
                     true,
                     true,
                     CollisionID::Wall,
@@ -156,7 +152,7 @@ impl Logics {
                 collision.add_entity_as_xywh(
                     Vec2::new(0.0, HEIGHT as f32),
                     Vec2::new(WIDTH as f32, 2.0),
-                    Vec2::zero(),
+                    Vec2::ZERO,
                     true,
                     true,
                     CollisionID::Floor,
@@ -165,7 +161,7 @@ impl Logics {
             },
             resources: {
                 let mut resources = QueuedResources::new();
-                resources.items.insert(PoolID::Points, 0.0);
+                resources.items.insert(PoolID::Points, (0,0,u32::MAX));
                 resources
             },
             entity_state: {
@@ -197,7 +193,7 @@ impl World {
         }
     }
 
-    fn update(&mut self, logics: &mut Logics) -> Result<bool> {
+    fn update(&mut self, logics: &mut Logics, animation: &mut SimpleAnim) -> Result<bool> {
         // this should probably go into a temporal matching? or chance logic but i dont want to write it right now
         if get_time() - self.time > self.interval {
             self.apples.push(Apple::new());
@@ -219,7 +215,7 @@ impl World {
 
         self.project_physics(&mut logics.physics);
         logics.physics.update();
-        self.unproject_physics(&logics.physics);
+        self.unproject_physics(&logics.physics, &mut animation);
 
         self.project_collision(&mut logics.collision);
         logics.collision.update();
@@ -246,7 +242,7 @@ impl World {
                         logics
                             .resources
                             .transactions
-                            .push(vec![(PoolID::Points, Transaction::Change(1.0))]);
+                            .push(PoolID::Points, Transaction::Change(1));
                     }
                 }
                 (CollisionID::Apple(i), CollisionID::Wall) => {
@@ -260,7 +256,7 @@ impl World {
 
         self.project_resources(&mut logics.resources);
         logics.resources.update();
-        self.unproject_resources(&logics.resources);
+        self.unproject_resources(&logics.resources, &mut animation);
 
         for completed in logics.resources.completed.iter() {
             match completed {
@@ -268,8 +264,8 @@ impl World {
                     for item_type in item_types {
                         match item_type {
                             PoolID::Points => {
-                                print!("current score: {}\r", self.score);
-                                io::stdout().flush().unwrap();
+                                println!("current score: {}\r", self.score);
+                                
                             }
                         }
                     }
@@ -296,9 +292,11 @@ impl World {
         physics.positions.clear();
         physics.velocities.clear();
         physics.accelerations.clear();
+
         for apple in self.apples.iter() {
             physics.add_physics_entity(apple.pos, apple.vel, Vec2::new(0.0, 0.04));
         }
+
         physics.add_physics_entity(
             self.basket,
             Vec2::new(self.basket_vel.x, 0.0),
@@ -306,7 +304,11 @@ impl World {
         );
     }
 
-    fn unproject_physics(&mut self, physics: &PointPhysics) {
+    fn unproject_physics(&mut self, physics: &PointPhysics, animation: &mut SimpleAnim) {
+        
+        animation.objects.clear();
+        animation.objects.push(AnimObject::new(animation.sheet.get_entity(1), Vec2::ZERO));
+        animation.objects.push(AnimObject::new(animation.sheet.get_entity(2),self.basket));
         for ((apple, pos), vel) in self
             .apples
             .iter_mut()
@@ -318,6 +320,7 @@ impl World {
         {
             apple.pos = *pos;
             apple.vel = *vel;
+            animation.objects.push(AnimObject::new(animation.sheet.get_entity(0), apple.pos));
         }
         self.basket = physics.positions[self.apples.len()];
         self.basket_vel = physics.velocities[self.apples.len()];
@@ -371,47 +374,6 @@ impl World {
         entity_state.conditions.clear();
         entity_state.states.clear();
 
-        if self.score > 15 {
-            entity_state.add_state_map(
-                3,
-                vec![
-                    (StateID::EmptyBasket, vec![1]),
-                    (StateID::PartialBasket, vec![2]),
-                    (StateID::MidBasket, vec![3]),
-                    (StateID::FullBasket, vec![0]),
-                ],
-            );
-        } else if self.score > 10 {
-            entity_state.add_state_map(
-                2,
-                vec![
-                    (StateID::EmptyBasket, vec![1]),
-                    (StateID::PartialBasket, vec![2]),
-                    (StateID::MidBasket, vec![3]),
-                    (StateID::FullBasket, vec![0]),
-                ],
-            );
-        } else if self.score > 5 {
-            entity_state.add_state_map(
-                1,
-                vec![
-                    (StateID::EmptyBasket, vec![1]),
-                    (StateID::PartialBasket, vec![2]),
-                    (StateID::MidBasket, vec![3]),
-                    (StateID::FullBasket, vec![0]),
-                ],
-            );
-        } else {
-            entity_state.add_state_map(
-                0,
-                vec![
-                    (StateID::EmptyBasket, vec![0]),
-                    (StateID::PartialBasket, vec![2]),
-                    (StateID::MidBasket, vec![3]),
-                    (StateID::FullBasket, vec![0]),
-                ],
-            );
-        }
         for _ in self.apples.iter() {
             entity_state.add_state_map(
                 0,
@@ -476,21 +438,19 @@ impl World {
                 StateID::AppleResting => {
                     self.apples[i].vel.y = 0.0;
                 }
-                StateID::EmptyBasket => {}
-                StateID::PartialBasket => {}
-                StateID::MidBasket => {}
-                StateID::FullBasket => {}
+               
             }
         }
     }
 
     fn project_resources(&self, resources: &mut QueuedResources<PoolID, u32>) {
-        if !resources.items.contains_key(&PoolID::Points) {
-            resources.items.insert(PoolID::Points, 0);
-        }
+        resources
+            .items
+            .entry(PoolID::Points)
+            .or_insert((0, 0, u32::MAX));
     }
 
-    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID, u32>) {
+    fn unproject_resources(&mut self, resources: &QueuedResources<PoolID, u32>, animation: &mut SimpleAnim) {
         for completed in resources.completed.iter() {
             match completed {
                 Ok(item_types) => {
@@ -504,38 +464,21 @@ impl World {
                 Err(_) => {}
             }
         }
-    }
-    fn draw(&self, animation: &SimpleAnim, entity_state: &FlatEntityState<StateID>) {
-        clear_background(Color::new(0., 0., 0.5, 1.));
 
-        if animation.sheet_loaded() {
-            animation.draw_sprite(0.0, 0.0, 1, 0);
-
-            match entity_state.get_id_for_entity(0) {
-                StateID::AppleFalling => {}
-                StateID::AppleBouncing => {}
-                StateID::AppleResting => {}
-                StateID::EmptyBasket => {
-                    animation.draw_sprite(self.basket.x, self.basket.y, 2, 0);
-                }
-                StateID::PartialBasket => {
-                    animation.draw_sprite(self.basket.x, self.basket.y, 2, 1);
-                }
-                StateID::MidBasket => {
-                    animation.draw_sprite(self.basket.x, self.basket.y, 2, 2);
-                }
-                StateID::FullBasket => {
-                    animation.draw_sprite(self.basket.x, self.basket.y, 2, 3);
-                }
-            }
-
-            for apple in self.apples.iter() {
-                animation.draw_sprite(apple.pos.x, apple.pos.y, 0, 0);
-            }
+        if self.score > 15
+        {
+            animation.activate_seq(0, "Full");
+        }
+        else if self.score > 10
+        {
+            animation.activate_seq(0, "Almost Full");
+        }
+        else if self.score > 5 {
+            animation.activate_seq(0, "Not Empty");
         }
     }
+    
 }
-
 impl Apple {
     fn new() -> Self {
         Self {

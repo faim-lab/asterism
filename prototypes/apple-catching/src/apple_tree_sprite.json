@@ -1,50 +1,167 @@
 [
-
-{
-	"name": "apple",
-	"frame": {"x":0,"y":0,"w":32,"h":32},
-	"rotated": false,
-	"trimmed": false,
-	"sprite_source_size": {"x":0,"y":0,"w":32,"h":32},
-	"source_size": {"w":32,"h":32}
-},
-{
-	"name": "appletree",
-	"frame": {"x":0,"y":32,"w":255,"h":225},
-	"rotated": false,
-	"trimmed": false,
-	"sprite_source_size": {"x":0,"y":0,"w":255,"h":225},
-	"source_size": {"w":255,"h":225}
-},
-{
-	"name": "basket1",
-	"frame": {"x":0,"y":257,"w":64,"h":64},
-	"rotated": false,
-	"trimmed": false,
-	"sprite_source_size": {"x":0,"y":0,"w":64,"h":64},
-	"source_size": {"w":64,"h":64}
-},
-{
-	"name": "basket2",
-	"frame": {"x":64,"y":257,"w":64,"h":64},
-	"rotated": false,
-	"trimmed": false,
-	"sprite_source_size": {"x":0,"y":0,"w":64,"h":64},
-	"source_size": {"w":64,"h":64}
-},
-{
-	"name": "basket3",
-	"frame": {"x":128,"y":257,"w":64,"h":64},
-	"rotated": false,
-	"trimmed": false,
-	"sprite_source_size": {"x":0,"y":0,"w":64,"h":64},
-	"source_size": {"w":64,"h":64}
-},
-{
-	"name": "basket4",
-	"frame": {"x":192,"y":257,"w":64,"h":64},
-	"rotated": false,
-	"trimmed": false,
-	"sprite_source_size": {"x":0,"y":0,"w":64,"h":64},
-	"source_size": {"w":64,"h":64}
-}]
+	{
+	  "name": "apple",
+	  "sheet_index": 0,
+	  "default_seq": 0,
+	  "seqs": [
+		{
+		  "seq_name": "Basic",
+		  "frame_rate": 0,
+		  "is_cycle": true,
+		  "is_active": false,
+		  "priority": 0,
+		  "pause": false,
+		  "sprites": [
+			{
+			  "index": 0,
+			  "frame": {
+				"x": 0,
+				"y": 0,
+				"w": 32,
+				"h": 32
+			  },
+			  "trimmed": false,
+			  "size": {
+				"w": 32,
+				"h": 32
+			  }
+			}
+		  ]
+		}
+	  ]
+	},
+	{
+	  "name": "appletree",
+	  "sheet_index": 1,
+	  "default_seq": 0,
+	  "seqs": [
+		{
+		  "seq_name": "Basic",
+		  "frame_rate": 0,
+		  "is_cycle": true,
+		  "is_active": false,
+		  "priority": 0,
+		  "pause": false,
+		  "sprites": [
+			{
+			  "index": 0,
+			  "frame": {
+				"x": 0,
+				"y": 32,
+				"w": 255,
+				"h": 225
+			  },
+			  "trimmed": false,
+			  "size": {
+				"w": 255,
+				"h": 255
+			  }
+			}
+		  ]
+		}
+	  ]
+	},
+	{
+	  "name": "Basket",
+	  "sheet_index": 0,
+	  "default_seq": 0,
+	  "seqs": [
+		{
+		  "seq_name": "Empty",
+		  "frame_rate": 0,
+		  "is_cycle": true,
+		  "is_active": false,
+		  "priority": 0,
+		  "pause": false,
+		  "sprites": [
+			{
+			  "index": 0,
+			  "frame": {
+				"x": 0,
+				"y": 257,
+				"w": 64,
+				"h": 64
+			  },
+			  "trimmed": false,
+			  "size": {
+				"w": 64,
+				"h": 64
+			  }
+			}
+		  ]
+		},
+		{
+		  "seq_name": "Not Empty",
+		  "frame_rate": 0,
+		  "is_cycle": true,
+		  "is_active": false,
+		  "priority": 0,
+		  "pause": false,
+		  "sprites": [
+			{
+			  "index": 0,
+			  "frame": {
+				"x": 64,
+				"y": 257,
+				"w": 64,
+				"h": 64
+			  },
+			  "trimmed": false,
+			  "size": {
+				"w": 64,
+				"h": 64
+			  }
+			}
+		  ]
+		},
+		{
+		  "seq_name": "Almost Full",
+		  "frame_rate": 0,
+		  "is_cycle": true,
+		  "is_active": false,
+		  "priority": 0,
+		  "pause": false,
+		  "sprites": [
+			{
+			  "index": 0,
+			  "frame": {
+				"x": 128,
+				"y": 257,
+				"w": 64,
+				"h": 64
+			  },
+			  "trimmed": false,
+			  "size": {
+				"w": 64,
+				"h": 64
+			  }
+			}
+		  ]
+		},
+		{
+		  "seq_name": "Full",
+		  "frame_rate": 0,
+		  "is_cycle": true,
+		  "is_active": false,
+		  "priority": 0,
+		  "pause": false,
+		  "sprites": [
+			{
+			  "index": 0,
+			  "frame": {
+				"x": 192,
+				"y": 257,
+				"w": 64,
+				"h": 64
+			  },
+			  "trimmed": false,
+			  "size": {
+				"w": 64,
+				"h": 64
+			  }
+			}
+		  ]
+		}
+	  ]
+	}
+  ]
