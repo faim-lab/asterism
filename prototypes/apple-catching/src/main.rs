@@ -2,13 +2,12 @@ use asterism::{
     animation::{SimpleAnim, AnimObject},
     collision::AabbCollision,
     control::{KeyboardControl, MacroquadInputWrapper},
-    entity_state::FlatEntityState,
     physics::PointPhysics,
     resources::{QueuedResources, Transaction},
+    Logic,
 };
 use json::*;
 use macroquad::prelude::*;
-use std::io::{self, Write};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
@@ -38,17 +37,6 @@ impl Default for CollisionID {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-enum StateID {
-    AppleFalling,
-    AppleBouncing,
-    AppleResting,
-    EmptyBasket,
-    PartialBasket,
-    MidBasket,
-    FullBasket,
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Debug)]
 enum PoolID {
     Points,
@@ -72,7 +60,6 @@ fn window_conf() -> Conf {
 
 struct Logics {
     control: KeyboardControl<ActionID, MacroquadInputWrapper>,
-    entity_state: FlatEntityState<StateID>,
     physics: PointPhysics,
     collision: AabbCollision<CollisionID>,
     resources: QueuedResources<PoolID, u32>,
@@ -89,13 +76,11 @@ struct World {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let mut rows = Vec::<usize>::new();
-    rows.push(0);
-    rows.push(1);
-    rows.push(2);
-    let mut animation = SimpleAnim::new("src/apple_tree_sprite.png", "src/apple_tree.sprite.json");
+    let mut animation = SimpleAnim::new("src/apple_tree_sprite.png", "src/apple_tree_sprite.json");
     let mut world = World::new();
     let mut logics = Logics::new();
+    animation.set_background_color(BLUE);
+
 
     loop {
         if let Ok(cont) = world.update(&mut logics, &mut animation) {
@@ -164,19 +149,6 @@ impl Logics {
                 resources.items.insert(PoolID::Points, (0,0,u32::MAX));
                 resources
             },
-            entity_state: {
-                let mut entity_state = FlatEntityState::new();
-                entity_state.add_state_map(
-                    0,
-                    vec![
-                        (StateID::EmptyBasket, vec![1]),
-                        (StateID::PartialBasket, vec![2]),
-                        (StateID::MidBasket, vec![3]),
-                        (StateID::FullBasket, vec![0]),
-                    ],
-                );
-                entity_state
-            },
         }
     }
 }
@@ -215,26 +187,22 @@ impl World {
 
         self.project_physics(&mut logics.physics);
         logics.physics.update();
-        self.unproject_physics(&logics.physics, &mut animation);
+        self.unproject_physics(&logics.physics, animation);
 
         self.project_collision(&mut logics.collision);
         logics.collision.update();
         self.unproject_collision(&logics.collision);
-
-        self.project_entity_state(&mut logics.entity_state, &logics.collision);
-        logics.entity_state.update();
-        self.unproject_entity_state(&logics.entity_state);
 
         for contact in logics.collision.contacts.iter() {
             match (
                 logics.collision.metadata[contact.i].id,
                 logics.collision.metadata[contact.j].id,
             ) {
-                (CollisionID::Apple(i), CollisionID::Basket) => {
+                (CollisionID::Basket, CollisionID::Apple(i)) => {
                     if i < self.apples.len()
                         && logics
                             .collision
-                            .sides_touched(contact, &CollisionID::Apple(i))
+                            .sides_touched(contact.i, contact.j)
                             .y
                             < 0.0
                     {
@@ -242,12 +210,31 @@ impl World {
                         logics
                             .resources
                             .transactions
-                            .push(PoolID::Points, Transaction::Change(1));
+                            .push((PoolID::Points, Transaction::Change(1)));
                     }
                 }
-                (CollisionID::Apple(i), CollisionID::Wall) => {
+                (CollisionID::Wall, CollisionID::Apple(i)) => {
                     if i < self.apples.len() {
                         self.apples.remove(i);
+                    }
+                }
+                (CollisionID::Floor, CollisionID::Apple(i)) => {
+                    let apple = &mut self.apples[i];
+                    if apple.vel.y >= 0.1 {
+                        apple.vel.y *= -0.6;
+                    }
+                }
+                (CollisionID::Apple(i), CollisionID::Apple(j)) => {
+                    let sides_touched = logics.collision.sides_touched(contact.i, contact.j);
+                    let apple_i = &mut self.apples[i];
+
+                    if sides_touched.y > 0.0 && apple_i.vel.y >= 0.1 {
+                        apple_i.vel.y *= -0.6;
+                    }
+
+                    let apple_j = &mut self.apples[j];
+                    if sides_touched.y < 0.0 && apple_j.vel.y >= 0.1 {
+                        apple_j.vel.y *= -0.6;
                     }
                 }
                 _ => {}
@@ -256,17 +243,14 @@ impl World {
 
         self.project_resources(&mut logics.resources);
         logics.resources.update();
-        self.unproject_resources(&logics.resources, &mut animation);
+        self.unproject_resources(&logics.resources, animation);
 
         for completed in logics.resources.completed.iter() {
             match completed {
-                Ok(item_types) => {
-                    for item_type in item_types {
-                        match item_type {
-                            PoolID::Points => {
-                                println!("current score: {}\r", self.score);
-                                
-                            }
+                Ok(item_type) => {
+                    match item_type {
+                        PoolID::Points => {
+                            println!("current score: {}\r", self.score);
                         }
                     }
                 }
@@ -337,7 +321,7 @@ impl World {
             Vec2::new(BASKET_WIDTH as f32, BASKET_HEIGHT as f32),
             self.basket_vel,
             true,
-            false,
+            true,
             CollisionID::Basket,
         );
 
@@ -355,90 +339,14 @@ impl World {
     }
 
     fn unproject_collision(&mut self, collision: &AabbCollision<CollisionID>) {
-        self.basket = collision
-            .get_xy_pos_for_entity(CollisionID::Basket)
-            .unwrap();
+        self.basket = {
+            let col = collision.get_ident_data(4);
+            col.center - col.half_size
+        };
         for (i, apple) in self.apples.iter_mut().enumerate() {
-            apple.pos = collision
-                .get_xy_pos_for_entity(CollisionID::Apple(i))
-                .unwrap();
-        }
-    }
-
-    fn project_entity_state(
-        &self,
-        entity_state: &mut FlatEntityState<StateID>,
-        collision: &AabbCollision<CollisionID>,
-    ) {
-        entity_state.maps.clear();
-        entity_state.conditions.clear();
-        entity_state.states.clear();
-
-        for _ in self.apples.iter() {
-            entity_state.add_state_map(
-                0,
-                vec![
-                    (StateID::AppleFalling, vec![1, 2]),
-                    (StateID::AppleBouncing, vec![0]),
-                    (StateID::AppleResting, vec![0]),
-                ],
-            );
-        }
-
-        let mut bounce = Vec::new();
-        for contact in collision.contacts.iter() {
-            match (
-                collision.metadata[contact.i].id,
-                collision.metadata[contact.j].id,
-            ) {
-                (CollisionID::Apple(i), CollisionID::Floor) => {
-                    if collision.sides_touched(contact, &CollisionID::Apple(i)).y < 0.0 {
-                        if self.apples[i].vel.y < 1.0 {
-                            entity_state.conditions[i][2] = true;
-                        } else {
-                            entity_state.conditions[i][1] = true;
-                            bounce.push(i);
-                        }
-                    }
-                }
-                (CollisionID::Apple(i), CollisionID::Apple(j)) => {
-                    if collision.sides_touched(contact, &CollisionID::Apple(i)).y < 0.0 {
-                        if self.apples[i].vel.y < 1.0 {
-                            entity_state.conditions[i][2] = true;
-                        } else {
-                            entity_state.conditions[i][1] = true;
-                            bounce.push(i);
-                        }
-                    }
-                    if collision.sides_touched(contact, &CollisionID::Apple(j)).y < 0.0 {
-                        if self.apples[j].vel.y < 1.0 {
-                            entity_state.conditions[j][2] = true;
-                        } else {
-                            entity_state.conditions[j][1] = true;
-                            bounce.push(j);
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        for idx in bounce.iter() {
-            entity_state.conditions[*idx][0] = true;
-        }
-    }
-
-    fn unproject_entity_state(&mut self, entity_state: &FlatEntityState<StateID>) {
-        for (i, state) in entity_state.states.iter().enumerate() {
-            match entity_state.maps[i].states[*state].id {
-                StateID::AppleBouncing => {
-                    self.apples[i].vel.y *= -0.6;
-                }
-                StateID::AppleFalling => {}
-                StateID::AppleResting => {
-                    self.apples[i].vel.y = 0.0;
-                }
-               
+            apple.pos = {
+                let col = collision.get_ident_data(i + 5);
+                col.center - col.half_size
             }
         }
     }
@@ -453,12 +361,10 @@ impl World {
     fn unproject_resources(&mut self, resources: &QueuedResources<PoolID, u32>, animation: &mut SimpleAnim) {
         for completed in resources.completed.iter() {
             match completed {
-                Ok(item_types) => {
-                    for item_type in item_types {
-                        let value = resources.get_value_by_itemtype(item_type).unwrap();
-                        match item_type {
-                            PoolID::Points => self.score = value,
-                        }
+                Ok(item_type) => {
+                    let value = resources.get_value_by_itemtype(item_type).unwrap();
+                    match item_type {
+                        PoolID::Points => self.score = value,
                     }
                 }
                 Err(_) => {}
