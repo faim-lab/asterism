@@ -1,90 +1,178 @@
 //! # Linking logics
 //!
-//! Linking logics present the idea that some things, in some context, are related or connected to
-//! each other. They maintain, enumerate, and follow/activate directed connections between
-//! concepts.
+//! Linking logics present the idea that some things, in some context, are connected to each other. They maintain, enumerate, and follow/activate directed connections between concepts.
 //!
-//! Linking logics are incredibly broad and have a wide range of uses. Linking logics are slightly
-//! confusing to visualize because of all the nested vecs. I recommend looking at `yarn` and
-//! `maze-minigame` in `/prototypes/` for examples.
+//! Linking logics are incredibly broad and have a wide range of uses.
+use crate::graph::StateMachine;
+use crate::{tables::OutputTable, Event, EventType, Logic, Reaction};
 
-/// A generic linking logic.
-pub struct GraphedLinking {
-    /// A vec of maps.
-    pub maps: Vec<NodeMap>,
-    /// Condition tables for each map in `self.maps`. If `conditions[i][j]` is true, that means the
-    /// node `j` in `maps[i]` can be moved to, i.e. `position[i]` can be set to `j`.
-    pub conditions: Vec<Vec<bool>>,
-    /// The current node the map is on. `positions[i]` is an index in `maps[i].nodes`.
-    pub positions: Vec<usize>,
+/// A generic linking logic. See [StateMachine][crate::graph::StateMachine] documentation for more information.
+///
+/// I think this is the exact same code as FlatEntityState actually. The difference might make become more clear when rendering?
+pub struct GraphedLinking<NodeID: Copy + Eq> {
+    /// A vec of state machines
+    pub graphs: Vec<StateMachine<NodeID>>,
+    /// If the state machine has just traversed an edge or not
+    pub just_traversed: Vec<Option<usize>>,
 }
 
-impl GraphedLinking {
+impl<NodeID: Copy + Eq> GraphedLinking<NodeID> {
     pub fn new() -> Self {
         Self {
-            maps: Vec::new(),
-            conditions: Vec::new(),
-            positions: Vec::new(),
+            graphs: Vec::new(),
+            just_traversed: Vec::new(),
         }
     }
 
     /// Updates the linking logic.
     ///
-    /// First, check the status of all the links from the current node in the condition table. If
-    /// any of those links are `true`, i.e. that node can be moved to, move the current position.
-    /// Then, reset the condition table.
+    /// Check the status of all the links from the current node in the condition table. If any of those links are `true`, i.e. that node can be moved to, move the current position.
     pub fn update(&mut self) {
-        for (i, idx) in self.positions.iter_mut().enumerate() {
-            for link in &self.maps[i].nodes[*idx].links {
-                if self.conditions[i][*link] {
-                    *idx = *link;
-                    break; // exit iteration after first match is found
+        self.just_traversed.fill(None);
+        for (graph, traversed) in self.graphs.iter_mut().zip(self.just_traversed.iter_mut()) {
+            for i in graph.graph.get_edges(graph.current_node) {
+                if graph.conditions[i] {
+                    *traversed = Some(graph.current_node);
+                    graph.current_node = i;
+                    break;
                 }
-            }
-        }
-
-        for map_conditions in self.conditions.iter_mut() {
-            for val in map_conditions.iter_mut() {
-                *val = false;
             }
         }
     }
 
     /// Adds a map of nodes to the logic.
     ///
-    /// `starting_pos` is where the node where the linking logic will start looking for links.
+    /// `starting_pos` is where the node the graph traversal starts on. `edges` is a list of adjacency lists. All conditions are set to false.
     ///
-    /// At each index i of `nodes`, the vec of indices j_0, j_1, j_2, ... represents the indices of
-    /// nodes to which node i can be linked to.
-    ///
-    /// All conditions by default are set to false.
-    pub fn add_link_map(&mut self, starting_pos: usize, nodes: Vec<Vec<usize>>) {
-        let mut node_map = NodeMap { nodes: Vec::new() };
-        for nodes in nodes.iter() {
-            node_map.nodes.push(Node {
-                links: {
-                    let mut self_nodes: Vec<usize> = Vec::new();
-                    for node in nodes.iter() {
-                        self_nodes.push(*node);
-                    }
-                    self_nodes
-                },
-            });
+    /// const generics <3
+    pub fn add_graph<const NUM_NODES: usize>(
+        &mut self,
+        starting_pos: usize,
+        edges: [(NodeID, &[NodeID]); NUM_NODES],
+    ) {
+        let mut graph = StateMachine::new();
+        let (ids, edges): (Vec<_>, Vec<_>) = edges.iter().cloned().unzip();
+        graph.add_nodes(ids.as_slice());
+        graph.current_node = starting_pos;
+        for (from, node_edges) in edges.iter().enumerate() {
+            for to in node_edges.iter() {
+                graph
+                    .graph
+                    .add_edge(from, ids.iter().position(|id| to == id).unwrap());
+            }
         }
-        self.maps.push(node_map);
-        self.conditions.push(vec![false; nodes.len()]);
-        self.positions.push(starting_pos);
+        self.graphs.push(graph);
+        self.just_traversed.push(None);
     }
 }
 
-/// A representation of a map of nodes.
-pub struct NodeMap {
-    /// A list of the nodes in the NodeMap.
-    pub nodes: Vec<Node>,
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct LinkingEvent {
+    pub graph: usize,
+    pub node: usize,
+    pub event_type: LinkingEventType,
 }
 
-/// A node of a map of links.
-pub struct Node {
-    /// List of the indices in [NodeMap] of the nodes that this node is linked to.
-    pub links: Vec<usize>,
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum LinkingEventType {
+    Activated,
+    Traversed(usize), // last node (which edge)
+}
+impl EventType for LinkingEventType {}
+
+impl Event for LinkingEvent {
+    type EventType = LinkingEventType;
+    fn get_type(&self) -> &Self::EventType {
+        &self.event_type
+    }
+}
+
+pub enum LinkingReaction {
+    Activate(usize, usize),
+    Traverse(usize, usize),
+    // AddNode(usize),
+    // AddEdge(usize, (usize, usize))
+    // RemoveNode(usize),
+    // RemoveEdge(usize, (usize, usize)),
+}
+
+impl Reaction for LinkingReaction {}
+
+impl<NodeID: Copy + Eq> Logic for GraphedLinking<NodeID> {
+    type Event = LinkingEvent;
+    type Reaction = LinkingReaction;
+
+    /// index of graph
+    type Ident = usize;
+    /// list of graph nodes and edges
+    type IdentData = NodeID;
+
+    fn handle_predicate(&mut self, reaction: &Self::Reaction) {
+        match reaction {
+            LinkingReaction::Activate(graph, node) => self.graphs[*graph].conditions[*node] = true,
+            LinkingReaction::Traverse(graph, node) => {
+                self.just_traversed[*graph] = Some(self.graphs[*graph].current_node);
+                self.graphs[*graph].set_current_node(*node);
+            }
+        }
+    }
+
+    fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData {
+        self.graphs[ident].get_current_node()
+    }
+
+    fn update_ident_data(&mut self, ident: Self::Ident, data: Self::IdentData) {
+        let graph = &mut self.graphs[ident];
+        let node = graph.graph.nodes.iter().position(|id| *id == data);
+        if let Some(idx) = node {
+            graph.current_node = idx;
+        }
+    }
+}
+
+type QueryIdent<ID> = (
+    <GraphedLinking<ID> as Logic>::Ident,
+    <GraphedLinking<ID> as Logic>::IdentData,
+);
+
+impl<ID: Copy + Eq> OutputTable<QueryIdent<ID>> for GraphedLinking<ID> {
+    fn get_table(&self) -> Vec<QueryIdent<ID>> {
+        (0..self.graphs.len())
+            .map(|idx| (idx, self.get_ident_data(idx)))
+            .collect()
+    }
+}
+
+type QueryEvent<ID> = <GraphedLinking<ID> as Logic>::Event;
+
+impl<ID: Copy + Eq> OutputTable<QueryEvent<ID>> for GraphedLinking<ID> {
+    fn get_table(&self) -> Vec<QueryEvent<ID>> {
+        let mut events = Vec::new();
+        for (i, (graph, traversed)) in self
+            .graphs
+            .iter()
+            .zip(self.just_traversed.iter())
+            .enumerate()
+        {
+            if let Some(last_node) = traversed {
+                let event = LinkingEvent {
+                    graph: i,
+                    node: graph.current_node,
+                    event_type: LinkingEventType::Traversed(*last_node),
+                };
+                events.push(event);
+            }
+            for (node, activated) in graph.conditions.iter().enumerate() {
+                if *activated && node != graph.current_node {
+                    let event = LinkingEvent {
+                        graph: i,
+                        node,
+                        event_type: LinkingEventType::Activated,
+                    };
+                    events.push(event);
+                }
+            }
+        }
+        events
+    }
 }

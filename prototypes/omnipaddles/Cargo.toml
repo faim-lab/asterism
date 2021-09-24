@@ -1,5 +1,5 @@
 [package]
-name = "maze-macroquad"
+name = "omnipaddles"
 version = "0.1.0"
 authors = ["cynthia <cxla2018@mymail.pomona.edu>"]
 edition = "2018"
@@ -8,4 +8,4 @@ edition = "2018"
 
 [dependencies]
 asterism = { path = "../../asterism" }
-macroquad = "0.3.4"
+macroquad = { git = "https://github.com/not-fl3/macroquad", rev = "b3fc6aa8f9a66e32a401b00864af8c99fbfc26e2" }

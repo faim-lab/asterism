@@ -1,6 +1,7 @@
 use asterism::{
     linking::GraphedLinking,
     resources::{PoolInfo, QueuedResources, ResourceError, Transaction},
+    Logic,
 };
 use rand::prelude::*;
 

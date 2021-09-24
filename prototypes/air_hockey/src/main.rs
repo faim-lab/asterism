@@ -1,11 +1,11 @@
-#![deny(clippy::all)]
 #![forbid(unsafe_code)]
 
 use asterism::{
     collision::AabbCollision,
-    control::{KeyboardControl, WinitKeyboardControl},
+    control::{KeyboardControl, Values, WinitInputWrapper},
     physics::PointPhysics,
     resources::{PoolInfo, QueuedResources, Transaction},
+    Logic,
 };
 use pixels::{wgpu::Surface, Error, Pixels, SurfaceTexture};
 use ultraviolet::Vec2;
@@ -72,7 +72,7 @@ impl PoolInfo for PoolID {
 }
 
 struct Logics {
-    control: WinitKeyboardControl<ActionID>,
+    control: KeyboardControl<ActionID, VirtualKeyCode, WinitInputHelper, WinitInputWrapper>,
     physics: PointPhysics<Vec2>,
     collision: AabbCollision<CollisionID, Vec2>,
     resources: QueuedResources<PoolID>,
@@ -82,13 +82,13 @@ impl Logics {
     fn new() -> Self {
         Self {
             control: {
-                let mut control = WinitKeyboardControl::new();
+                let mut control = KeyboardControl::new();
                 control.add_key_map(0, VirtualKeyCode::A, ActionID::MoveLeft(Player::P1));
                 control.add_key_map(0, VirtualKeyCode::D, ActionID::MoveRight(Player::P1));
                 control.add_key_map(0, VirtualKeyCode::W, ActionID::MoveUp(Player::P1));
                 control.add_key_map(0, VirtualKeyCode::S, ActionID::MoveDown(Player::P1));
-                control.add_key_map(1, VirtualKeyCode::J, ActionID::MoveRight(Player::P2));
-                control.add_key_map(1, VirtualKeyCode::L, ActionID::MoveLeft(Player::P2));
+                control.add_key_map(1, VirtualKeyCode::L, ActionID::MoveRight(Player::P2));
+                control.add_key_map(1, VirtualKeyCode::J, ActionID::MoveLeft(Player::P2));
                 control.add_key_map(1, VirtualKeyCode::I, ActionID::MoveUp(Player::P2));
                 control.add_key_map(1, VirtualKeyCode::K, ActionID::MoveDown(Player::P2));
                 control
@@ -97,41 +97,33 @@ impl Logics {
             collision: {
                 let mut collision = AabbCollision::new();
                 collision.add_entity_as_xywh(
-                    0.0,
-                    HEIGHT as f32,
-                    WIDTH as f32,
-                    0.0,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(0.0, HEIGHT as f32),
+                    Vec2::new(WIDTH as f32, 0.0),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::TopWall(Player::P1),
                 );
                 collision.add_entity_as_xywh(
-                    0.0,
-                    0.0,
-                    WIDTH as f32,
-                    0.0,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::zero(),
+                    Vec2::new(WIDTH as f32, 0.0),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::BottomWall(Player::P2),
                 );
                 collision.add_entity_as_xywh(
-                    WIDTH as f32,
-                    0.0,
-                    0.0,
-                    HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::new(WIDTH as f32, 0.0),
+                    Vec2::new(0.0, HEIGHT as f32),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::RightWall,
                 );
                 collision.add_entity_as_xywh(
-                    0.0,
-                    0.0,
-                    0.0,
-                    HEIGHT as f32,
-                    Vec2::new(0.0, 0.0),
+                    Vec2::zero(),
+                    Vec2::new(0.0, HEIGHT as f32),
+                    Vec2::zero(),
                     true,
                     true,
                     CollisionID::LeftWall,
@@ -371,7 +363,15 @@ impl World {
         }
     }
 
-    fn project_control(&self, control: &mut WinitKeyboardControl<ActionID>) {
+    fn project_control(
+        &self,
+        control: &mut KeyboardControl<
+            ActionID,
+            VirtualKeyCode,
+            WinitInputHelper,
+            WinitInputWrapper,
+        >,
+    ) {
         control.mapping[0][0].is_valid = true;
         control.mapping[0][1].is_valid = true;
         control.mapping[0][2].is_valid = true;
@@ -382,23 +382,26 @@ impl World {
         control.mapping[1][3].is_valid = true;
     }
 
-    fn unproject_control(&mut self, control: &WinitKeyboardControl<ActionID>) {
-        self.paddles.0.x = ((self.paddles.0.x - control.values[0][0].value as f32
-            + control.values[0][1].value as f32) //confusing, incorporate ActionIds
-            .max(0.0) as f32)
+    fn unproject_control(
+        &mut self,
+        control: &KeyboardControl<ActionID, VirtualKeyCode, WinitInputHelper, WinitInputWrapper>,
+    ) {
+        self.paddles.0.x = (self.paddles.0.x - control.values[0][0].value
+            + control.values[0][1].value) //confusing, incorporate ActionIds
+            .max(0.0)
             .min((255 - PADDLE_WIDTH) as f32); //drive with data not code
-        self.paddles.0.y = ((self.paddles.0.y as f32 - control.values[0][2].value as f32
-            + control.values[0][3].value as f32)
-            .max(0.0) as f32)
+        self.paddles.0.y = (self.paddles.0.y - control.values[0][2].value
+            + control.values[0][3].value)
+            .max(0.0)
             .min((255 - PADDLE_HEIGHT) as f32);
-        self.paddles.1.x = ((self.paddles.1.x as f32 - control.values[1][0].value as f32
-            + control.values[1][1].value as f32)
-            .max(0.0) as f32)
+        self.paddles.1.x = (self.paddles.1.x - control.values[1][0].value
+            + control.values[1][1].value)
+            .max(0.0)
             .min((255 - PADDLE_WIDTH) as f32);
-        self.paddles.1.y = ((self.paddles.1.y as f32 - control.values[1][2].value as f32
-            + control.values[1][3].value as f32)
-            .max(0.0) as f32)
-            .min((255 - PADDLE_HEIGHT) as f32);
+        self.paddles.1.y = (self.paddles.1.y - control.values[1][2].value
+            + control.values[1][3].value)
+            .max(0.0)
+            .min((255 - PADDLE_WIDTH) as f32);
     }
 
     fn project_physics(&self, physics: &mut PointPhysics<Vec2>) {
@@ -434,27 +437,25 @@ impl World {
     fn project_collision(
         &self,
         collision: &mut AabbCollision<CollisionID, Vec2>,
-        control: &WinitKeyboardControl<ActionID>,
+        control: &KeyboardControl<ActionID, VirtualKeyCode, WinitInputHelper, WinitInputWrapper>,
     ) {
         collision.centers.resize_with(4, Default::default);
         collision.half_sizes.resize_with(4, Default::default);
         collision.velocities.resize_with(4, Default::default);
         collision.metadata.resize_with(4, Default::default);
         collision.add_entity_as_xywh(
-            self.ball.0 as f32,
-            self.ball.1 as f32,
-            BALL_SIZE as f32,
-            BALL_SIZE as f32,
+            Vec2::new(self.ball.0 as f32, self.ball.1 as f32),
+            Vec2::new(BALL_SIZE as f32, BALL_SIZE as f32),
             self.ball_vel,
             true,
             false,
             CollisionID::Ball,
         );
+
+        let paddle_size = Vec2::new(PADDLE_WIDTH as f32, PADDLE_HEIGHT as f32);
         collision.add_entity_as_xywh(
-            self.paddles.0.x as f32,
-            self.paddles.0.y as f32,
-            PADDLE_WIDTH as f32,
-            PADDLE_HEIGHT as f32,
+            self.paddles.0,
+            paddle_size,
             Vec2::new(
                 -control.values[0][0].value + control.values[0][1].value,
                 -control.values[0][2].value + control.values[0][3].value,
@@ -465,10 +466,8 @@ impl World {
         );
 
         collision.add_entity_as_xywh(
-            self.paddles.1.x as f32,
-            self.paddles.1.y as f32,
-            PADDLE_WIDTH as f32,
-            PADDLE_HEIGHT as f32,
+            self.paddles.1,
+            paddle_size,
             Vec2::new(
                 -control.values[1][0].value + control.values[1][1].value,
                 -control.values[1][2].value + control.values[1][3].value,
@@ -502,12 +501,14 @@ impl World {
     }
 
     fn project_resources(&self, resources: &mut QueuedResources<PoolID>) {
-        if !resources.items.contains_key(&PoolID::Points(Player::P1)) {
-            resources.items.insert(PoolID::Points(Player::P1), 0.0);
-        }
-        if !resources.items.contains_key(&PoolID::Points(Player::P2)) {
-            resources.items.insert(PoolID::Points(Player::P1), 0.0);
-        }
+        resources
+            .items
+            .entry(PoolID::Points(Player::P1))
+            .or_insert(0.0);
+        resources
+            .items
+            .entry(PoolID::Points(Player::P2))
+            .or_insert(0.0);
     }
 
     fn unproject_resources(&mut self, resources: &QueuedResources<PoolID>) {

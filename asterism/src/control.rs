@@ -1,17 +1,9 @@
 //! # Control logics
 //!
-//! Control logics communicate that different entities are controlled by different inputs at
-//! different times. They map button inputs, AI intentions, network socket messages, etc onto
-//! high-level game actions.
+//! Control logics communicate that different entities are controlled by different inputs at different times. They map button inputs, AI intentions, network socket messages, etc onto high-level game actions.
 //!
-//! We're currently trying to consider analog as well as digital inputs, but we haven't implemented
-//! controller support, so some of these fields don't really make sense yet.
-
-#[cfg(feature = "asterism-bevy")]
-use bevy_input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
-use macroquad::prelude::{is_key_down, KeyCode as MqKeyCode};
-use winit::event::VirtualKeyCode;
-use winit_input_helper::WinitInputHelper;
+//! We're currently trying to consider analog as well as digital inputs, but we haven't implemented controller support, so some of these fields don't really make sense yet.
+use crate::{tables::OutputTable, Event, EventType, Logic, Reaction};
 
 /// Information for a key/button press.
 trait Input {
@@ -19,24 +11,125 @@ trait Input {
     fn max(&self) -> f32;
 }
 
-/// Trait for generic keyboard control.
-pub trait KeyboardControl<ID, KeyCode, InputHandler>
+/// A keyboard control logic.
+///
+/// A Wrapper is a helper struct that helps keep track of keypress information that libraries may not but we do want. This is currently only necessary if you're using `winit_input_helper`.
+pub struct KeyboardControl<ID, Wrapper>
 where
     ID: Copy + Eq + Ord,
+    Wrapper: InputWrapper,
 {
-    fn new() -> Self;
+    /// Input mappings from actions to keypresses. Each outer Vec is a set of inputs, ex. one player gets the first set of mappings, another gets a second set of mappings, an AI player gets the third.
+    pub mapping: Vec<Vec<Action<ID, Wrapper::KeyCode>>>,
+    /// The values for each keypress in the sets described above.
+    pub values: Vec<Vec<Values>>,
+    /// An input wrapper
+    input_wrapper: Wrapper,
+}
+
+impl<ID, Wrapper> Logic for KeyboardControl<ID, Wrapper>
+where
+    ID: Copy + Eq + Ord,
+    Wrapper: InputWrapper,
+{
+    type Event = ControlEvent<ID>;
+    type Reaction = ControlReaction<ID, Wrapper::KeyCode>;
+
+    /// for each control locus
+    type Ident = usize;
+    /// values are only included for reference; modifying values will not change the data in the logic. Not super sure about this type...
+    type IdentData = Vec<Action<ID, Wrapper::KeyCode>>;
+
+    fn handle_predicate(&mut self, reaction: &Self::Reaction) {
+        match reaction {
+            ControlReaction::AddKeyToSet(set, id, key, valid) => {
+                self.add_key_map(*set, *key, *id, *valid)
+            }
+            ControlReaction::SetKeyValid(set, id) => {
+                if let Some(action) = self.mapping[*set].iter_mut().find(|act| act.id == *id) {
+                    action.is_valid = true;
+                }
+            }
+            ControlReaction::SetKeyInvalid(set, id) => {
+                if let Some(action) = self.mapping[*set].iter_mut().find(|act| act.id == *id) {
+                    action.is_valid = false;
+                }
+            }
+        }
+    }
+
+    fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData {
+        self.mapping[ident].clone()
+    }
+
+    fn update_ident_data(&mut self, ident: Self::Ident, data: Self::IdentData) {
+        self.mapping[ident] = data;
+    }
+}
+
+impl<ID, Wrapper> KeyboardControl<ID, Wrapper>
+where
+    ID: Copy + Eq + Ord,
+    Wrapper: InputWrapper,
+{
+    pub fn new() -> Self {
+        Self {
+            mapping: Vec::new(),
+            values: Vec::new(),
+            input_wrapper: Wrapper::new(),
+        }
+    }
 
     /// Checks and updates what inputs are being pressed every frame.
-    fn update(&mut self, events: &InputHandler);
-
-    fn mapping(&self) -> &Vec<Vec<Action<ID, KeyCode>>>;
-    fn mapping_mut(&mut self) -> &mut Vec<Vec<Action<ID, KeyCode>>>;
-    fn values(&self) -> &Vec<Vec<Values>>;
-    fn values_mut(&mut self) -> &mut Vec<Vec<Values>>;
+    pub fn update(&mut self, events: &Wrapper::InputHelper) {
+        self.input_wrapper.clear();
+        for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
+            for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
+                let Action {
+                    key_input,
+                    input_type,
+                    is_valid,
+                    ..
+                } = action;
+                let Values { value, changed_by } = &mut values;
+                // if not valid, reset and skip check. could cause problems if a key were pressed before it became valid then the key became valid while still being held. this is probably semi-reasonable, actually
+                if !*is_valid {
+                    *value = 0.0;
+                    *changed_by = 0.0;
+                    continue;
+                }
+                match input_type {
+                    InputType::Digital => {
+                        // NOTE: if update_held isn't called for every key in the mappings, it can completely break some of the input wrappers.
+                        //
+                        // This feels easily broken... but it feels less weird than filtering out and looping through all inputs beforehand to see if they're held, _then_ calling is_held again---which is just doing the same thing twice?
+                        if self.input_wrapper.update_held(&key_input.keycode, events) {
+                            if self.input_wrapper.is_pressed(&key_input.keycode, events) {
+                                *changed_by = 1.0;
+                            } else {
+                                *changed_by = 0.0;
+                            }
+                        } else if self.input_wrapper.is_released(&key_input.keycode, events)
+                        // see comment earlier about keypresses that are invalid. logic may not be correct though
+                            && *value != 0.0
+                        {
+                            *changed_by = -1.0;
+                        } else {
+                            *changed_by = 0.0;
+                        }
+                    }
+                    InputType::Analog => unimplemented!(),
+                }
+                *value = (*value + *changed_by)
+                    .max(key_input.min())
+                    .min(key_input.max());
+            }
+        }
+    }
 
     /// Returns the [Values] for the first action in the mapping with the given ID.
-    fn get_action(&self, id: ID) -> Option<Values> {
-        for (i, ..) in self.mapping().iter().enumerate() {
+    pub fn get_action(&self, id: ID) -> Option<Values> {
+        for (i, ..) in self.mapping.iter().enumerate() {
             if let Some(values) = self.get_action_in_set(i, id) {
                 return Some(values);
             }
@@ -45,44 +138,38 @@ where
     }
 
     /// Returns the [Values] for the action with the given ID in the given set of mappings.
-    fn get_action_in_set(&self, action_set: usize, id: ID) -> Option<Values> {
-        if let Some(i) = self.mapping()[action_set]
-            .iter()
-            .position(|act| act.id == id)
-        {
-            return Some(self.values()[action_set][i]);
+    pub fn get_action_in_set(&self, action_set: <Self as Logic>::Ident, id: ID) -> Option<Values> {
+        if let Some(i) = self.mapping[action_set].iter().position(|act| act.id == id) {
+            return Some(self.values[action_set][i]);
         }
         None
     }
 
     /// Adds a single keymap to the logic.
-    fn add_key_map(&mut self, locus_idx: usize, keycode: KeyCode, id: ID) {
-        if locus_idx >= self.mapping().len() {
-            self.mapping_mut()
-                .resize_with(locus_idx + 1, Default::default);
-            self.values_mut()
-                .resize_with(locus_idx + 1, Default::default);
+    pub fn add_key_map(
+        &mut self,
+        locus_idx: <Self as Logic>::Ident,
+        keycode: Wrapper::KeyCode,
+        id: ID,
+        valid: bool,
+    ) {
+        if locus_idx >= self.mapping.len() {
+            self.mapping.resize_with(locus_idx + 1, Default::default);
+            self.values.resize_with(locus_idx + 1, Default::default);
         }
-        self.mapping_mut()[locus_idx].push(Action {
-            id,
-            key_input: KeyInput { keycode },
-            is_valid: false,
-            input_type: InputType::Digital,
-        });
-        self.values_mut()[locus_idx].push(Values {
-            value: 0.0,
-            changed_by: 0.0,
-        });
+        self.mapping[locus_idx].push(Action::new(id, keycode, InputType::Digital, valid));
+        self.values[locus_idx].push(Values::new());
     }
 }
 
 /// A keyboard input.
-pub struct KeyInput<KeyCode> {
+#[derive(Clone, Copy)]
+pub struct KeyInput<KeyCode: Copy> {
     /// The keycode that the input is tracking.
     keycode: KeyCode,
 }
 
-impl<KeyCode> Input for KeyInput<KeyCode> {
+impl<KeyCode: Copy> Input for KeyInput<KeyCode> {
     /// Minimum value for a keypress is 0.0.
     fn min(&self) -> f32 {
         0.0
@@ -93,12 +180,16 @@ impl<KeyCode> Input for KeyInput<KeyCode> {
     }
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum InputType {
+    /// an input that can be a range of values (joystick, etc)
     Analog,
+    /// an input that can only be pressed or not pressed
     Digital,
 }
 
-#[derive(Copy, Clone)]
+/// Information about the player's input related to one action.
+#[derive(Copy, Clone, Debug)]
 pub struct Values {
     /// How much the value of the input was changed last frame.
     pub changed_by: f32,
@@ -106,7 +197,18 @@ pub struct Values {
     pub value: f32,
 }
 
-pub struct Action<ID, KeyCode> {
+impl Values {
+    pub fn new() -> Self {
+        Self {
+            changed_by: 0.0,
+            value: 0.0,
+        }
+    }
+}
+
+/// Information for an action and the input it's attached to.
+#[derive(Clone, Copy)]
+pub struct Action<ID, KeyCode: Copy> {
     pub id: ID,
     /// The input's keycode and min/max.
     pub key_input: KeyInput<KeyCode>,
@@ -116,278 +218,238 @@ pub struct Action<ID, KeyCode> {
     pub input_type: InputType,
 }
 
-/// Implementation of keyboard control for `winit_input_helper`.
-pub struct WinitKeyboardControl<ID: Copy + Eq + Ord> {
-    /// Keymaps for each player.
-    ///
-    /// An index in the outer vec, i.e. `mapping[i]`, points to a keymap for a player. Indexing
-    /// that vec will get you actual actions.
-    pub mapping: Vec<Vec<Action<ID, VirtualKeyCode>>>,
-    /// The values for each input in `mapping`.
-    pub values: Vec<Vec<Values>>,
-    // Invariants: mapping.len() == values.len(), mapping[i].inputs.len() == values[i].len()
-    last_frame_inputs: Vec<VirtualKeyCode>,
-    this_frame_inputs: Vec<VirtualKeyCode>,
-}
-
-/// Implementation of keyboard control for Bevy's input handler. See [WinitKeyboardControl] for
-/// documentation of fields.
-#[cfg(feature = "asterism-bevy")]
-pub struct BevyKeyboardControl<ID: Copy + Eq + Ord> {
-    pub mapping: Vec<Vec<Action<ID, BevyKeyCode>>>,
-    pub values: Vec<Vec<Values>>,
-    last_frame_inputs: Vec<BevyKeyCode>,
-    this_frame_inputs: Vec<BevyKeyCode>,
-}
-
-/// Implementation of keyboard control for Macroquad's input handler. See [WinitKeyboardControl] for
-/// documentation of fields.
-pub struct MacroQuadKeyboardControl<ID: Copy + Eq + Ord> {
-    pub mapping: Vec<Vec<Action<ID, MqKeyCode>>>,
-    pub values: Vec<Vec<Values>>,
-    last_frame_inputs: Vec<MqKeyCode>,
-    this_frame_inputs: Vec<MqKeyCode>,
-}
-
-impl<ID> KeyboardControl<ID, VirtualKeyCode, WinitInputHelper> for WinitKeyboardControl<ID>
-where
-    ID: Copy + Eq + Ord,
-{
-    fn new() -> Self {
+impl<ID, KeyCode: Copy> Action<ID, KeyCode> {
+    pub fn new(id: ID, keycode: KeyCode, input_type: InputType, is_valid: bool) -> Self {
         Self {
-            mapping: Vec::new(),
-            values: Vec::new(),
-            last_frame_inputs: Vec::new(),
-            this_frame_inputs: Vec::new(),
+            id,
+            key_input: KeyInput { keycode },
+            is_valid,
+            input_type,
         }
     }
 
-    fn mapping(&self) -> &Vec<Vec<Action<ID, VirtualKeyCode>>> {
-        &self.mapping
+    pub fn get_keycode(&self) -> &KeyCode {
+        &self.key_input.keycode
     }
-    fn mapping_mut(&mut self) -> &mut Vec<Vec<Action<ID, VirtualKeyCode>>> {
-        &mut self.mapping
-    }
+}
 
-    fn values(&self) -> &Vec<Vec<Values>> {
-        &self.values
-    }
-    fn values_mut(&mut self) -> &mut Vec<Vec<Values>> {
-        &mut self.values
-    }
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ControlReaction<ID: Copy + Eq, KeyCode: Copy + Eq> {
+    /// add a key to the set with the given id, and if it's valid or not.
+    AddKeyToSet(usize, ID, KeyCode, bool),
+    SetKeyValid(usize, ID),
+    SetKeyInvalid(usize, ID),
+}
 
-    fn update(&mut self, events: &WinitInputHelper) {
-        for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
-            for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
-                let Action {
-                    key_input,
-                    input_type,
-                    is_valid,
-                    ..
-                } = action;
-                let Values { value, changed_by } = &mut values;
-                match input_type {
-                    _ => {
-                        if events.key_held(key_input.keycode) {
-                            self.this_frame_inputs.push(key_input.keycode);
-                            if *is_valid {
-                                if let Some(..) = self
-                                    .last_frame_inputs
-                                    .iter()
-                                    .position(|vkc| *vkc == key_input.keycode)
-                                {
-                                    *changed_by = 0.0;
-                                } else {
-                                    *changed_by = 1.0;
-                                }
-                            }
-                        } else {
-                            if *is_valid {
-                                if let Some(..) = self
-                                    .last_frame_inputs
-                                    .iter()
-                                    .position(|vkc| *vkc == key_input.keycode)
-                                {
-                                    *changed_by = -1.0;
-                                } else {
-                                    *changed_by = 0.0;
-                                }
-                            }
-                        }
-                    }
+impl<ID: Copy + Eq, KeyCode: Copy + Eq> Reaction for ControlReaction<ID, KeyCode> {}
+
+#[derive(PartialEq, Eq, Ord, PartialOrd, Debug, Clone, Copy)]
+pub struct ControlEvent<ID> {
+    pub event_type: ControlEventType,
+    pub set: usize,
+    pub action_id: ID,
+}
+
+impl<ID> Event for ControlEvent<ID> {
+    type EventType = ControlEventType;
+    fn get_type(&self) -> &Self::EventType {
+        &self.event_type
+    }
+}
+
+#[derive(PartialEq, Eq, Ord, PartialOrd, Debug, Clone, Copy)]
+pub enum ControlEventType {
+    KeyPressed,
+    KeyReleased,
+    KeyHeld,
+    KeyUnheld,
+}
+
+impl EventType for ControlEventType {}
+
+type QueryIdent<ID, Wrapper> = (
+    <KeyboardControl<ID, Wrapper> as Logic>::Ident,
+    <KeyboardControl<ID, Wrapper> as Logic>::IdentData,
+);
+
+impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> OutputTable<QueryIdent<ID, Wrapper>>
+    for KeyboardControl<ID, Wrapper>
+{
+    fn get_table(&self) -> Vec<QueryIdent<ID, Wrapper>> {
+        (0..self.mapping.len())
+            .map(|idx| (idx, self.get_ident_data(idx)))
+            .collect()
+    }
+}
+
+type QueryEvent<ID, Wrapper> = <KeyboardControl<ID, Wrapper> as Logic>::Event;
+impl<ID: Copy + Eq + Ord, Wrapper: InputWrapper> OutputTable<QueryEvent<ID, Wrapper>>
+    for KeyboardControl<ID, Wrapper>
+{
+    fn get_table(&self) -> Vec<QueryEvent<ID, Wrapper>> {
+        let mut events = Vec::new();
+
+        for (i, (mapping, values)) in self.mapping.iter().zip(self.values.iter()).enumerate() {
+            for (action, value) in mapping.iter().zip(values.iter()) {
+                if value.changed_by > 0.0 {
+                    let event = ControlEvent {
+                        set: i,
+                        action_id: action.id,
+                        event_type: ControlEventType::KeyPressed,
+                    };
+                    events.push(event);
+                } else if value.changed_by < 0.0 {
+                    let event = ControlEvent {
+                        set: i,
+                        action_id: action.id,
+                        event_type: ControlEventType::KeyReleased,
+                    };
+                    events.push(event);
                 }
-                *value = (*value + *changed_by)
-                    .max(key_input.min())
-                    .min(key_input.max());
+
+                if value.value != 0.0 {
+                    let event = ControlEvent {
+                        set: i,
+                        action_id: action.id,
+                        event_type: ControlEventType::KeyHeld,
+                    };
+                    events.push(event);
+                } else {
+                    let event = ControlEvent {
+                        set: i,
+                        action_id: action.id,
+                        event_type: ControlEventType::KeyUnheld,
+                    };
+                    events.push(event);
+                };
             }
         }
-        self.last_frame_inputs.clear();
-        for input in self.this_frame_inputs.iter() {
-            self.last_frame_inputs.push(*input);
-        }
-        self.this_frame_inputs.clear();
+
+        events
     }
 }
 
-#[cfg(feature = "asterism-bevy")]
-impl<ID> KeyboardControl<ID, BevyKeyCode, BevyInput<BevyKeyCode>> for BevyKeyboardControl<ID>
-where
-    ID: Copy + Eq + Ord,
-{
+/// A wrapper to help keep track of input information that preexisting input handlers may not offer, but that we need.
+pub trait InputWrapper {
+    /// what kind of keycode the InputWrapper will keep track of
+    type KeyCode: Copy + Eq;
+    /// the InputHelper that the engine's input handler uses, ex. Bevy's `bevy_input::Input` or winit_input_helper's `WinitInputHelper`.
+    type InputHelper;
+    fn new() -> Self;
+
+    /// clears input information for this frame
+    fn clear(&mut self);
+
+    /// if the key is held or not. If keeping track of current inputs, also logs what keys are being pressed this frame.
+    fn update_held(&mut self, key: &Self::KeyCode, events: &Self::InputHelper) -> bool;
+
+    /// if the key has just been pressed or not
+    fn is_pressed(&self, key: &Self::KeyCode, events: &Self::InputHelper) -> bool;
+
+    /// if the key has just been released or not
+    fn is_released(&self, key: &Self::KeyCode, events: &Self::InputHelper) -> bool;
+}
+
+use macroquad::prelude::{is_key_down, is_key_pressed, is_key_released, KeyCode as MqKeyCode};
+/// Macroquad's input handler already correctly handles the information we need, so this is just a wrapper for their functions
+pub struct MacroquadInputWrapper {}
+
+impl InputWrapper for MacroquadInputWrapper {
+    type KeyCode = MqKeyCode;
+    type InputHelper = ();
     fn new() -> Self {
-        Self {
-            mapping: Vec::new(),
-            values: Vec::new(),
-            last_frame_inputs: Vec::new(),
-            this_frame_inputs: Vec::new(),
-        }
+        Self {}
     }
 
-    fn mapping(&self) -> &Vec<Vec<Action<ID, BevyKeyCode>>> {
-        &self.mapping
-    }
-    fn mapping_mut(&mut self) -> &mut Vec<Vec<Action<ID, BevyKeyCode>>> {
-        &mut self.mapping
+    fn clear(&mut self) {}
+
+    fn update_held(&mut self, key: &MqKeyCode, _events: &()) -> bool {
+        is_key_down(*key)
     }
 
-    fn values(&self) -> &Vec<Vec<Values>> {
-        &self.values
-    }
-    fn values_mut(&mut self) -> &mut Vec<Vec<Values>> {
-        &mut self.values
+    fn is_pressed(&self, key: &MqKeyCode, _events: &()) -> bool {
+        is_key_pressed(*key)
     }
 
-    fn update(&mut self, events: &BevyInput<BevyKeyCode>) {
-        for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
-            for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
-                let Action {
-                    key_input,
-                    input_type,
-                    is_valid,
-                    ..
-                } = action;
-                let Values { value, changed_by } = &mut values;
-                match input_type {
-                    _ => {
-                        if events.pressed(key_input.keycode) {
-                            self.this_frame_inputs.push(key_input.keycode);
-                            if *is_valid {
-                                if let Some(..) = self
-                                    .last_frame_inputs
-                                    .iter()
-                                    .position(|vkc| *vkc == key_input.keycode)
-                                {
-                                    *changed_by = 0.0;
-                                } else {
-                                    *changed_by = 1.0;
-                                }
-                            }
-                        } else {
-                            if *is_valid {
-                                if let Some(..) = self
-                                    .last_frame_inputs
-                                    .iter()
-                                    .position(|vkc| *vkc == key_input.keycode)
-                                {
-                                    *changed_by = -1.0;
-                                } else {
-                                    *changed_by = 0.0;
-                                }
-                            }
-                        }
-                    }
-                }
-                *value = (*value + *changed_by)
-                    .max(key_input.min())
-                    .min(key_input.max());
-            }
-        }
-        self.last_frame_inputs.clear();
-        for input in self.this_frame_inputs.iter() {
-            self.last_frame_inputs.push(*input);
-        }
-        self.this_frame_inputs.clear();
+    fn is_released(&self, key: &MqKeyCode, _events: &()) -> bool {
+        is_key_released(*key)
     }
 }
 
-/// Macroquad doesn't have a keyboard handler type, so use the unit type.
-impl<ID> KeyboardControl<ID, MqKeyCode, ()> for MacroQuadKeyboardControl<ID>
-where
-    ID: Copy + Eq + Ord,
-{
+#[cfg(feature = "winit-render")]
+use std::collections::BTreeSet;
+#[cfg(feature = "winit-render")]
+use winit::event::VirtualKeyCode;
+#[cfg(feature = "winit-render")]
+use winit_input_helper::WinitInputHelper;
+
+/// WinitInputHelper doesn't handle key repeat properly because of key repeat, so track the keys pressed last and this frame.
+#[cfg(feature = "winit-render")]
+pub struct WinitInputWrapper {
+    this_frame_keys: BTreeSet<VirtualKeyCode>,
+    last_frame_keys: BTreeSet<VirtualKeyCode>,
+}
+
+#[cfg(feature = "winit-render")]
+impl InputWrapper for WinitInputWrapper {
+    type KeyCode = VirtualKeyCode;
+    type InputHelper = WinitInputHelper;
+
     fn new() -> Self {
         Self {
-            mapping: Vec::new(),
-            values: Vec::new(),
-            last_frame_inputs: Vec::new(),
-            this_frame_inputs: Vec::new(),
+            this_frame_keys: BTreeSet::new(),
+            last_frame_keys: BTreeSet::new(),
         }
     }
 
-    fn mapping(&self) -> &Vec<Vec<Action<ID, MqKeyCode>>> {
-        &self.mapping
-    }
-    fn mapping_mut(&mut self) -> &mut Vec<Vec<Action<ID, MqKeyCode>>> {
-        &mut self.mapping
+    fn clear(&mut self) {
+        self.last_frame_keys = std::mem::take(&mut self.this_frame_keys);
     }
 
-    fn values(&self) -> &Vec<Vec<Values>> {
-        &self.values
-    }
-    fn values_mut(&mut self) -> &mut Vec<Vec<Values>> {
-        &mut self.values
+    fn update_held(&mut self, key: &VirtualKeyCode, events: &WinitInputHelper) -> bool {
+        if events.key_held(*key) {
+            self.this_frame_keys.insert(*key);
+            return true;
+        }
+        false
     }
 
-    /// Instead of an input handler type, pass in a reference to the unit type (?)
-    fn update(&mut self, _events: &()) {
-        for (map, map_values) in self.mapping.iter().zip(self.values.iter_mut()) {
-            for (action, mut values) in map.iter().zip(map_values.iter_mut()) {
-                let Action {
-                    key_input,
-                    input_type,
-                    is_valid,
-                    ..
-                } = action;
-                let Values { value, changed_by } = &mut values;
-                match input_type {
-                    _ => {
-                        if is_key_down(key_input.keycode) {
-                            self.this_frame_inputs.push(key_input.keycode);
-                            if *is_valid {
-                                if let Some(..) = self
-                                    .last_frame_inputs
-                                    .iter()
-                                    .position(|vkc| *vkc == key_input.keycode)
-                                {
-                                    *changed_by = 0.0;
-                                } else {
-                                    *changed_by = 1.0;
-                                }
-                            }
-                        } else {
-                            if *is_valid {
-                                if let Some(..) = self
-                                    .last_frame_inputs
-                                    .iter()
-                                    .position(|vkc| *vkc == key_input.keycode)
-                                {
-                                    *changed_by = -1.0;
-                                } else {
-                                    *changed_by = 0.0;
-                                }
-                            }
-                        }
-                    }
-                }
-                *value = (*value + *changed_by)
-                    .max(key_input.min())
-                    .min(key_input.max());
-            }
-        }
-        self.last_frame_inputs.clear();
-        for input in self.this_frame_inputs.iter() {
-            self.last_frame_inputs.push(*input);
-        }
-        self.this_frame_inputs.clear();
+    fn is_pressed(&self, key: &VirtualKeyCode, _events: &WinitInputHelper) -> bool {
+        self.this_frame_keys.contains(key) && !self.last_frame_keys.contains(key)
+    }
+
+    fn is_released(&self, key: &VirtualKeyCode, events: &WinitInputHelper) -> bool {
+        events.key_released(*key)
+    }
+}
+
+#[cfg(feature = "bevy-engine")]
+use bevy_input::{keyboard::KeyCode as BevyKeyCode, Input as BevyInput};
+
+#[cfg(feature = "bevy-engine")]
+/// Bevy's input handler already correctly handles the information we need, so this is just a wrapper for their functions
+pub struct BevyInputWrapper;
+
+#[cfg(feature = "bevy-engine")]
+impl InputWrapper for BevyInputWrapper {
+    type KeyCode = BevyKeyCode;
+    type InputHelper = BevyInput<BevyKeyCode>;
+
+    fn new() -> Self {
+        Self
+    }
+
+    fn clear(&mut self) {}
+
+    fn update_held(&mut self, key: &BevyKeyCode, events: &BevyInput<BevyKeyCode>) -> bool {
+        events.pressed(*key)
+    }
+
+    fn is_pressed(&self, key: &BevyKeyCode, events: &BevyInput<BevyKeyCode>) -> bool {
+        events.just_pressed(*key)
+    }
+
+    fn is_released(&self, key: &BevyKeyCode, events: &BevyInput<BevyKeyCode>) -> bool {
+        events.just_released(*key)
     }
 }
