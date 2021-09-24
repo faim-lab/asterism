@@ -10,6 +10,8 @@ use glam::Vec2 as GlamVec2;
 use std::cmp::Ordering;
 use std::ops::{Add, AddAssign};
 use ultraviolet::Vec2 as UVVec2;
+use macroquad::math::Vec2 as MVec2;
+
 
 /// A trait for a set of two coordinates that represent a point in 2d space.
 pub trait Vec2: Add + AddAssign + Copy {
@@ -45,6 +47,24 @@ impl Vec2 for UVVec2 {
 impl Vec2 for GlamVec2 {
     fn new(x: f32, y: f32) -> GlamVec2 {
         GlamVec2::new(x, y)
+    }
+    fn x(&self) -> f32 {
+        self.x
+    }
+    fn y(&self) -> f32 {
+        self.y
+    }
+    fn set_x(&mut self, x: f32) {
+        self.x = x;
+    }
+    fn set_y(&mut self, y: f32) {
+        self.y = y;
+    }
+}
+
+impl Vec2 for MVec2 {
+    fn new(x: f32, y: f32) -> MVec2 {
+        MVec2::new(x, y)
     }
     fn x(&self) -> f32 {
         self.x

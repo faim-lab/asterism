@@ -1,16 +1,18 @@
 use asterism::{
+    animation::SimpleAnim,
     collision::AabbCollision,
     control::{KeyboardControl, MacroQuadKeyboardControl},
     entity_state::FlatEntityState,
     physics::PointPhysics,
     resources::{PoolInfo, QueuedResources, Transaction},
 };
+use json::*;
 use macroquad::prelude::*;
 use std::io::{self, Write};
 
 const WIDTH: u8 = 255;
 const HEIGHT: u8 = 255;
-const BASKET_OFF: u8 = 223;
+const BASKET_OFF: u8 = 200;
 const BASKET_WIDTH: u8 = 48;
 const BASKET_HEIGHT: u8 = 32;
 const APPLE_SIZE: u8 = 24;
@@ -41,6 +43,10 @@ enum StateID {
     AppleFalling,
     AppleBouncing,
     AppleResting,
+    EmptyBasket,
+    PartialBasket,
+    MidBasket,
+    FullBasket,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
@@ -97,6 +103,15 @@ struct World {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    let mut rows = Vec::<usize>::new();
+    rows.push(0);
+    rows.push(1);
+    rows.push(2);
+    let mut animation = SimpleAnim::new();
+    animation
+        .load_sprite_sheet("src/apple_tree_sprite.png", "src/apple_tree_sprite.json")
+        .await;
+    animation.assign_rows(rows);
     let mut world = World::new();
     let mut logics = Logics::new();
 
@@ -106,7 +121,7 @@ async fn main() {
                 break;
             }
         }
-        world.draw();
+        world.draw(&mut animation, &logics.entity_state);
         next_frame().await;
     }
 }
@@ -175,7 +190,19 @@ impl Logics {
                 resources.items.insert(PoolID::Points, 0.0);
                 resources
             },
-            entity_state: FlatEntityState::new(),
+            entity_state: {
+                let mut entity_state = FlatEntityState::new();
+                entity_state.add_state_map(
+                    0,
+                    vec![
+                        (StateID::EmptyBasket, vec![1]),
+                        (StateID::PartialBasket, vec![2]),
+                        (StateID::MidBasket, vec![3]),
+                        (StateID::FullBasket, vec![0]),
+                    ],
+                );
+                entity_state
+            },
         }
     }
 }
@@ -192,7 +219,7 @@ impl World {
         }
     }
 
-    fn update(&mut self, logics: &mut Logics) -> Result<bool, ()> {
+    fn update(&mut self, logics: &mut Logics) -> Result<bool> {
         // this should probably go into a temporal matching? or chance logic but i dont want to write it right now
         if get_time() - self.time > self.interval {
             self.apples.push(Apple::new());
@@ -365,6 +392,48 @@ impl World {
         entity_state.maps.clear();
         entity_state.conditions.clear();
         entity_state.states.clear();
+
+        if self.score > 15 {
+            entity_state.add_state_map(
+                3,
+                vec![
+                    (StateID::EmptyBasket, vec![1]),
+                    (StateID::PartialBasket, vec![2]),
+                    (StateID::MidBasket, vec![3]),
+                    (StateID::FullBasket, vec![0]),
+                ],
+            );
+        } else if self.score > 10 {
+            entity_state.add_state_map(
+                2,
+                vec![
+                    (StateID::EmptyBasket, vec![1]),
+                    (StateID::PartialBasket, vec![2]),
+                    (StateID::MidBasket, vec![3]),
+                    (StateID::FullBasket, vec![0]),
+                ],
+            );
+        } else if self.score > 5 {
+            entity_state.add_state_map(
+                1,
+                vec![
+                    (StateID::EmptyBasket, vec![1]),
+                    (StateID::PartialBasket, vec![2]),
+                    (StateID::MidBasket, vec![3]),
+                    (StateID::FullBasket, vec![0]),
+                ],
+            );
+        } else {
+            entity_state.add_state_map(
+                0,
+                vec![
+                    (StateID::EmptyBasket, vec![0]),
+                    (StateID::PartialBasket, vec![2]),
+                    (StateID::MidBasket, vec![3]),
+                    (StateID::FullBasket, vec![0]),
+                ],
+            );
+        }
         for _ in self.apples.iter() {
             entity_state.add_state_map(
                 0,
@@ -429,6 +498,10 @@ impl World {
                 StateID::AppleResting => {
                     self.apples[i].vel.y = 0.0;
                 }
+                StateID::EmptyBasket => {}
+                StateID::PartialBasket => {}
+                StateID::MidBasket => {}
+                StateID::FullBasket => {}
             }
         }
     }
@@ -454,24 +527,33 @@ impl World {
             }
         }
     }
-
-    fn draw(&self) {
+    fn draw(&self, animation: &SimpleAnim, entity_state: &FlatEntityState<StateID>) {
         clear_background(Color::new(0., 0., 0.5, 1.));
-        draw_rectangle(
-            self.basket.x,
-            self.basket.y,
-            BASKET_WIDTH as f32,
-            BASKET_HEIGHT as f32,
-            WHITE,
-        );
 
-        for apple in self.apples.iter() {
-            draw_circle(
-                apple.pos.x + APPLE_SIZE as f32 / 2.0,
-                apple.pos.y + APPLE_SIZE as f32 / 2.0,
-                APPLE_SIZE as f32 / 2.0,
-                apple.color,
-            );
+        if animation.sheet_loaded() {
+            animation.draw_sprite(0.0, 0.0, 1, 0);
+
+            match entity_state.get_id_for_entity(0) {
+                StateID::AppleFalling => {}
+                StateID::AppleBouncing => {}
+                StateID::AppleResting => {}
+                StateID::EmptyBasket => {
+                    animation.draw_sprite(self.basket.x, self.basket.y, 2, 0);
+                }
+                StateID::PartialBasket => {
+                    animation.draw_sprite(self.basket.x, self.basket.y, 2, 1);
+                }
+                StateID::MidBasket => {
+                    animation.draw_sprite(self.basket.x, self.basket.y, 2, 2);
+                }
+                StateID::FullBasket => {
+                    animation.draw_sprite(self.basket.x, self.basket.y, 2, 3);
+                }
+            }
+
+            for apple in self.apples.iter() {
+                animation.draw_sprite(apple.pos.x, apple.pos.y, 0, 0);
+            }
         }
     }
 }
