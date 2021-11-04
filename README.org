@@ -4,7 +4,7 @@ An asterism is a pattern people can see in stars, and while there is a fixed set
 
 Asterism is a project in operationalizing operational logics to the extent that they can be composed to form game engines.
 
-Authors (2019--2021): Cynthia Li, Katiana Wieser, Carl Bell, Abigail Garner, Joseph C. Osborn
+Authors (2019--2021): Cynthia Li, Katiana Wieser, Carl Bell, Julie Ye, Abigail Garner, Joseph C. Osborn
 
 * Prototypes
 
