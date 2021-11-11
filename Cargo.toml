@@ -1,9 +1,5 @@
 [workspace]
 
-members = [
-    "prototypes/boxsy",
-    "prototypes/paddles-engine",
-    "prototypes/clowder",
-    "prototypes/apple-catching"
-]
+members = ["prototypes/*"]
+exclude = ["prototypes/old"]
 
