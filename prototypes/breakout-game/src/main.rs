@@ -362,11 +362,10 @@ impl World {
     }
 
     fn project_resources(&self, resources: &mut QueuedResources<PoolID, u8>) {
-        if !resources.items.contains_key(&PoolID::Points) {
-            resources
-                .items
-                .insert(PoolID::Points, (0, u8::MIN, u8::MAX));
-        }
+        resources
+            .items
+            .entry(PoolID::Points)
+            .or_insert((0, u8::MIN, u8::MAX));
     }
 
     fn unproject_resources(&mut self, resources: &QueuedResources<PoolID, u8>) {

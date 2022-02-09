@@ -334,7 +334,7 @@ fn resources(game: &mut Game) {
             .update_filter(QueryType::User(*id), |rsrc: &RsrcEvent| rsrc == event)
             .unwrap();
         for event in ans.iter() {
-            reaction(&mut game.state, &mut game.logics, &event);
+            reaction(&mut game.state, &mut game.logics, event);
         }
     }
 }
@@ -357,7 +357,7 @@ fn linking(game: &mut Game) {
             .update_filter(QueryType::User(*id), |link: &LinkingEvent| link == event)
             .unwrap();
         for event in ans.iter() {
-            reaction(&mut game.state, &mut game.logics, &event);
+            reaction(&mut game.state, &mut game.logics, event);
         }
     }
 }

@@ -77,7 +77,7 @@ where
                 continue;
             }
 
-            let (val, min, max) = self.items.get_mut(&item_type).unwrap();
+            let (val, min, max) = self.items.get_mut(item_type).unwrap();
             match change {
                 Transaction::Change(amt) => {
                     *val += *amt;

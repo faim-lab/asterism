@@ -244,7 +244,7 @@ impl<TileID: Eq + Ord + Copy + Debug, EntID> TileMapCollision<TileID, EntID> {
                         continue;
                     }
                     if let Some(tile_id) = self.tile_at_pos(pos) {
-                        if self.tile_solid(&tile_id) {
+                        if self.tile_solid(tile_id) {
                             let moved = normalize(self.amt_moved[*i]);
                             let mut pos = self.positions[*i];
                             pos -= moved;
