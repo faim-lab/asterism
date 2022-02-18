@@ -1,7 +1,7 @@
 -- this is mostly just the macro part of paddles.rs but reformatted slightly more comprehensively
 -- in general, game definition seems split into two parts: initialization/defining an initial game state, then defining game rules that aren't provided by the engine
 -- defining initial game state is relatively easy. it's just types
--- game rules feels way harder without dipping into actual rust---i felt this when writing the macro as well
+-- game rules feels way harder without dipping into actual rust. i felt this when writing the macro as well
 
 BALL b
 pos: x, y
@@ -24,99 +24,58 @@ act_w KeyCode::W
 SCORE s1 = 0
 SCORE s2 = 0
 
-=control=
-filter move_paddle
-from: QueryType::CtrlEvent
-type: CtrlEvent
-fn: |ctrl, _, _| {
-    ctrl.event_type == ControlEventType::KeyHeld
-}
-predtype: foreach
-pred: |ctrl, _, logics| {
-    if ctrl.action_id == action_q || ctrl.action_id == action_o {
-        move_up(logics, ctrl.set);
-    } else if ctrl.action_id == action_a || ctrl.action_id == action_l {
-        move_down(logics, ctrl.set);
-    }
-}
+-- define queries, which are filtered on for both events and reactions
+-- missing: connection between the event that occurred -> what caused the event
+--
+-- > event data should belong to an id, it should just be queryable data
+--
+-- > ex, have a table of is this thing colliding with this thing? like an adjacency matrix/condition table (?), or a table of resource pools and if they've been changed this frame or not
+--
+-- ^ feels somewhat clunky + takes up a lot of space but i don't think it's a terrible idea
 
-filter serve
-from: QueryType::CtrlEvent
-type: CtrlEvent
-fn: |ctrl, _, _| {
+QUERY paddles_moved
+query_type: filter from row QueryType::CtrlEvent -> CtrlEvent
+condition (ctrl, _state, _logics):
+    ctrl.event_type == ControlEventType::KeyHeld
+        && ctrl.action_id == movement
+
+-- there's tension between id's vs types here---same as w/ collision logics and metadata
+QUERY serve_pressed
+query_type: filter from QueryType::CtrlEvent -> CtrlEvent
+conditon (ctrl, _, _):
     ctrl.event_type == ControlEventType::KeyPressed
         && (ctrl.action_id == action_w || ctrl.action_id == action_i)
-}
-predtype: foreach
-pred: |ctrl, _, logics| {
-    serve_ball(logics, ctrl.set);
-}
 
-=physics=
-
-=collision=
-filter bounce
-from: QueryType::ColEvent
-type: ColEvent
-fn: |(i, j), _, logics| {
+QUERY ball_collided
+query_type: filter from QueryType::ColEvent -> ColEvent
+condition ((i, j), _, logics):
     let i_id = logics.collision.metadata[*i].id;
     let j_id = logics.collision.metadata[*j].id;
     i_id == CollisionEnt::Ball &&
         (j_id == CollisionEnt::Wall || j_id == CollisionEnt::Paddle)
-}
-predtype: foreach
-pred: |col, state, logics| {
-    bounce_ball(col, state, logics);
-}
 
-filter score
-from: QueryType::ColEvent
-type: ColEvent
-fn: |(i, j), state, logics| {
+QUERY score
+query_type: filter from QueryType::ColEvent -> ColEvent
+condition ((i, j), state, logics):
     let i_id = logics.collision.metadata[*i].id;
     i_id == CollisionEnt::Ball &&
-        (*j == state.get_col_idx(left_wall.idx(), CollisionEnt::Wall) || *j == state.get_col_idx(right_wall.idx(), CollisionEnt::Wall))
-}
-predtype: foreach
-pred: |(_, j), state, logics| {
-    if *j == state.get_col_idx(left_wall.idx(), CollisionEnt::Wall) {
-        inc_score(logics, 1);
-    } else if *j == state.get_col_idx(right_wall.idx(), CollisionEnt::Wall) {
-        inc_score(logics, 0);
-    } else {
-        unreachable!();
+        (*j == state.get_col_idx(left_wall.idx(), CollisionEnt::Wall)
+            || *j == state.get_col_idx(right_wall.idx(), CollisionEnt::Wall))
+
+...
+
+-- self: perform reaction on the query row it's for
+-- or, zip paddles_moved and paddles colliders?
+REACTION for paddles_moved on paddles_colliders
+foreach (ctrl, _, logics):
+    if ctrl.action_id == action_q || ctrl.action_id == action_o {
+        -- move_up(logics, ctrl.set);
+        let mut paddle_col = logics.collision.get_ident_data(set);
+        paddle_col.center.y -= 1.0;
+        paddle_col.vel.y = (paddle_col.vel.y.abs() - 1.0).max(-1.0);
+        logics.collision.update_ident_data(set, paddle_col);
+    } else if ctrl.action_id == action_a || ctrl.action_id == action_l {
+        move_down(logics, ctrl.set);
     }
-}
 
-=resources=
-filter score_increased
-from: QueryType::RsrcEvent
-type: RsrcEvent
-fn: |pool, _, _| {
-    pool.event_type == ResourceEventType::PoolUpdated
-}
-predtype: foreach
-pred: |event, _, logics| {
-    let RsrcPool::Score(score) = event.pool;
-
-    println!(
-        "p{} scored: {}",
-        score.idx() + 1,
-        logics.resources.get_ident_data(event.pool).0
-    );
-    logics
-        .physics
-        .handle_predicate(&PhysicsReaction::SetVel(0, Vec2::ZERO));
-
-    logics.physics.handle_predicate(&PhysicsReaction::SetPos(
-        0,
-        Vec2::splat(WIDTH as f32 / 2.0 - BALL_SIZE as f32 / 2.0),
-    ));
-
-    logics
-        .control
-        .handle_predicate(&ControlReaction::SetKeyValid(
-            score.idx(),
-            match_set!(score.idx(), action_w, action_i),
-        ));
-}
+vim:cms=--%s
