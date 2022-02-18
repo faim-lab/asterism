@@ -3,8 +3,6 @@
 /// State machine with links represented by a directed graph with an adjacency matrix.
 ///
 /// Uses a condition table to check if an edge is traversable. If `graph.conditions[node_idx] == true`, then the edge from `graph.nodes[current_node]` to `graph.nodes[node_idx]` is traversable.
-///
-/// should definitely eventually separate the condition table part from the actual graph representation
 pub struct StateMachine<NodeID: Copy + Eq> {
     /// graph
     pub graph: Graph<NodeID>,

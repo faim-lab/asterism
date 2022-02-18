@@ -212,9 +212,7 @@ where
     }
 }
 
-/// this resource logic updates as it receives reactions and produces events immediately, rather than at the end of each event loop.
-///
-/// this possibly breaks how condition table events are assumed to be handled?
+/// not to be confused with the variety of ramen, this resource logic updates as it receives reactions and produces events immediately, rather than at the end of each event loop.
 pub struct InstantResources<ID, Value>
 where
     ID: Copy + Ord + Debug,
@@ -231,6 +229,18 @@ where
     ID: Copy + Ord + Debug,
     Value: Add<Output = Value> + AddAssign + Ord + Copy,
 {
+    pub fn new() -> Self {
+        Self {
+            items: BTreeMap::new(),
+            completed: Vec::new(),
+        }
+    }
+
+    /// clear events, supposed to be called once per game loop
+    pub fn clear_events(&mut self) {
+        self.completed.clear();
+    }
+
     /// Checks if the transaction is possible or not
     fn is_possible(
         &self,
@@ -275,8 +285,8 @@ where
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         let (item_type, change) = reaction;
 
-        if let Err(_err) = self.is_possible(item_type, change) {
-            // log error somehow
+        if let Err(err) = self.is_possible(item_type, change) {
+            self.completed.push(Err(err));
             return;
         }
 
@@ -295,9 +305,10 @@ where
                 *min = *new_min;
             }
         }
-        // log this transaction somehow
+        self.completed.push(Ok(*item_type));
     }
 
+    // dislike this panic. is it reasonable to put an option on the type? oh ugh i don't like the way these tables work
     fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData {
         *self
             .items
@@ -332,7 +343,6 @@ where
     ID: Copy + Ord + Debug,
     Value: Add<Output = Value> + AddAssign + Ord + Copy,
 {
-    /// cleared each time an output table of events is produced? oh, except for the non-mut reference. boo
     fn get_table(&self) -> Vec<ResourceEvent<ID>> {
         self.completed
             .iter()
@@ -347,6 +357,5 @@ where
                 },
             })
             .collect()
-        // self.completed.clear();
     }
 }

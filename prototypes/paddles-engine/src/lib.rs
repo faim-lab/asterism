@@ -4,7 +4,7 @@
 use asterism::{
     control::{KeyboardControl, MacroquadInputWrapper},
     physics::PointPhysics,
-    resources::QueuedResources,
+    resources::InstantResources,
 };
 use macroquad::prelude::*;
 
@@ -26,7 +26,7 @@ pub use types::*;
 pub struct Logics {
     pub collision: AabbCollision<CollisionEnt>,
     pub physics: PointPhysics,
-    pub resources: QueuedResources<RsrcPool, u16>,
+    pub resources: InstantResources<RsrcPool, u16>,
     pub control: KeyboardControl<ActionID, MacroquadInputWrapper>,
 }
 
@@ -35,7 +35,7 @@ impl Logics {
         Self {
             collision: AabbCollision::new(),
             physics: PointPhysics::new(),
-            resources: QueuedResources::new(),
+            resources: InstantResources::new(),
             control: KeyboardControl::new(),
         }
     }
@@ -348,14 +348,13 @@ fn collision(game: &mut Game) {
 }
 
 fn resources(game: &mut Game) {
-    game.logics.resources.update();
-
     game.tables
         .update_single::<RsrcEvent>(QueryType::RsrcEvent, game.logics.resources.get_table())
         .unwrap();
     game.tables
         .update_single::<RsrcIdent>(QueryType::RsrcIdent, game.logics.resources.get_table())
         .unwrap();
+    game.logics.resources.clear_events();
 
     if let Some(resources) = game.events.resources.clone() {
         resources(game);

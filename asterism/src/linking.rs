@@ -135,6 +135,7 @@ type QueryIdent<ID> = (
     <GraphedLinking<ID> as Logic>::IdentData,
 );
 
+// this feels so bad, ugh
 impl<ID: Copy + Eq> OutputTable<QueryIdent<ID>> for GraphedLinking<ID> {
     fn get_table(&self) -> Vec<QueryIdent<ID>> {
         (0..self.graphs.len())

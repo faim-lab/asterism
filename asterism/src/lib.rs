@@ -7,9 +7,11 @@
 //! The descriptions of logics in the modules are lightly modified from Prof Osborn's dissertation.
 //!
 //! Requires at least Rust 1.51---if this doesn't compile, update your rustc.
+
 #![allow(clippy::new_without_default)]
 #![allow(clippy::upper_case_acronyms)]
-pub mod animation;
+
+// logics
 pub mod collision;
 pub mod control;
 pub mod entity_state;
@@ -17,8 +19,10 @@ pub mod graph;
 pub mod linking;
 pub mod physics;
 pub mod resources;
-pub mod tables;
 
+// putting the logics together
+pub mod animation;
+pub mod tables;
 pub use tables::OutputTable;
 
 /// An operational logic
@@ -40,6 +44,8 @@ pub trait Logic:
     fn handle_predicate(&mut self, reaction: &Self::Reaction);
 
     /// exposes the data associated with a particular ""entity"" of the logic. NOTE that modifying the data returned here does NOT change the logic's data!!!
+    ///
+    /// frankly this should just be done with something like the trait that does indexing or something
     fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData;
 
     /// updates the data of a unit of the logic

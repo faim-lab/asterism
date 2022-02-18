@@ -3,6 +3,7 @@
 //! Animation handles the sprites and images to be rendered as well as handles
 //! the process of rendering them
 
+#![allow(dead_code)]
 use futures::executor::block_on;
 use macroquad::prelude::*;
 use serde;

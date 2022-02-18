@@ -6,13 +6,13 @@
 use asterism::{
     control::{KeyboardControl, MacroquadInputWrapper},
     linking::GraphedLinking,
-    resources::QueuedResources,
+    resources::InstantResources,
 };
 use macroquad::prelude::*;
 
 pub struct Logics {
     pub linking: GraphedLinking<NodeID>,
-    pub resources: QueuedResources<RsrcPool, u16>,
+    pub resources: InstantResources<RsrcPool, u16>,
     pub control: KeyboardControl<ActionID, MacroquadInputWrapper>,
 }
 
@@ -24,7 +24,7 @@ impl Logics {
     fn new() -> Self {
         Self {
             linking: GraphedLinking::new(),
-            resources: QueuedResources::new(),
+            resources: InstantResources::new(),
             control: KeyboardControl::new(),
             // chance logics?
             // progression logics?
