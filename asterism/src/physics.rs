@@ -2,7 +2,7 @@
 //!
 //! Physics logics communicate that physical laws govern the movement of some in-game entities. They update and honor objects' physical properties like position, velocity, density, etc., according to physical laws integrated over time.
 
-use crate::{tables::OutputTable, Event, EventType, Logic, Reaction};
+use crate::{tables::OutputTable, Logic, Reaction};
 use macroquad::math::Vec2;
 
 /// A physics logic using 2d points.
@@ -10,9 +10,11 @@ pub struct PointPhysics {
     pub positions: Vec<Vec2>,
     pub velocities: Vec<Vec2>,
     pub accelerations: Vec<Vec2>,
+    pub events: Vec<Vec<Option<PhysicsEvent>>>,
 }
 
-#[derive(Clone)]
+// doesn't include events bc they happen one time instead of being continuous across states?
+#[derive(Clone, Copy)]
 pub struct PointPhysData {
     pub pos: Vec2,
     pub vel: Vec2,
@@ -21,10 +23,10 @@ pub struct PointPhysData {
 
 impl Logic for PointPhysics {
     type Reaction = PhysicsReaction;
-    type Event = PhysicsEvent;
 
     type Ident = usize;
     type IdentData = PointPhysData;
+    // type IdentEventData = Vec<Events>
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         match reaction {
@@ -41,9 +43,13 @@ impl Logic for PointPhysics {
                 self.positions.remove(*idx);
                 self.velocities.remove(*idx);
                 self.accelerations.remove(*idx);
+                self.events.remove(*idx);
+                for events in self.events.iter_mut() {
+                    events.remove(*idx);
+                }
             }
-            PhysicsReaction::AddBody { pos, vel, acc } => {
-                self.add_physics_entity(*pos, *vel, *acc);
+            PhysicsReaction::AddBody(data) => {
+                self.add_physics_entity(data.pos, data.vel, data.acc);
             }
         }
     }
@@ -69,6 +75,7 @@ impl PointPhysics {
             positions: Vec::new(),
             velocities: Vec::new(),
             accelerations: Vec::new(),
+            events: Vec::new(),
         }
     }
     /// Update the physics logic: changes the velocities of entities based on acceleration, then changes entities' positions based on updated velocities.
@@ -88,6 +95,13 @@ impl PointPhysics {
         self.positions.push(pos);
         self.velocities.push(vel);
         self.accelerations.push(acc);
+
+        let mut events = Vec::new();
+        events.resize(self.positions.len(), None);
+        self.events.push(events);
+        for ev in self.events.iter_mut() {
+            ev.push(None);
+        }
     }
 
     /// Clears vecs from last frame
@@ -95,38 +109,27 @@ impl PointPhysics {
         self.positions.clear();
         self.velocities.clear();
         self.accelerations.clear();
+        for events in self.events.iter_mut() {
+            events.fill(None);
+        }
     }
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub enum PhysicsReaction {
     SetPos(usize, Vec2),
     SetVel(usize, Vec2),
     SetAcc(usize, Vec2),
     RemoveBody(usize),
-    AddBody { pos: Vec2, vel: Vec2, acc: Vec2 },
+    AddBody(PointPhysData),
 }
 impl Reaction for PhysicsReaction {}
 
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub struct PhysicsEvent {
-    ent: usize,
-    event_type: PhysicsEventType,
-}
-
-impl Event for PhysicsEvent {
-    type EventType = PhysicsEventType;
-    fn get_type(&self) -> &Self::EventType {
-        &self.event_type
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum PhysicsEventType {
+pub enum PhysicsEvent {
     VelChange,
     PosChange,
 }
-impl EventType for PhysicsEventType {}
 
 type QueryIdent = (
     <PointPhysics as Logic>::Ident,
@@ -138,35 +141,5 @@ impl OutputTable<QueryIdent> for PointPhysics {
         (0..self.positions.len())
             .map(|idx| (idx, self.get_ident_data(idx)))
             .collect()
-    }
-}
-
-type QueryEvent = <PointPhysics as Logic>::Event;
-
-impl OutputTable<QueryEvent> for PointPhysics {
-    fn get_table(&self) -> Vec<QueryEvent> {
-        let mut events = Vec::new();
-        self.accelerations.iter().enumerate().for_each(|(i, acc)| {
-            // velocity changes if acceleration != 0.0
-            if *acc != Vec2::ZERO {
-                let event = PhysicsEvent {
-                    ent: i,
-                    event_type: PhysicsEventType::VelChange,
-                };
-                events.push(event);
-            }
-        });
-
-        self.velocities.iter().enumerate().for_each(|(i, vel)| {
-            // position changes if velocity != 0.0
-            if *vel != Vec2::ZERO {
-                let event = PhysicsEvent {
-                    ent: i,
-                    event_type: PhysicsEventType::PosChange,
-                };
-                events.push(event);
-            }
-        });
-        events
     }
 }

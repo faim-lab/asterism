@@ -12,30 +12,29 @@
 #![allow(clippy::upper_case_acronyms)]
 
 // logics
-pub mod collision;
-pub mod control;
-pub mod entity_state;
-pub mod graph;
-pub mod linking;
+// pub mod collision;
+// pub mod control;
+// pub mod entity_state;
+// pub mod graph;
+// pub mod linking;
 pub mod physics;
-pub mod resources;
+// pub mod resources;
 
-// putting the logics together
+// putting the logics together/operational integrations &c
 pub mod animation;
 pub mod tables;
 pub use tables::OutputTable;
 
 /// An operational logic
-pub trait Logic:
-    OutputTable<(<Self as Logic>::Ident, <Self as Logic>::IdentData)>
-    + OutputTable<<Self as Logic>::Event>
-{
-    /// the events that this logic can generate
-    type Event: Event + Copy;
+// (old trait bound) + OutputTable<<Self as Logic>::Event>
+pub trait Logic: OutputTable<(<Self as Logic>::Ident, <Self as Logic>::IdentData)> {
+    // the events that this logic can generate
+    // type Event: Event + Copy;
+
     /// the reactions that this logic can act on
     type Reaction: Reaction;
 
-    /// a single unit/entity within the logic
+    /// a single unit/entity within the logic (is this necessary?)
     type Ident: Copy;
     /// the data of the logic associated with its identity (`<Self as Logic>::Ident`).
     type IdentData: Clone;
@@ -52,12 +51,12 @@ pub trait Logic:
     fn update_ident_data(&mut self, ident: Self::Ident, data: Self::IdentData);
 }
 
-/// An event produced by the logic. Holds both the data associated with the event and information about what the event is---these should be separated for easier matching.
+/* /// An event produced by the logic. Holds both the data associated with the event and information about what the event is---these should be separated for easier matching.
 pub trait Event {
     type EventType: EventType;
     fn get_type(&self) -> &Self::EventType;
 }
 
-pub trait EventType {}
+pub trait EventType {} */
 
 pub trait Reaction {}

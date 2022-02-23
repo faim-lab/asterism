@@ -34,7 +34,7 @@ SCORE s2 = 0
 -- ^ feels somewhat clunky + takes up a lot of space but i don't think it's a terrible idea
 
 QUERY paddles_moved
-query_type: filter from row QueryType::CtrlEvent -> CtrlEvent
+query_type: filter from QueryType::CtrlEvent -> CtrlEvent
 condition (ctrl, _state, _logics):
     ctrl.event_type == ControlEventType::KeyHeld
         && ctrl.action_id == movement
@@ -66,6 +66,7 @@ condition ((i, j), state, logics):
 
 -- self: perform reaction on the query row it's for
 -- or, zip paddles_moved and paddles colliders?
+-- ???? i don't think this works
 REACTION for paddles_moved on paddles_colliders
 foreach (ctrl, _, logics):
     if ctrl.action_id == action_q || ctrl.action_id == action_o {

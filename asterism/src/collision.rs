@@ -42,6 +42,7 @@ pub struct CollisionData<ID: Copy + Eq> {
     ///
     /// Pushable entities are _not_ fixed, while entities that shouldn't be pushable, such as walls or moving platforms, are.
     pub fixed: bool,
+    // NOTE: are ID's necessary, does the *logic* need to know what ~kind~ of thing this is? or are semantics a game thing/created by syntheses which are engine/game specific
     pub id: ID,
 }
 
@@ -368,22 +369,18 @@ fn intersects(center_i: Vec2, half_size_i: Vec2, center_j: Vec2, half_size_j: Ve
 
 #[inline(always)]
 fn find_displacement(center_i: Vec2, half_size_i: Vec2, center_j: Vec2, half_size_j: Vec2) -> Vec2 {
-    let displ_abs = Vec2::new(
+    let mut displ_abs = Vec2::new(
         half_size_i.x + half_size_j.x - (center_i.x - center_j.x).abs(),
         half_size_i.y + half_size_j.y - (center_i.y - center_j.y).abs(),
     );
-    let side_x = if center_i.x - center_j.x < 0.0 {
-        -1.0
-    } else {
-        1.0
+    if center_i.x - center_j.x < 0.0 {
+        displ_abs.x *= -1.0;
     };
-    let side_y = if center_i.y - center_j.y < 0.0 {
-        -1.0
-    } else {
-        1.0
+    if center_i.y - center_j.y < 0.0 {
+        displ_abs.y *= -1.0;
     };
 
-    Vec2::new(side_x * displ_abs.x, side_y * displ_abs.y)
+    displ_abs
 }
 
 /// Calculates the speed ratio of the two entities, i.e. the amount of restitution an entity should be responsible for.
