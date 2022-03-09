@@ -27,7 +27,8 @@ pub use tables::OutputTable;
 
 /// An operational logic
 // (old trait bound) + OutputTable<<Self as Logic>::Event>
-pub trait Logic: OutputTable<(<Self as Logic>::Ident, <Self as Logic>::IdentData)> {
+// and also OutputTable<(<Self as Logic>::Ident, <Self as Logic>::IdentData)>
+pub trait Logic {
     // the events that this logic can generate
     // type Event: Event + Copy;
 

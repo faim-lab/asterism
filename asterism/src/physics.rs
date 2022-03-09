@@ -14,11 +14,12 @@ pub struct PointPhysics {
 }
 
 // doesn't include events bc they happen one time instead of being continuous across states?
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct PointPhysData {
     pub pos: Vec2,
     pub vel: Vec2,
     pub acc: Vec2,
+    pub events: Vec<Option<PhysicsEvent>>,
 }
 
 impl Logic for PointPhysics {
@@ -26,7 +27,6 @@ impl Logic for PointPhysics {
 
     type Ident = usize;
     type IdentData = PointPhysData;
-    // type IdentEventData = Vec<Events>
 
     fn handle_predicate(&mut self, reaction: &Self::Reaction) {
         match reaction {
@@ -48,8 +48,8 @@ impl Logic for PointPhysics {
                     events.remove(*idx);
                 }
             }
-            PhysicsReaction::AddBody(data) => {
-                self.add_physics_entity(data.pos, data.vel, data.acc);
+            PhysicsReaction::AddBody { pos, vel, acc } => {
+                self.add_physics_entity(*pos, *vel, *acc);
             }
         }
     }
@@ -59,6 +59,7 @@ impl Logic for PointPhysics {
             pos: self.positions[ident],
             vel: self.velocities[ident],
             acc: self.accelerations[ident],
+            events: self.events[ident].clone(),
         }
     }
 
@@ -95,12 +96,10 @@ impl PointPhysics {
         self.positions.push(pos);
         self.velocities.push(vel);
         self.accelerations.push(acc);
-
-        let mut events = Vec::new();
-        events.resize(self.positions.len(), None);
+        let events = vec![None; self.positions.len()];
         self.events.push(events);
-        for ev in self.events.iter_mut() {
-            ev.push(None);
+        for events in self.events.iter_mut() {
+            events.push(None);
         }
     }
 
@@ -115,31 +114,48 @@ impl PointPhysics {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum PhysicsReaction {
     SetPos(usize, Vec2),
     SetVel(usize, Vec2),
     SetAcc(usize, Vec2),
     RemoveBody(usize),
-    AddBody(PointPhysData),
+    AddBody { pos: Vec2, vel: Vec2, acc: Vec2 },
 }
 impl Reaction for PhysicsReaction {}
+
+pub struct PointPhysicsIter<'logic> {
+    physics: &'logic PointPhysics,
+    index: <PointPhysics as Logic>::Ident,
+}
+
+impl<'logic> IntoIterator for &'logic PointPhysics {
+    type Item = PointPhysData;
+    type IntoIter = PointPhysicsIter<'logic>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        PointPhysicsIter {
+            physics: self,
+            index: 0,
+        }
+    }
+}
+
+impl<'logic> Iterator for PointPhysicsIter<'logic> {
+    type Item = PointPhysData;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.physics.positions.len() {
+            return None;
+        }
+        let ret = Some(self.physics.get_ident_data(self.index));
+        self.index += 1;
+        ret
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PhysicsEvent {
     VelChange,
     PosChange,
-}
-
-type QueryIdent = (
-    <PointPhysics as Logic>::Ident,
-    <PointPhysics as Logic>::IdentData,
-);
-
-impl OutputTable<QueryIdent> for PointPhysics {
-    fn get_table(&self) -> Vec<QueryIdent> {
-        (0..self.positions.len())
-            .map(|idx| (idx, self.get_ident_data(idx)))
-            .collect()
-    }
 }

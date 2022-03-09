@@ -1,5 +1,5 @@
 [workspace]
 
-members = ["prototypes/*"]
-exclude = ["prototypes/old"]
+members = ["prototypes/new-events-test"]
+# exclude = ["prototypes/old"]
 
