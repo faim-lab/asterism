@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 /// Builds output tables based on output of logics
-// TODO: i really dislike that this returns/reallocates a vec. would be nice to have an iterator kind of api (oh: this might be possible now that you only have to implement iterator one (1) time for a logic instead of twice)
 pub trait OutputTable<ProcessOutput> {
     fn get_table(&self) -> Vec<ProcessOutput>;
 }

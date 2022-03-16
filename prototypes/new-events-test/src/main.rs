@@ -1,4 +1,4 @@
-use asterism::physics::{PointPhysData, PointPhysics};
+use asterism::physics::PointPhysics;
 // use asterism::tables::{ConditionTables, OutputTable};
 use macroquad::prelude::*;
 
@@ -48,9 +48,10 @@ async fn main() {
             break;
         }
         logics.physics.update();
-        for (i, phys) in logics.physics.into_iter().enumerate() {
+        for (i, phys) in logics.physics.iter_mut().enumerate() {
             if phys.vel.length_squared() > 0.0 {
-                println!("physics entity {}, you're going too fast!!!", i);
+                *phys.vel = Vec2::ZERO;
+                println!("physics entity {}, please stop", i);
             }
         }
         clear_background(BLUE);

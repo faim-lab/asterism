@@ -2,7 +2,7 @@
 //!
 //! Physics logics communicate that physical laws govern the movement of some in-game entities. They update and honor objects' physical properties like position, velocity, density, etc., according to physical laws integrated over time.
 
-use crate::{tables::OutputTable, Logic, Reaction};
+use crate::{Logic, Reaction};
 use macroquad::math::Vec2;
 
 /// A physics logic using 2d points.
@@ -11,63 +11,6 @@ pub struct PointPhysics {
     pub velocities: Vec<Vec2>,
     pub accelerations: Vec<Vec2>,
     pub events: Vec<Vec<Option<PhysicsEvent>>>,
-}
-
-// doesn't include events bc they happen one time instead of being continuous across states?
-#[derive(Clone)]
-pub struct PointPhysData {
-    pub pos: Vec2,
-    pub vel: Vec2,
-    pub acc: Vec2,
-    pub events: Vec<Option<PhysicsEvent>>,
-}
-
-impl Logic for PointPhysics {
-    type Reaction = PhysicsReaction;
-
-    type Ident = usize;
-    type IdentData = PointPhysData;
-
-    fn handle_predicate(&mut self, reaction: &Self::Reaction) {
-        match reaction {
-            PhysicsReaction::SetPos(idx, pos) => {
-                self.positions[*idx] = *pos;
-            }
-            PhysicsReaction::SetVel(idx, vel) => {
-                self.velocities[*idx] = *vel;
-            }
-            PhysicsReaction::SetAcc(idx, acc) => {
-                self.accelerations[*idx] = *acc;
-            }
-            PhysicsReaction::RemoveBody(idx) => {
-                self.positions.remove(*idx);
-                self.velocities.remove(*idx);
-                self.accelerations.remove(*idx);
-                self.events.remove(*idx);
-                for events in self.events.iter_mut() {
-                    events.remove(*idx);
-                }
-            }
-            PhysicsReaction::AddBody { pos, vel, acc } => {
-                self.add_physics_entity(*pos, *vel, *acc);
-            }
-        }
-    }
-
-    fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData {
-        PointPhysData {
-            pos: self.positions[ident],
-            vel: self.velocities[ident],
-            acc: self.accelerations[ident],
-            events: self.events[ident].clone(),
-        }
-    }
-
-    fn update_ident_data(&mut self, ident: Self::Ident, data: Self::IdentData) {
-        self.positions[ident] = data.pos;
-        self.velocities[ident] = data.vel;
-        self.accelerations[ident] = data.acc;
-    }
 }
 
 impl PointPhysics {
@@ -112,25 +55,67 @@ impl PointPhysics {
             events.fill(None);
         }
     }
+
+    pub fn iter(&self) -> PointPhysicsIter {
+        self.into_iter()
+    }
+
+    pub fn iter_mut(&mut self) -> PointPhysicsIterMut {
+        self.into_iter()
+    }
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
-pub enum PhysicsReaction {
-    SetPos(usize, Vec2),
-    SetVel(usize, Vec2),
-    SetAcc(usize, Vec2),
-    RemoveBody(usize),
-    AddBody { pos: Vec2, vel: Vec2, acc: Vec2 },
+impl Logic for PointPhysics {
+    type Reaction = PhysicsReaction;
+
+    fn handle_predicate(&mut self, reaction: &Self::Reaction) {
+        match reaction {
+            PhysicsReaction::SetPos(idx, pos) => {
+                self.positions[*idx] = *pos;
+            }
+            PhysicsReaction::SetVel(idx, vel) => {
+                self.velocities[*idx] = *vel;
+            }
+            PhysicsReaction::SetAcc(idx, acc) => {
+                self.accelerations[*idx] = *acc;
+            }
+            PhysicsReaction::RemoveBody(idx) => {
+                self.positions.remove(*idx);
+                self.velocities.remove(*idx);
+                self.accelerations.remove(*idx);
+                self.events.remove(*idx);
+                for events in self.events.iter_mut() {
+                    events.remove(*idx);
+                }
+            }
+            PhysicsReaction::AddBody { pos, vel, acc } => {
+                self.add_physics_entity(*pos, *vel, *acc);
+            }
+        }
+    }
 }
-impl Reaction for PhysicsReaction {}
+
+pub struct PointPhysData<'logic> {
+    pub pos: &'logic Vec2,
+    pub vel: &'logic Vec2,
+    pub acc: &'logic Vec2,
+    pub events: &'logic [Option<PhysicsEvent>],
+}
+
+pub struct PointPhysDataMut<'logic> {
+    pub pos: &'logic mut Vec2,
+    pub vel: &'logic mut Vec2,
+    pub acc: &'logic mut Vec2,
+    pub events: &'logic mut [Option<PhysicsEvent>],
+}
 
 pub struct PointPhysicsIter<'logic> {
     physics: &'logic PointPhysics,
-    index: <PointPhysics as Logic>::Ident,
+    index: usize,
 }
 
 impl<'logic> IntoIterator for &'logic PointPhysics {
-    type Item = PointPhysData;
+    type Item = PointPhysData<'logic>;
     type IntoIter = PointPhysicsIter<'logic>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -142,17 +127,75 @@ impl<'logic> IntoIterator for &'logic PointPhysics {
 }
 
 impl<'logic> Iterator for PointPhysicsIter<'logic> {
-    type Item = PointPhysData;
+    type Item = PointPhysData<'logic>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.physics.positions.len() {
+        let i = self.index;
+        self.index += 1;
+        if i >= self.physics.positions.len() {
             return None;
         }
-        let ret = Some(self.physics.get_ident_data(self.index));
-        self.index += 1;
-        ret
+        Some(PointPhysData {
+            pos: &self.physics.positions[i],
+            vel: &self.physics.velocities[i],
+            acc: &self.physics.accelerations[i],
+            events: &self.physics.events[i],
+        })
     }
 }
+
+pub struct PointPhysicsIterMut<'logic> {
+    physics: &'logic mut PointPhysics,
+    index: usize,
+}
+
+impl<'logic> IntoIterator for &'logic mut PointPhysics {
+    type Item = PointPhysDataMut<'logic>;
+    type IntoIter = PointPhysicsIterMut<'logic>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        PointPhysicsIterMut {
+            physics: self,
+            index: 0,
+        }
+    }
+}
+
+impl<'logic> Iterator for PointPhysicsIterMut<'logic> {
+    type Item = PointPhysDataMut<'logic>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let i = self.index;
+        self.index += 1;
+        if i >= self.physics.positions.len() {
+            return None;
+        }
+        let pos = self.physics.positions.as_mut_ptr();
+        let vel = self.physics.velocities.as_mut_ptr();
+        let acc = self.physics.accelerations.as_mut_ptr();
+        let events = self.physics.events.as_mut_ptr();
+
+        // safety: mutability doesn't overlap when calling next(). *pos.add(i) is a *mut Vec2 and taking a reference to it is a &mut Vec2. adapted from: https://stackoverflow.com/questions/63437935/in-rust-how-do-i-create-a-mutable-iterator
+        unsafe {
+            Some(PointPhysDataMut {
+                pos: &mut *pos.add(i),
+                vel: &mut *vel.add(i),
+                acc: &mut *acc.add(i),
+                events: &mut *events.add(i),
+            })
+        }
+    }
+}
+
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum PhysicsReaction {
+    SetPos(usize, Vec2),
+    SetVel(usize, Vec2),
+    SetAcc(usize, Vec2),
+    RemoveBody(usize),
+    AddBody { pos: Vec2, vel: Vec2, acc: Vec2 },
+}
+impl Reaction for PhysicsReaction {}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PhysicsEvent {
