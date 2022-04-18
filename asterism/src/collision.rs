@@ -205,13 +205,6 @@ impl<ID: Copy + Eq> AabbCollision<ID> {
         }
     }
 
-    /// Clears vecs from last frame
-    pub fn clear(&mut self) {
-        self.centers.clear();
-        self.half_sizes.clear();
-        self.velocities.clear();
-    }
-
     pub fn get_ids(&self, contact: &Contact) -> (ID, ID) {
         (self.metadata[contact.i].id, self.metadata[contact.j].id)
     }

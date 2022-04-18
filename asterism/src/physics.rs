@@ -89,13 +89,6 @@ impl PointPhysics {
         self.velocities.push(vel);
         self.accelerations.push(acc);
     }
-
-    /// Clears vecs from last frame
-    pub fn clear(&mut self) {
-        self.positions.clear();
-        self.velocities.clear();
-        self.accelerations.clear();
-    }
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
