@@ -15,9 +15,9 @@ where
 {
     /// The items involved, and their values.
     pub items: BTreeMap<ID, (Value, Value, Value)>, // value, min, max
-    /// Each transaction is a list of items involved in the transaction and the amount they're being changed.
+    /// Each transaction is a list of items involved in the transaction and what's changing.
     pub transactions: Vec<(ID, Transaction<Value>)>,
-    /// A Vec of all transactions and if they were able to be completed or not. If yes, supply a Vec of the IDs of successful transactions; if no, supply the ID of the pool that caused the error and a reason (see [ResourceError]).
+    /// A Vec of all transactions and if they were able to be completed or not. If yes, supply the IDs of successful transactions; if no, supply the ID of the pool that caused the error and a reason (see [ResourceError]).
     pub completed: Vec<Result<ID, (ID, ResourceError)>>,
 }
 
@@ -77,7 +77,7 @@ where
                 continue;
             }
 
-            let (val, min, max) = self.items.get_mut(&item_type).unwrap();
+            let (val, min, max) = self.items.get_mut(item_type).unwrap();
             match change {
                 Transaction::Change(amt) => {
                     *val += *amt;
@@ -191,6 +191,154 @@ where
 }
 
 impl<ID, Value> OutputTable<ResourceEvent<ID>> for QueuedResources<ID, Value>
+where
+    ID: Copy + Ord + Debug,
+    Value: Add<Output = Value> + AddAssign + Ord + Copy,
+{
+    fn get_table(&self) -> Vec<ResourceEvent<ID>> {
+        self.completed
+            .iter()
+            .map(|completed| match completed {
+                Ok(id) => ResourceEvent {
+                    pool: *id,
+                    event_type: ResourceEventType::PoolUpdated,
+                },
+                Err((id, err)) => ResourceEvent {
+                    pool: *id,
+                    event_type: ResourceEventType::TransactionUnsuccessful(*err),
+                },
+            })
+            .collect()
+    }
+}
+
+/// not to be confused with the variety of ramen, this resource logic updates as it receives reactions and produces events immediately, rather than at the end of each event loop.
+pub struct InstantResources<ID, Value>
+where
+    ID: Copy + Ord + Debug,
+    Value: Add<Output = Value> + AddAssign + Ord + Copy,
+{
+    /// The items involved and their values.
+    pub items: BTreeMap<ID, (Value, Value, Value)>, // value, min, max
+    /// A Vec of all transactions and if they were able to be completed or not. If yes, supply the IDs of successful transactions; if no, supply the ID of the pool that caused the error and a reason (see [ResourceError]).
+    pub completed: Vec<Result<ID, (ID, ResourceError)>>,
+}
+
+impl<ID, Value> InstantResources<ID, Value>
+where
+    ID: Copy + Ord + Debug,
+    Value: Add<Output = Value> + AddAssign + Ord + Copy,
+{
+    pub fn new() -> Self {
+        Self {
+            items: BTreeMap::new(),
+            completed: Vec::new(),
+        }
+    }
+
+    /// clear events, supposed to be called once per game loop
+    pub fn clear_events(&mut self) {
+        self.completed.clear();
+    }
+
+    /// Checks if the transaction is possible or not
+    fn is_possible(
+        &self,
+        item_type: &ID,
+        transaction: &Transaction<Value>,
+    ) -> Result<(), (ID, ResourceError)> {
+        if let Some((value, min, max)) = self.items.get(item_type) {
+            match transaction {
+                Transaction::Change(amt) => {
+                    if *value + *amt > *max {
+                        Err((*item_type, ResourceError::TooBig))
+                    } else if *value + *amt < *min {
+                        Err((*item_type, ResourceError::TooSmall))
+                    } else {
+                        Ok(())
+                    }
+                }
+                _ => Ok(()),
+            }
+        } else {
+            Err((*item_type, ResourceError::PoolNotFound))
+        }
+    }
+
+    /// Gets the value of the item based on its ID.
+    pub fn get_value_by_itemtype(&self, item_type: &ID) -> Option<Value> {
+        self.items.get(item_type).map(|(val, ..)| *val)
+    }
+}
+
+impl<ID, Value> Logic for InstantResources<ID, Value>
+where
+    ID: Copy + Ord + Debug,
+    Value: Add<Output = Value> + AddAssign + Ord + Copy,
+{
+    type Event = ResourceEvent<ID>;
+    type Reaction = ResourceReaction<ID, Value>;
+
+    type Ident = ID;
+    type IdentData = (Value, Value, Value);
+
+    fn handle_predicate(&mut self, reaction: &Self::Reaction) {
+        let (item_type, change) = reaction;
+
+        if let Err(err) = self.is_possible(item_type, change) {
+            self.completed.push(Err(err));
+            return;
+        }
+
+        let (val, min, max) = self.items.get_mut(item_type).unwrap();
+        match change {
+            Transaction::Change(amt) => {
+                *val += *amt;
+            }
+            Transaction::Set(amt) => {
+                *val = *amt;
+            }
+            Transaction::SetMax(new_max) => {
+                *max = *new_max;
+            }
+            Transaction::SetMin(new_min) => {
+                *min = *new_min;
+            }
+        }
+        self.completed.push(Ok(*item_type));
+    }
+
+    // dislike this panic. is it reasonable to put an option on the type? oh ugh i don't like the way these tables work
+    fn get_ident_data(&self, ident: Self::Ident) -> Self::IdentData {
+        *self
+            .items
+            .get(&ident)
+            .unwrap_or_else(|| panic!("requested pool {:?} doesn't exist in resource logic", ident))
+    }
+
+    fn update_ident_data(&mut self, ident: Self::Ident, data: Self::IdentData) {
+        let vals = self
+            .items
+            .get_mut(&ident)
+            .unwrap_or_else(|| panic!("pool {:?} not found", ident));
+        *vals = data;
+    }
+}
+
+impl<ID, Value> OutputTable<QueryIdent<ID, Value>> for InstantResources<ID, Value>
+where
+    ID: Copy + Ord + Debug,
+    Value: Add<Output = Value> + AddAssign + Ord + Copy,
+{
+    fn get_table(&self) -> Vec<QueryIdent<ID, Value>> {
+        self.items
+            .keys()
+            .map(|id| (*id, self.get_ident_data(*id)))
+            .collect()
+    }
+}
+
+impl<ID, Value> OutputTable<ResourceEvent<ID>> for InstantResources<ID, Value>
 where
     ID: Copy + Ord + Debug,
     Value: Add<Output = Value> + AddAssign + Ord + Copy,
