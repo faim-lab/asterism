@@ -1,0 +1,194 @@
+```
+pub enum QueryType {
+    CtrlEvent,
+    CtrlIdent,
+    ColEvent,
+    ColIdent,
+    PhysEvent,
+    PhysIdent,
+    RsrcEvent,
+    RsrcIdent,
+    BallCol,
+    User(UserQueryID),
+}
+
+logic col: AABBCollision
+logic phys: PointPhysics
+logic rsrc: QueuedResources (or w/e)
+logic ctrl: KeyboardControl
+
+[col, phys, rsrc, ctrl]
+
+ent Ball: [true, true, false, false]
+ent Paddle: [true, true, false, true]
+ent Wall: [true, true, false, false]
+ent Score: [false, false, true, false]
+```
+
+-> then you can generate something like. 1. the paddle type,
+
+    ```
+    pub struct Paddle {
+        pub pos: Vec2,
+        pub size: Vec2,
+        pub controls: Vec<(ActionID, KeyCode, bool)>,
+    }
+    ```
+    but it would possibly look something more like
+
+    ```
+    pub struct Paddle {
+        pub pos: Vec2,
+        pub half_size: Vec2,
+        pub center: Vec2,
+        pub col_vel: Vec2,
+        pub phys_vel: Vec2,
+        pub controls: whatever
+    }
+    ```
+
+    and you'd need some kind of fn that could map: pos -> center, col_vel -> phys_vel, etc and convince the generator to let go of the field.
+
+    and 2. consume_paddle() based on the values above?
+
+    ```
+    pub fn consume_paddle(&mut self, id: PaddleID, col_idx: usize, paddle: Paddle) {
+        let hs = paddle.size / 2.0;
+        let center = paddle.pos + hs;
+        self.collision.centers.insert(col_idx, center);
+        self.collision.half_sizes.insert(col_idx, hs);
+        self.collision.velocities.insert(col_idx, Vec2::ZERO);
+
+        use asterism::collision::CollisionData;
+        self.collision.metadata.insert(
+            col_idx,
+            CollisionData {
+                solid: true,
+                fixed: true,
+                id: CollisionEnt::Paddle,
+            },
+        );
+
+        for (act_id, keycode, valid) in paddle.controls {
+            self.control.add_key_map(id.idx(), keycode, act_id, valid);
+        }
+    }
+    ```
+
+maybe Score becomes attached to paddles???? where's the concept of a "user"-- is that in a control logic? i have uh. mmmmmmmm
+    in this engine score is *not* inherent to a paddle. which means a paddle can have a score or not? like a paddle does not necessarily have to keep track of a score? ex. one can be a "coach" whose score doesn't matter. okay i guess
+    also scores can just be free floating? i guess? like score can be "the number of times a ball has bounced off a wall" or something like that?
+    wow i'm way more comfortable reading/analyzing code than making decisions about my own code, apparently. english major moment
+
+
+
+PADDLES GAME MAKING DSL DRAFT FROM OTHER BRANCH???
+this is mostly just the macro part of paddles.rs but reformatted slightly more comprehensively
+in general, game definition seems split into two parts: initialization/defining an initial game state, then defining game rules that aren't provided by the engine
+defining initial game state is relatively easy. it's just types
+game rules feels way harder without dipping into actual rust. i felt this when writing the macro as well
+
+```
+BALL b
+pos: x, y
+size: w, h
+
+WALL left
+pos:
+size:
+
+...
+
+PADDLE p1
+pos:
+size:
+actions:
+act_q KeyCode::Q,
+act_a KeyCode::A,
+act_w KeyCode::W
+
+SCORE s1 = 0
+SCORE s2 = 0
+```
+
+(define queries, which are filtered on for both events and reactions
+missing: connection between the event that occurred -> what caused the event
+
+> event data should belong to an id, it should just be queryable data
+
+> ex, have a table of is this thing colliding with this thing? like an adjacency matrix/condition table (?), or a table of resource pools and if they've been changed this frame or not
+
+^ feels somewhat clunky + takes up a lot of space but i don't think it's a terrible idea)
+
+```
+QUERY paddles_moved
+query_type: filter from QueryType::CtrlEvent -> CtrlEvent
+condition (ctrl, _state, _logics):
+    ctrl.event_type == ControlEventType::KeyHeld
+        && ctrl.action_id == movement
+```
+
+
+
+(there's tension between id's vs types here---same as w/ collision logics and metadata)
+
+```
+QUERY serve_pressed
+query_type: filter from QueryType::CtrlEvent -> CtrlEvent
+conditon (ctrl, _, _):
+    ctrl.event_type == ControlEventType::KeyPressed
+        && (ctrl.action_id == action_w || ctrl.action_id == action_i)
+
+QUERY ball_collided
+query_type: filter from QueryType::ColEvent -> ColEvent
+condition ((i, j), _, logics):
+    let i_id = logics.collision.metadata[*i].id;
+    let j_id = logics.collision.metadata[*j].id;
+    i_id == CollisionEnt::Ball &&
+        (j_id == CollisionEnt::Wall || j_id == CollisionEnt::Paddle)
+
+QUERY score
+query_type: filter from QueryType::ColEvent -> ColEvent
+condition ((i, j), state, logics):
+    let i_id = logics.collision.metadata[*i].id;
+    i_id == CollisionEnt::Ball &&
+        (*j == state.get_col_idx(left_wall.idx(), CollisionEnt::Wall)
+            || *j == state.get_col_idx(right_wall.idx(), CollisionEnt::Wall))
+
+...
+```
+
+self: perform reaction on the query row it's for
+or, zip paddles_moved and paddles colliders?
+???? i don't know if this works
+reactions are also built on queries-- paddles_moved is a list of things: paddles that have moved. paddles_colliders is a list of paddle colliders.
+
+how far down do events go-- how far can we narrow them down? ex. should i be able to have those if statements in the foreach block? what's *really* the difference between action_q and action_o, can i name them the same thing?
+
+```
+let action_q = paddle1.add_control_map(KeyCode::Q, true);
+let action_a = paddle1.add_control_map(KeyCode::A, true);
+let action_w = paddle1.add_control_map(KeyCode::W, true);
+```
+
+    -> you add a control to a paddle rather than defining a set of controls and saying "each paddle has these controls"?
+    -> assumption that every paddle will have distinct actions, not the same player duplicated over & over
+
+
+```
+REACTION for paddles_moved on paddles_colliders
+foreach (ctrl, _, logics):
+    if ctrl.action_id == action_q || ctrl.action_id == action_o {
+        -- move_up(logics, ctrl.set);
+        let mut paddle_col = logics.collision.get_ident_data(set);
+        paddle_col.center.y -= 1.0;
+        paddle_col.vel.y = (paddle_col.vel.y.abs() - 1.0).max(-1.0);
+        logics.collision.update_ident_data(set, paddle_col);
+    } else if ctrl.action_id == action_a || ctrl.action_id == action_l {
+        move_down(logics, ctrl.set);
+    }
+```
+
+"just make a decision and commit to one (1) way this engine could go cynthia" absolutely not
+
+vim:ft=pandoc

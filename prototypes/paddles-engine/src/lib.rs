@@ -1,3 +1,11 @@
+// - generate something like querytype automatically, along with fns that filter tables from them
+// - remove id from collision metadata?
+// - remove ids from logics? which might be a bad idea but-- what if semantics only ever touches an engine, logics have no idea abt meaning/metaphor (does that make sense from a theoretical standpoint? i think it might not-- but doing it this way might end up w/ interesting things. or be incredibly confusing)
+// - should have some kind of fn that goes "this item has a phys position. find its collision center" and/or vice versa
+// - how to go from event data -> logic data? ex. collision
+// - reactions and filters are separate.....??????? -> https://pom-itb-gitlab01.campus.pomona.edu/faim-lab/asterism/-/blob/better-tables/prototypes/paddles-engine/src/bin/paddles
+//   - not just dsls for a game, but also some kind of language specifying types for _engines_
+
 #![allow(clippy::new_without_default)]
 #![allow(clippy::upper_case_acronyms)]
 
